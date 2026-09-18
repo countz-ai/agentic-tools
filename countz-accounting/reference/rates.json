@@ -1,0 +1,47 @@
+{
+  "//": "Model rates used to ESTIMATE the dollar cost of a run. Tokens are measured; dollars are computed from this table at standard LIST rates, so a figure derived here does not reflect promotional pricing or contracted discounts and may differ from your actual bill. The authoritative number is your provider's usage console. OpenTelemetry's GenAI conventions define no cost attribute, so `cost_usd` is deliberately our own name and not `gen_ai.usage.cost`.",
+  "schema": "countz-accounting/rates@1",
+  "unit": "USD per million tokens, except web_search which is USD per request",
+  "captured_at": "2026-08-19",
+  "source": "the baked model catalog inside Claude Code 2.1.236, which describes itself as 'the source of truth for per-model provider IDs and metadata'. Tiers and the model->tier mapping were read from that catalog; the arithmetic below is the CLI's own cost function.",
+  "how_to_refresh": "Re-read the catalog from a current Claude Code build, or replace this file with rates from your own billing. Bump captured_at when you do. A model absent from `models` gets its tokens reported and its cost withheld - never priced at a neighbour's rate.",
+
+  "formula": [
+    "cost = input_tokens/1e6 * input",
+    "     + output_tokens/1e6 * output",
+    "     + cache_read_input_tokens/1e6 * cache_read",
+    "     + min(ephemeral_1h_input_tokens, cache_creation_input_tokens)/1e6 * cache_write_1h",
+    "     + (cache_creation_input_tokens - that 1h portion)/1e6 * cache_write_5m",
+    "     + web_search_requests * web_search",
+    "Thinking tokens are NOT priced separately - they are already inside output_tokens."
+  ],
+
+  "tiers": {
+    "tier_3_15":  {"input": 3,   "output": 15, "cache_write_5m": 3.75,  "cache_write_1h": 6,   "cache_read": 0.3,  "web_search": 0.01},
+    "tier_5_25":  {"input": 5,   "output": 25, "cache_write_5m": 6.25,  "cache_write_1h": 10,  "cache_read": 0.5,  "web_search": 0.01},
+    "tier_10_50": {"input": 10,  "output": 50, "cache_write_5m": 12.5,  "cache_write_1h": 20,  "cache_read": 1,    "web_search": 0.01},
+    "tier_15_75": {"input": 15,  "output": 75, "cache_write_5m": 18.75, "cache_write_1h": 30,  "cache_read": 1.5,  "web_search": 0.01},
+    "haiku_35":   {"input": 0.8, "output": 4,  "cache_write_5m": 1,     "cache_write_1h": 1.6, "cache_read": 0.08, "web_search": 0.01},
+    "haiku_45":   {"input": 1,   "output": 5,  "cache_write_5m": 1.25,  "cache_write_1h": 2,   "cache_read": 0.1,  "web_search": 0.01}
+  },
+
+  "models": {
+    "claude-3-5-haiku":  "haiku_35",
+    "claude-haiku-4-5":  "haiku_45",
+    "claude-3-5-sonnet": "tier_3_15",
+    "claude-3-7-sonnet": "tier_3_15",
+    "claude-sonnet-4-0": "tier_3_15",
+    "claude-sonnet-4-5": "tier_3_15",
+    "claude-sonnet-4-6": "tier_3_15",
+    "claude-sonnet-5":   "tier_3_15",
+    "claude-opus-4-0":   "tier_15_75",
+    "claude-opus-4-1":   "tier_15_75",
+    "claude-opus-4-5":   "tier_5_25",
+    "claude-opus-4-6":   "tier_5_25",
+    "claude-opus-4-7":   "tier_5_25",
+    "claude-opus-4-8":   "tier_5_25",
+    "claude-opus-5":     "tier_5_25",
+    "claude-fable-5":    "tier_10_50",
+    "claude-mythos-5":   "tier_10_50"
+  }
+}

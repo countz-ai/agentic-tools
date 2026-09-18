@@ -1,0 +1,13 @@
+{
+  "name": "countz-accounting",
+  "displayName": "Countz Accounting",
+  "version": "0.19.1",
+  "description": "Accounting analyses using Countz Accounting platform: tie out ledgers, sub-ledgers and schedules; reconcile cash to bank and payables to supplier statements; prove out cash ahead of an audit; build a quality-of-earnings EBITDA bridge; test ASC 606 revenue recognition and ASC 842 lease accounting; trace revenue leakage from invoice to cash and many more. You get a workbook and a report deck with every figure traceable to its source file.",
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Countz"
+  },
+  "connectors": [
+    "countz"
+  ]
+}

@@ -1,0 +1,17 @@
+# The plugin's Python dependencies, pinned by uv.lock. Not a package (`package = false`):
+# `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 <script>` is the only consumer.
+# Which library to reach for is reference/CONDUCT.md § Libraries; the version is plugin.json's.
+[project]
+name = "countz-accounting"
+version = "0.0.0"
+requires-python = ">=3.11"
+dependencies = [
+    "polars",
+    "fastexcel",
+    "openpyxl",
+    "pyyaml",
+    "python-pptx",
+]
+
+[tool.uv]
+package = false
