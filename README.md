@@ -23,9 +23,20 @@ Ask for `countz` inside a session to list the analyses and how to start one.
 
 ## Installation
 
+### Claude Code
+
+Add this repository as a plugin marketplace, then install the plugin from it:
+
+```
+/plugin marketplace add countz-ai/agentic-tools
+/plugin install countz-accounting@countz
+```
+
 ### Claude Cowork
 
-Cowork installs a plugin from a zip. Build it from this repository:
+Claude Desktop can install the plugin from a zip or from the marketplace.
+
+**From a zip.** Build it from this repository:
 
 ```bash
 make zip
@@ -35,6 +46,17 @@ This validates the plugin with the Claude Code CLI (`claude plugin validate`), r
 structural checks, and writes `dist/countz-accounting-<version>.zip`.
 
 Then in Cowork: **Customize → Plugins → upload**, and select the zip.
+
+**From the marketplace.** From Claude Desktop Settings / Plugins, add a marketplace using this repository's URL:
+
+```
+https://github.com/countz-ai/agentic-tools
+```
+
+Adding the marketplace only makes its plugins searchable. Search for `countz` in the
+plugin browser and add the **Countz Accounting** plugin.
+
+### First use
 
 On first use, connect the Countz connector when prompted; every analysis signs in before
 it reads a file.
