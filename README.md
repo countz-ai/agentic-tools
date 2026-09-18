@@ -34,20 +34,7 @@ Add this repository as a plugin marketplace, then install the plugin from it:
 
 ### Claude Cowork
 
-Claude Desktop can install the plugin from a zip or from the marketplace.
-
-**From a zip.** Build it from this repository:
-
-```bash
-make zip
-```
-
-This validates the plugin with the Claude Code CLI (`claude plugin validate`), runs the
-structural checks, and writes `dist/countz-accounting-<version>.zip`.
-
-Then in Cowork: **Customize → Plugins → upload**, and select the zip.
-
-**From the marketplace.** From Claude Desktop Settings / Plugins, add a marketplace using this repository's URL:
+From Claude Desktop Settings / Plugins, add a marketplace using this repository's URL:
 
 ```
 https://github.com/countz-ai/agentic-tools
