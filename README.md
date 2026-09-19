@@ -9,28 +9,15 @@ Agentic skills and tools for accounting analysis, backed by the Countz Accountin
 This repo packages the Countz accounting tools and skills that run accounting analysis:
 tie out ledgers, sub-ledgers and schedules; reconcile cash to bank; prove out cash ahead
 of an audit; build a quality-of-earnings EBITDA bridge; test ASC 606 revenue recognition
-and ASC 842 lease accounting; trace revenue leakage from invoice to cash etc. Each run reads
-your files, drafts a check plan you confirm before anything runs, executes the checks in
+and ASC 842 lease accounting; trace revenue leakage from invoice to cash and many more. 
+Each run reads your files, drafts a plan you confirm, executes the plan steps in
 parallel, and hands you a workbook and a report deck with every figure traceable to its
 source file.
 
-The skills follow the open Agent Skills model: each skill has a `SKILL.md` plus supporting
-files loaded on demand. The plugin is self-contained — its agents, reference documents and
-helper scripts ship in the package — and connects to the Countz platform through the
-`countz` MCP connector (sign in with Google) for the analysis catalog and recipes.
-
-Ask for `countz` inside a session to list the analyses and how to start one.
+The skills use Countz mcp to fetch the up-to-date playbooks, which are then executed
+in your AI environment using your own AI tokens. No financial data goes to Countz server.
 
 ## Installation
-
-### Claude Code
-
-Add this repository as a plugin marketplace, then install the plugin from it:
-
-```
-/plugin marketplace add countz-ai/agentic-tools
-/plugin install countz-accounting@countz
-```
 
 ### Claude Cowork
 
@@ -43,10 +30,18 @@ https://github.com/countz-ai/agentic-tools
 Adding the marketplace only makes its plugins searchable. Search for `countz` in the
 plugin browser and add the **Countz Accounting** plugin.
 
+### Claude Code
+
+Add this repository as a plugin marketplace, then install the plugin from it:
+
+```
+/plugin marketplace add countz-ai/agentic-tools
+/plugin install countz-accounting@countz
+```
+
 ### First use
 
-On first use, connect the Countz connector when prompted; every analysis signs in before
-it reads a file.
+Ask for `countz` inside a session to list the analyses and see how to start one.
 
 ## License
 
