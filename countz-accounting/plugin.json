@@ -1,0 +1,52 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "countz-accounting",
+  "version": "0.19.1",
+  "description": "Accounting analyses using Countz Accounting platform: tie out ledgers, sub-ledgers and schedules; reconcile cash to bank and payables to supplier statements; prove out cash ahead of an audit; build a quality-of-earnings EBITDA bridge; test ASC 606 revenue recognition and ASC 842 lease accounting; trace revenue leakage from invoice to cash and many more. You get a workbook and a report deck with every figure traceable to its source file.",
+  "author": {
+    "name": "Countz",
+    "url": "https://www.countz.ai"
+  },
+  "homepage": "https://www.countz.ai",
+  "repository": "https://github.com/countz-ai/agentic-tools",
+  "license": "Apache-2.0",
+  "keywords": [
+    "accounting",
+    "audit",
+    "tie-out",
+    "reconciliation",
+    "bank-reconciliation",
+    "cash",
+    "quality-of-earnings",
+    "ebitda",
+    "asc-606",
+    "revenue-recognition",
+    "asc-842",
+    "lease-accounting",
+    "dso",
+    "receivables",
+    "finance",
+    "countz"
+  ],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Countz Accounting",
+        "shortDescription": "Audit-grade accounting analyses over your own files, every figure traceable to its source.",
+        "longDescription": "Accounting analyses using Countz Accounting platform: tie out ledgers, sub-ledgers and schedules; reconcile cash to bank and payables to supplier statements; prove out cash ahead of an audit; build a quality-of-earnings EBITDA bridge; test ASC 606 revenue recognition and ASC 842 lease accounting; trace revenue leakage from invoice to cash and many more. You get a workbook and a report deck with every figure traceable to its source file.",
+        "developerName": "Countz",
+        "category": "Productivity",
+        "capabilities": [
+          "Read",
+          "Write"
+        ],
+        "websiteURL": "https://www.countz.ai",
+        "defaultPrompt": [
+          "Tie out my trial balance to the general ledger.",
+          "Reconcile my GL cash account to the bank statement.",
+          "Build a quality-of-earnings EBITDA bridge from these files."
+        ]
+      }
+    }
+  }
+}

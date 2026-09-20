@@ -1,0 +1,20 @@
+{
+  "name": "countz",
+  "interface": {
+    "displayName": "Countz Agentic Tools"
+  },
+  "plugins": [
+    {
+      "name": "countz-accounting",
+      "source": {
+        "source": "local",
+        "path": "./countz-accounting"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
