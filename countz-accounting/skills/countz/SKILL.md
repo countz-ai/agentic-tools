@@ -19,6 +19,7 @@ no file first.
 | `revenue-recognition` | Test revenue under ASC 606: tie revenue to billing and contracts, place every item in the period its obligation was satisfied, test cutoff, trace deferred and unbilled balances. |
 | `revenue-leak` | Find where invoices fail to turn into cash: roll the receivable forward, measure DSO against what the terms allow, test each cause of delay, price every leak in days and dollars. |
 | `lease` | Test lease accounting under ASC 842: tie ROU assets, liabilities and lease cost to the books, find leases the register misses, recompute every figure from the contract terms. |
+| `revenue-analysis` | Analyze recurring revenue: build a cleansed customer cube, compute ARR on a stated definition and trend it by every dimension the data carries, measure retention, renewal and churn, split organic from acquired growth, re-perform management's KPIs, reconcile ARR to GAAP revenue. |
 | `tieout` | Establish whether two or more records of the same quantity agree — a general ledger to a trial balance, a sub-ledger to its control account — and analyze what does not. |
 | `recon` | Explain the difference between two related records — GL cash to a bank statement, payables to a supplier statement — item by item, every reconciling item evidenced. |
 | `countz-analysis` | Run an analysis you describe in your own words: matched to the server's catalog when one fits, otherwise a recipe is authored from your ask and your data before the plan is drafted. |

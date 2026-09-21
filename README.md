@@ -41,19 +41,18 @@ Add this repository as a plugin marketplace, then install the plugin from it:
 
 ### ChatGPT
 
-**Codex CLI** (adds the marketplace, then installs the plugin from it):
+In the ChatGPT desktop app, open the **Plugins** tab and choose **Add a marketplace**:
+
+- Marketplace: `countz-ai/agentic-tools`
+
+Then search for `countz` in the plugin directory and add **countz-accounting**.
+
+From the Codex CLI the same two steps are:
 
 ```
 codex plugin marketplace add countz-ai/agentic-tools
 codex plugin install countz-accounting@countz
 ```
-
-Restart the ChatGPT desktop app afterwards; the plugin then shows under the
-**Countz Agentic Tools** source in the Plugins Directory and works in Chat, Work and
-Codex. Inside Codex CLI you can also run `/plugins` to open the plugin browser.
-
-**Workspace admins** can instead import the plugin from Admin > Plugins using this
-repository's GitHub URL and publish it to selected roles.
 
 On first use the plugin asks you to sign in to the Countz connector.
 
