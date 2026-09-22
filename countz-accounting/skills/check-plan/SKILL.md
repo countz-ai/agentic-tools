@@ -63,7 +63,7 @@ The walk never reads past the peek: a file whose peek does not settle its verdic
 a second bounded look — `--rows` up to the tool's ceiling, a page-ranged read of a PDF,
 a `head` of a text file — and a file that still does not settle is `"context"` with the
 open question in `why`, never a whole read. Every client-file read in this step is
-bounded per `reference/CONDUCT.md § Reading client files`; a Read with no `limit` or
+bounded per `${CLAUDE_PLUGIN_ROOT}/reference/CONDUCT.md § Reading client files`; a Read with no `limit` or
 `pages`, a `cat`, and a printed DataFrame are outside it, whatever the file's size.
 Relevance is judged per family, against each
 family's own question, never

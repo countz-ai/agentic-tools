@@ -17,9 +17,9 @@ block — the note goes on the deck's first page).
 
 Read `${CLAUDE_PLUGIN_ROOT}/reference/DOCTRINE.md` § Voice and § Number conventions,
 `${CLAUDE_PLUGIN_ROOT}/reference/WORKBOOK.md` (where the reader's eye lands on every tab —
-the map, the frozen band, the run-level tabs), `reference/WORKBOOK_STYLE.md` (how a
-cell looks; the kit every tab script starts from) and `reference/REPORT.md` (the deck:
-the brief, `report.yaml`, the gate), then `run.json` (the check roster and
+the map, the frozen band, the run-level tabs), `${CLAUDE_PLUGIN_ROOT}/reference/WORKBOOK_STYLE.md` (how a
+cell looks; the kit every tab script starts from) and `${CLAUDE_PLUGIN_ROOT}/reference/REPORT.md`
+(the deck: the brief, `report.yaml`, the gate), then `run.json` (the check roster and
 statuses), the latest review record, every `checks/<check>.md`, and the ledgers. Each
 check wrote its own tab; **you copy tabs, cached values intact — never rewrite one.** A
 rostered check with no tab gets no empty tab; it is stated in coverage.
@@ -91,8 +91,8 @@ planning. What this step writes:
   that argues one — and the sentence stating the message, where the page needs one, is
   `message`; every sentence on a slide is complete.
 
-Read `REPORT.md` § 3 for the words and § 4 for the numbers before writing pages; no
-other check reads either. Rules a finished deck got wrong:
+Read `${CLAUDE_PLUGIN_ROOT}/reference/REPORT.md` § 3 for the words and § 4 for the
+numbers before writing pages; no other check reads either. Rules a finished deck got wrong:
 
 - Write to the company's own executives and operators unless the run declares a
   transaction reader.

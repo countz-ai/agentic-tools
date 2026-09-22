@@ -313,6 +313,23 @@ def check(root: pathlib.Path) -> list[str]:
                 bad.append(f"{rel(f)}: carries the removed phrase '{tic}' - state the "
                            f"checkable fact instead, or delete the sentence")
 
+    # 5f. A dispatched instruction file (an agent charter, a skill) is read by a worker whose
+    #     working directory is the RUN, not the plugin. So every reference file it names as a
+    #     read target carries ${CLAUDE_PLUGIN_ROOT}; a bare `reference/X.md` resolves to
+    #     nothing there. Measured 2026-09-22: check-report/SKILL.md named REPORT.md and
+    #     WORKBOOK_STYLE.md bare in the one sentence listing what the report worker must
+    #     read, while naming DOCTRINE.md and WORKBOOK.md with the prefix in the same
+    #     sentence. Reference docs cite each other by bare name and are exempt: they are
+    #     siblings, already resolved by whoever opened one.
+    BARE_REF = re.compile(r"`reference/[A-Z][A-Z_]*\.md")
+    for f in sorted(list(root.glob("agents/*.md")) + list(root.glob("skills/*/SKILL.md"))):
+        if not f.is_file():
+            continue
+        for m in BARE_REF.finditer(f.read_text()):
+            bad.append(f"{rel(f)}: names `{m.group(0)[1:]}` with no ${{CLAUDE_PLUGIN_ROOT}} "
+                       f"prefix - a dispatched worker runs in the run directory, where that "
+                       f"path resolves to nothing")
+
     # 5g. Where scripts/section.py ships, every context a reader enters the plugin
     #     through reaches the rule for using it in one hop. The rule has two homes, one
     #     per reader class: reference/CONDUCT.md (the agents that touch client data read

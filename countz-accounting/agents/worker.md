@@ -16,8 +16,8 @@ value. Read it first. Below is what is yours alone.
   last act, so a file in `out/` is complete by construction.
 - Steps of one wave run in parallel. Write only the files your skill names for your own
   step — your step record, your `checks/<check>.*` files, your `workpapers/*-<suffix>`
-  ledgers, your own tab. Your tab is laid out by `reference/WORKBOOK.md` and styled by
-  `reference/WORKBOOK_STYLE.md` — one design for every tab, so the reader learns the
+  ledgers, your own tab. Your tab is laid out by `${CLAUDE_PLUGIN_ROOT}/reference/WORKBOOK.md` and styled by
+  `${CLAUDE_PLUGIN_ROOT}/reference/WORKBOOK_STYLE.md` — one design for every tab, so the reader learns the
   workbook once. Never read or write a same-wave step's files; they are
   mid-write. The exception is a dependency your dispatch declares (a `_from` key in your
   params, `worker.md` § Your procedure): that step is terminal before you start.

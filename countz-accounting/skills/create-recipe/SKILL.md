@@ -23,7 +23,7 @@ Read `${CLAUDE_PLUGIN_ROOT}/reference/RECIPE_FORMAT.md` whole — it is the cont
 write to — then `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py reference/PLAYBOOK_RECIPES.md "What every recipe inherits"`,
 then `run.json`. Its registered sources are the data room; you read them under
 `agents/planner.md`'s rules, through `scripts/peek.py`, bounded per
-`reference/CONDUCT.md § Reading client files`. You write a recipe, not a plan: no file
+`${CLAUDE_PLUGIN_ROOT}/reference/CONDUCT.md § Reading client files`. You write a recipe, not a plan: no file
 index, no profiles, no definition. `check-plan` does that against the recipe you leave.
 
 ## Draft pass (no `answers`)
