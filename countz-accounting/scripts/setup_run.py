@@ -71,6 +71,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import hashlib
 import json
 import os
 import pathlib
@@ -345,6 +346,31 @@ def touch_session(run: dict, session_id: str | None, ts: str) -> bool:
     return True
 
 
+# The instructions and code that govern a run.
+STAMP_GLOBS = ("reference/*.md", "agents/*.md", "skills/*/SKILL.md", "scripts/*.py",
+               "playbook-recipes/*.md", ".claude-plugin/plugin.json", "plugin.json")
+
+
+def plugin_stamp() -> dict:
+    """The plugin root's version and a content digest per governing file."""
+    root = pathlib.Path(__file__).resolve().parent.parent
+    version = None
+    manifest = root / ".claude-plugin" / "plugin.json"
+    if manifest.is_file():
+        try:
+            version = json.loads(manifest.read_text()).get("version")
+        except ValueError:
+            pass
+    files = {}
+    for pat in STAMP_GLOBS:
+        for f in sorted(root.glob(pat)):
+            if f.is_file():
+                files[str(f.relative_to(root))] = hashlib.sha256(f.read_bytes()).hexdigest()[:12]
+    tree = hashlib.sha256(
+        "".join(f"{k}:{v}\n" for k, v in sorted(files.items())).encode()).hexdigest()[:12]
+    return {"version": version, "root": str(root), "tree": tree, "files": files}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -496,6 +522,7 @@ def main() -> int:
         "checks": [],
         "playbook": None,
         "plan": None,
+        "plugin": plugin_stamp(),
         "dispatches": [],
         "next_seq": 1,
     }
@@ -508,7 +535,8 @@ def main() -> int:
         run["inputs"]["recipe"] = pinned
     _write_json(run_path, run)
     _append_event(run_dir, "run_created", run_id=run["run_id"],
-                  output_root=run["inputs"]["output_root"])
+                  output_root=run["inputs"]["output_root"],
+                  plugin_version=run["plugin"]["version"], plugin_tree=run["plugin"]["tree"])
     if pinned:
         _append_event(run_dir, "recipe_pinned", name=pinned["name"], version=pinned["version"])
         print(f"recipe {pinned['name']} ({pinned['version']}) pinned at {pinned['path']}")

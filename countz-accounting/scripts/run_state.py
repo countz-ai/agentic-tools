@@ -86,9 +86,12 @@ BRIEF = """\
 
 This file is your entire instruction.
 
+`${{CLAUDE_PLUGIN_ROOT}}` is `{plug}`. Every file you read below writes paths with that
+token; expand it to that directory each time, including on a path you reach from inside
+another file.
+
 1. Read `{agent}` — your standing instructions.
 2. Read `{plug}/skills/{skill}/SKILL.md` — your procedure.
-3. Where those files say `${{CLAUDE_PLUGIN_ROOT}}`, use: `{plug}`
 
 Your arguments:
 
