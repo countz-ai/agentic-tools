@@ -802,7 +802,19 @@ TABLE_KEYS = {"from", "block", "rows", "columns", "max_rows", "title", "ids", "f
 # A schedule of dollars is shown at a declared scale, each dollar column headed with it:
 # `64,143` under `$'000` (REPORT.md § 4).
 SCALES = {"thousands": (1e3, "$'000"), "millions": (1e6, "$m")}
-MONEY_FMT = re.compile(r"#,##0(?!\.)")
+# What a scaled dollar column is formatted as once it is stated at a scale: whole units,
+# negatives in parentheses, zero an en dash (REPORT.md § 4). Applied so the DISPLAYED
+# precision is the column's own, whatever precision the tab held - and so `shown_unit`,
+# which the footing check reads, is the unit the reader actually sees.
+SCALED_FMT = '#,##0;(#,##0);"-"'.replace("-", "\u2013")
+MONEY_FMT = re.compile(r"#,##0(?:\.00)?(?![.0-9])")
+
+
+def is_money(fmt: str | None) -> bool:
+    """A dollar column, whole or to the cent. A percent, ratio or day count is not one."""
+    f = fmt or ""
+    return "%" not in f and bool(MONEY_FMT.search(f))
+
 CHART_KEYS = {"type", "from", "rows", "columns", "block", "title"}
 STAT_KEYS = {"label", "value", "note"}
 
@@ -1013,12 +1025,16 @@ def table_block(v, at: str, res: Resolver, book: Book) -> dict:
         for i, is_num in enumerate(t.numeric):
             cells = [row[i] for row in t.rows if isinstance(row[i].value, (int, float))
                      and not isinstance(row[i].value, bool)]
-            if not is_num or not cells or not all(MONEY_FMT.search(c.fmt or "") for c in cells):
+            if not is_num or not cells or not all(is_money(c.fmt) for c in cells):
                 continue
             t.headers[i] = f"{t.headers[i]} ({suffix})"
+            # Divide, never round: the stored value keeps full precision, and every check
+            # downstream (not_footing below, and the deck gate's match against the workbook)
+            # computes on these values. Rounding happens once, in fmt_value, on the way to
+            # the slide - nothing reads a rendered number back.
             for row in t.rows:
                 if isinstance(row[i].value, (int, float)) and not isinstance(row[i].value, bool):
-                    row[i] = replace(row[i], value=row[i].value / factor)
+                    row[i] = replace(row[i], value=row[i].value / factor, fmt=SCALED_FMT)
             scaled += 1
         if not scaled:
             raise SpecError(f"{at}: `{tab}` has no dollar column to state in {scale}")
@@ -1239,7 +1255,8 @@ def flow(page: Page) -> list[Page]:
                 first["table"].more = 0
                 rest = deepcopy(b)
                 rest["table"].rows, rest["table"].kinds = tb.rows[k:], tb.kinds[k:]
-                rest["table"].title = (tb.title + CONTINUED) if tb.title else None
+                rest["table"].title = (tb.title if tb.title.endswith(CONTINUED)
+                                       else tb.title + CONTINUED) if tb.title else None
                 cur.append(first)
                 pending.insert(0, rest)
                 emit()

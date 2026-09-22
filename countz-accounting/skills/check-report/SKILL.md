@@ -96,9 +96,10 @@ numbers before writing pages; no other check reads either. Rules a finished deck
 
 - Write to the company's own executives and operators unless the run declares a
   transaction reader.
-- State the basis in words: *as instructed*, not *as the user declared*; *this report*,
-  not *this run*; a category, not a *bucket*. Retitle a copied table with `title:` where
-  its own title carries one of these.
+- State the basis only where the user chose it, and in the reader's words: *as instructed*,
+  not *as the user declared*. Say nothing about a parameter the recipe set by default. Write
+  *this report*, not *this run*, and a category, not a *bucket*. Retitle a copied table with
+  `title:` where its own title carries one of these.
 - Call a measure what the workbook calls it: *best-possible days sales outstanding*, not
   *the floor*.
 - Cut a line whose point is its phrasing; state the finding instead.

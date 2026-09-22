@@ -223,11 +223,30 @@ that month end. Both entries fall inside FY2025, so cash at 30 September 2025 is
 unaffected."*, not *"One intragroup settlement posts its two legs a month apart, at $458k
 a leg."*
 
-**Run vocabulary.** State the basis in words: *prepared on a buy-side diligence basis, as
-instructed*. Do not print a parameter name (`leak_stance`, `maturity_basis`), `the user`
-for the client, `this run` for the report, `bucket` for a category, or a test's internal
-shorthand (`direction`, `grain`) in place of what it tests. Where a copied tab
-title carries one, retitle the table with `title:`; the figures stay copied.
+**Run vocabulary.** State the basis only where the user chose it: *prepared on a buy-side
+diligence basis, as instructed*. Where the recipe set that parameter by default, say nothing
+about it. Where the recipe says the deliverable does not state a parameter, leave it out.
+
+Do not print a parameter name (`leak_stance`, `maturity_basis`), `the user` for the client,
+`this run` for the report, `bucket` for a category, or a test's internal shorthand
+(`direction`, `grain`) in place of what it tests.
+
+A copied table arrives with the heading the tab gave it. Where that heading carries one of
+these, select the block by the name the tab uses and set `title:` to what the slide shows.
+The figures stay copied and the tab is untouched. Example: a tab heads a block `The bridge
+with each of the five events of A0's register removed`, which names a check rather than the
+schedule. The page selects that block and retitles it:
+
+```yaml
+- table:
+    from: a5
+    block: The bridge with each of the five events of A0's register removed
+    title: Diligence ARR with each event removed
+```
+
+Where a copied CELL carries one of these, or any id `WORKBOOK.md` § 3 Language keeps off a
+tab, the tab is wrong and the owning check fixes it: name the cell and the check, and end the
+step `blocked`. Do not rewrite the tab, and do not drop the column to hide the cell.
 
 **Shares.** A percentage or ratio names the population it is a share of. Where a page
 carries two populations, name both. Example: *a third of the past-due balance* beside

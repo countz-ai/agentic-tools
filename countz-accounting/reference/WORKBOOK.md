@@ -54,6 +54,15 @@ Another accountant reads this workbook to re-perform the work, so it is written 
 vocabulary of a workpaper. Use standard accounting terms. Do not coin terms, and do not
 carry the run's own machine vocabulary onto a tab. Voice is `DOCTRINE.md` § Voice.
 
+A cell that states a status, a class or a verdict shows words, not the id the run computes
+with. Declare the words beside the id wherever the id is declared. An id belongs in the tab's
+id column, where the links resolve it, not inside a cell that reads as a sentence such as a
+reason, a condition or a note. Name what was done, not which step did it.
+
+Examples: the class `one_time_event` shows as *Non-recurring events*; the status `withheld`
+as *unable to establish from the records provided*; a reason reads *the management ARR agreed
+to the waterfall*, not *as a2_management_arr footed it*.
+
 ## 4. The blocks of a check tab
 
 Below the band, in this order, each block opened by a `Section` heading in column B and
@@ -173,7 +182,7 @@ examined | what was not examined, and why`, one row per rostered check, coloured
 
 **Open Items** — three tables under three `Section` headings — review calls, questions
 for management, data requests — the first with the `BAND` header, the other two
-`HeaderPlain`. Each `id | matter | size | what closes it | owner | from_finding`. A `Q.`
+`HeaderPlain`. Each `id | matter | size | what closes it | owner | raised by`. The last column holds the review finding's id; its header is the reader's words, not the record's field name (§ 3 Language). A `Q.`
 or `D.` id the check raises is stated on that check's own tab as well, so the row's id
 resolves there and the reader lands on the schedule that raised it; a row whose only link
 is the check's name sends them to the top of a tab to search.

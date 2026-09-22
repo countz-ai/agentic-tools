@@ -284,7 +284,7 @@ def make_run(rd: pathlib.Path) -> None:
             text(ws.cell(row=i, column=2 + j), v)
     grid(ws, 4, 6, 2, 5)
     section(ws, 8, "Procedures not performed")
-    text(ws.cell(row=9, column=2), "The capex bridge was dropped: the room carries no capitalized-cost accounts (D.q6.capex).")
+    text(ws.cell(row=9, column=2), "The capex bridge was dropped: the room carries no capitalized-cost accounts.")
     section(ws, 11, "How to read this workbook")
     header(ws, 12, ["prefix", "meaning"], ["status", "description"], primary=False)
     text(ws.cell(row=13, column=2), "F.")
@@ -332,7 +332,7 @@ def make_run(rd: pathlib.Path) -> None:
 
     ws = wb.create_sheet("Open Items")
     band(ws, "Open Items", "Acme Corp · review calls, questions for management, data requests")
-    header(ws, 4, ["id", "matter", "size", "what closes it", "owner", "from_finding"],
+    header(ws, 4, ["id", "matter", "size", "what closes it", "owner", "raised by"],
            ["id", "description", "amount", "note", "status", "id"])
     ident(ws.cell(row=5, column=2), "Q.q6.mgmt_residual")
     text(ws.cell(row=5, column=3), "Q.q6.mgmt_residual. Which schedule version produced the published figure?")
@@ -342,7 +342,7 @@ def make_run(rd: pathlib.Path) -> None:
     text(ws.cell(row=5, column=7), "")
     grid(ws, 4, 5, 2, 7)
     section(ws, 7, "Data requests")
-    header(ws, 8, ["id", "matter", "size", "what closes it", "owner", "from_finding"],
+    header(ws, 8, ["id", "matter", "size", "what closes it", "owner", "raised by"],
            ["id", "description", "amount", "note", "status", "id"], primary=False)
     ident(ws.cell(row=9, column=2), "D.q6.capex")
     text(ws.cell(row=9, column=3), "D.q6.capex. The capitalized-cost accounts, for the capex bridge.")
@@ -478,7 +478,7 @@ sections:
         blocks:
           - text: "Every rostered check is listed with what it examined and what it did not."
           - text: "No owner-compensation adjustment was taken: the amount is {q6 | Owner compensation, no adjustment taken | LTM Jul 2025 | $}."
-          - table: {from: Coverage}
+          - table: {from: Coverage, columns: ["token · title", status, "what was examined", "what was not examined, and why"]}
           - lines: {from: Basis of Preparation, block: Procedures not performed}
 """
 SENTENCE_TITLE = ("Reported EBITDA walks to diligence adjusted EBITDA through supported adjustments "
