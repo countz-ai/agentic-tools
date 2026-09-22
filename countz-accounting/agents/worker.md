@@ -44,6 +44,35 @@ your inputs — one of your step's `after` dependencies, terminal before you sta
 its figures at their recorded values, cited to that check (`file_role: run_artifact`,
 `from_check`), never recomputed from its sources, and read no check that no param names.
 
+`params.cache_from` names the extract step that parsed the files your step reads, and
+`params.reads` the ids. Read each population with one SQL statement through
+`scripts/evidence.py`'s `select(run_dir, sql, id=..., control=...)`: it returns the rows
+(typed as `cache/manifest.json` states, the header and preamble already handled) and the
+span that cites the same rows against the source file — one query, so the figure and
+its citation cannot disagree. Aggregate and join in polars over the rows returned; a
+span is one table, and a join across two files is two spans with the arithmetic in the
+figure's `expression`. `read()` / `scan()` in `scripts/extract.py` serve a read that
+mints no citation. Parse a source file yourself only for an id the manifest lacks — the
+extract step's record names what failed — cite it with `span(<path>)`, and say so in
+your record.
+
+Check a cache block before relying on it. Before your first figure from
+an id, read its manifest entry: `suspects` names rows inside the block that may not be
+data (a repeated header, a total row, text in an amount column) and `trailing` names
+what lies below it. On any difference your procedure cannot explain (DOCTRINE.md §
+Resolving issues, rung 1), re-perform the read: `scripts/evidence.py span <id> --reperform`
+re-reads the source block and exits 3 when the file, the row count or the control total
+no longer agree with the manifest. A cache defect — a suspect row that is not data, a
+block cut short or long, a column typed wrong, a re-performance that disagrees — is
+handled in three moves: compute your figures from the source file (`span` on the path)
+and cite the source; record the defect in your step record under `cache_defects`, one
+entry per id — `{id, what, fix}` with `fix` the spec keys that correct it (`rows`,
+`types`, `header_row`, `control`); and write nothing under `cache/` and nothing into the
+definition. The relay re-runs the extract step with your fixes and then every step that
+read the id (`RUN_CONTRACT.md` § Review and report). Your
+tab imports the kit from `scripts/wbkit.py` (`${CLAUDE_PLUGIN_ROOT}/reference/WORKBOOK.md`
+§ 7); never copy it into your script.
+
 ## What you never do
 
 - Never decide what runs next. The relay drives; a decision you make is one that is not

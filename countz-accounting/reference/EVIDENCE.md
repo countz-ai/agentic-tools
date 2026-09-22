@@ -91,6 +91,21 @@ A read of a file the run wrote, e.g. another check's item table under `checks/`,
 data-room role. Its basis is the producing check's own citations, and the deliverable
 presents the read as derived.
 
+**A span is measured.** A run whose plan scheduled an `extract` step (`PLAYBOOKS.md`
+§ The file) holds the files its steps read as typed parquet under `<run_dir>/cache/`,
+with `cache/manifest.json` recording each file's source path, bytes, header row,
+columns with their letters, and control total. A step reads a population with one SQL
+statement through `scripts/evidence.py select`, which returns the rows and the span of
+the same rows: `file`, `source`, `file_role`, `header_at`, `rows` and the column letters
+from the manifest, `filter` as the WHERE clause verbatim in the file's own column
+names, `row_count` and `control_total` measured over the rows returned. The caller
+supplies the id, the control column and the note. A span cites one table; a join
+across two files is two spans, and the figure's `expression` carries the arithmetic.
+The parquet is named nowhere: a reader holding the workbook and the data room opens
+the file at `header_at`, applies the filter, counts the rows and sums the control
+column. For a read the cache did not serve, `scripts/evidence.py span <path>` measures
+the same entry on the file.
+
 ### cell
 
 ```yaml

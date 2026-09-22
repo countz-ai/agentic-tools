@@ -117,7 +117,7 @@ LAUNCH = ("LAUNCH: in ONE message, one general-purpose sub-agent per NEXT line, 
 # file preview. KIND_WORDS is the word a check kind takes in that line.
 KIND_WORDS = {"tieout": "tie-out", "recon": "reconciliation",
               "completeness": "completeness", "vouch": "vouching",
-              "cutoff": "cutoff", "analysis": "analysis"}
+              "cutoff": "cutoff", "analysis": "analysis", "extract": "extraction"}
 
 # A recipe's family header, as check-plugin.py gates it (PLAYBOOK_RECIPES.md § The body).
 FAMILY_HEADER = re.compile(r"^### ([A-Z]\d) — (.+?) \(kind `[a-z]+`, .+\)\s*$", re.M)

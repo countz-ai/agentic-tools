@@ -204,7 +204,10 @@ blue do not appear.
 
 - Orientation: landscape for schedules wider than 8 columns, otherwise portrait.
 - Fit to 1 page wide, as many tall as needed. Margins 0.5". Centre horizontally.
-- Repeat rows 1:4 on every page (title, subtitle, blank, header).
+- Repeat rows 1:3 on every page (title, subtitle, summary). Never a table header row:
+  the row-4 header belongs to the primary table alone, and repeated on a page that
+  holds a later table it labels columns it does not describe. Each table's header
+  prints once, where the table starts.
 - Print gridlines off. Print in black and white must still be readable — every colour
   meaning is duplicated by text (parentheses, status word, "input" column note).
 - Footer: left `Confidential · Countz`, centre `&A` (sheet name), right `Page &P of &N`.
@@ -232,81 +235,30 @@ blue do not appear.
 
 ### openpyxl
 
-```python
-from openpyxl.styles import Alignment, Border, Font, NamedStyle, PatternFill, Side
+The constants below, `font()`, `fill`, the three `Side`s, the number formats and
+`styles()` are code in `scripts/wbkit.py`, which every tab script imports
+(`WORKBOOK.md` § 7). They are not copied into a script: the module is the one place the
+palette and the named styles are written, and `check_workbook.py` verifies the stored
+workbook against the same values. The names, for reading a tab script:
 
-BAND, ACCENT, MARKER, TINT = "005C53", "0F756D", "2A9D90", "E1F0ED"
-INK, SLATE, HAIRLINE, MIST, WHITE = "1C2A2A", "566665", "D3DAD8", "F1F5F4", "FFFFFF"
-INPUT = "1F4FA3"
-BREAK_T, BREAK_F   = "B42318", "FBEAE7"
-REVIEW_T, REVIEW_F = "9A5B00", "FFF3D1"
-TIED_T, TIED_F     = "1E7B3C", "E5F3E8"
+- palette: `BAND`, `ACCENT`, `MARKER`, `TINT`, `INK`, `SLATE`, `HAIRLINE`, `MIST`,
+  `WHITE`, `INPUT`, `BREAK_T`/`BREAK_F`, `REVIEW_T`/`REVIEW_F`, `TIED_T`/`TIED_F` — the
+  hex values of § 1;
+- type: `FONT` (Arial), `font(size, bold, italic, color, underline)`;
+- rules: `hair` (thin `HAIRLINE`), `thin` (thin `INK`), `dbl` (double `INK`); `grid(ws,
+  first_row, last_row, first_col, last_col)` puts the hairline on every side of every
+  table cell and keeps a side a style already rules;
+- formats: `FMT_AMOUNT`, `FMT_CENTS`, `FMT_THOUS`, `FMT_PCT`, `FMT_DAYS`, `FMT_DATE`,
+  `FMT_PERIOD`, `FMT_TEXT` — § 6;
+- `styles()`: the named styles `Title`, `Subtitle`, `Section`, `Header` (the `BAND`),
+  `HeaderPlain` (`MIST`), `Body`, `BodyInput`, `Subtotal`, `Total`, `Note`, `Link`,
+  `KeyFigure`, `StatusBreak`, `StatusReview`, `StatusTied`, registered as `cz_*` on the
+  workbook; `S = styles()` at import.
 
-FONT = "Arial"
-def font(size=10, bold=False, italic=False, color=INK, underline=None):
-    return Font(name=FONT, size=size, bold=bold, italic=italic, color=color, underline=underline)
-
-fill = lambda hex_: PatternFill("solid", fgColor=hex_)
-hair = Side(style="thin", color=HAIRLINE)
-thin = Side(style="thin", color=INK)
-dbl  = Side(style="double", color=INK)
-
-FMT_AMOUNT   = '#,##0;(#,##0);"–"'
-FMT_CENTS    = '#,##0.00;(#,##0.00);"–"'
-FMT_THOUS    = '#,##0,;(#,##0,);"–"'
-FMT_PCT      = '0.0%;(0.0%);"–"'
-FMT_DAYS     = '0.0'
-FMT_DATE     = 'd mmm yyyy'
-FMT_PERIOD   = 'mmm-yy'
-FMT_TEXT     = '@'
-
-def grid(ws, first_row, last_row, first_col, last_col):
-    """The hairline on every side of every table cell. A side a style already rules
-    (the header's bottom, the total's top and double bottom) keeps its rule."""
-    for r in range(first_row, last_row + 1):
-        for c in range(first_col, last_col + 1):
-            cell = ws.cell(row=r, column=c)
-            b = cell.border
-            keep = lambda side: side if (side is not None and side.style) else hair  # noqa: E731
-            cell.border = Border(left=hair, right=hair, top=keep(b.top), bottom=keep(b.bottom))
-
-
-def styles():
-    s = {}
-    s["Title"]     = NamedStyle("cz_title",     font=font(14, bold=True))
-    s["Subtitle"]  = NamedStyle("cz_subtitle",  font=font(10, color=SLATE))
-    s["Section"]   = NamedStyle("cz_section",   font=font(11, bold=True, color=ACCENT))
-    s["Header"]    = NamedStyle("cz_header",    font=font(10, bold=True, color=WHITE), fill=fill(BAND),
-                                alignment=Alignment(vertical="center"), border=Border(bottom=hair))
-    s["HeaderPlain"] = NamedStyle("cz_header_plain", font=font(10, bold=True), fill=fill(MIST),
-                                alignment=Alignment(vertical="center"), border=Border(bottom=hair))
-    s["Body"]      = NamedStyle("cz_body",      font=font())
-    s["BodyInput"] = NamedStyle("cz_body_input", font=font(color=INPUT))
-    s["Subtotal"]  = NamedStyle("cz_subtotal",  font=font(bold=True), fill=fill(MIST), border=Border(top=hair))
-    s["Total"]     = NamedStyle("cz_total",     font=font(bold=True), border=Border(top=thin, bottom=dbl))
-    s["Note"]      = NamedStyle("cz_note",      font=font(9, italic=True, color=SLATE))
-    s["Link"]      = NamedStyle("cz_link",      font=font(color=ACCENT, underline="single"))
-    s["KeyFigure"] = NamedStyle("cz_key",       font=font(12, bold=True), fill=fill(TINT))
-    s["StatusBreak"]  = NamedStyle("cz_break",  font=font(color=BREAK_T),  fill=fill(BREAK_F))
-    s["StatusReview"] = NamedStyle("cz_review", font=font(color=REVIEW_T), fill=fill(REVIEW_F))
-    s["StatusTied"]   = NamedStyle("cz_tied",   font=font(color=TIED_T))
-    return s
-
-# per table, after its last row is written:
-#   grid(ws, header_row, last_row, first_col, last_col)
-# per sheet:
-#   ws.sheet_view.showGridLines = False
-#   ws.freeze_panes = "B4"
-#   ws.column_dimensions["A"].width = 2
-#   ws.row_dimensions[1].height = 24 ; ws.row_dimensions[4].height = 20
-#   ws.sheet_properties.tabColor = ACCENT        # SLATE for ledgers, "9A5B00" for review tabs
-#   ws.print_title_rows = "1:4"
-#   ws.page_setup.orientation = "landscape" ; ws.page_setup.fitToWidth = 1 ; ws.page_setup.fitToHeight = 0
-#   ws.sheet_properties.pageSetUpPr.fitToPage = True
-#   ws.page_margins.left = ws.page_margins.right = ws.page_margins.top = ws.page_margins.bottom = 0.5
-#   ws.oddFooter.left.text = "Confidential · Countz" ; ws.oddFooter.center.text = "&A" ; ws.oddFooter.right.text = "Page &P of &N"
-#   ws.print_options.horizontalCentered = True
-```
+Per sheet, `finish()` in the same module sets: gridlines off (on for a ledger), freeze
+panes `B4`, column A width 2, row 1 height 24 and row 4 height 20, the tab colour
+(`ACCENT`; `SLATE` for a ledger), print titles `1:3`, landscape fit to one page wide,
+0.5 margins, horizontal centring, and the § 7 footer.
 
 ### xlsxwriter
 
@@ -340,7 +292,7 @@ F = {
 # also carries {"border": 1, "border_color": P["hairline"]}; note/section/title do not.
 # per sheet: ws.hide_gridlines(2); ws.freeze_panes("B4"); ws.set_column("A:A", 2);
 #   ws.set_row(0, 24); ws.set_row(3, 20); ws.set_tab_color(P["accent"]);
-#   ws.repeat_rows(0, 3); ws.set_landscape(); ws.fit_to_pages(1, 0); ws.set_margins(0.5, 0.5, 0.5, 0.5);
+#   ws.repeat_rows(0, 2); ws.set_landscape(); ws.fit_to_pages(1, 0); ws.set_margins(0.5, 0.5, 0.5, 0.5);
 #   ws.set_footer('&L Confidential · Countz &C &A &R Page &P of &N'); ws.center_horizontally()
 ```
 
@@ -360,4 +312,4 @@ Open the produced workbook (or dump its XML) and confirm, per deliverable tab:
 7. No merged cells (`ws.merged_cells.ranges` is empty).
 8. Status colours appear only in the status column and, for breaks, the variance cell.
 9. Hyperlinks render `ACCENT` underlined, not Excel blue.
-10. Print titles `1:4`, fit-to-width 1, footer set.
+10. Print titles `1:3` — no table header row repeated; fit-to-width 1, footer set.

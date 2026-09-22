@@ -22,7 +22,9 @@ cell looks; the kit every tab script starts from) and `${CLAUDE_PLUGIN_ROOT}/ref
 (the deck: the brief, `report.yaml`, the gate), then `run.json` (the check roster and
 statuses), the latest review record, every `checks/<check>.md`, and the ledgers. Each
 check wrote its own tab; **you copy tabs, cached values intact — never rewrite one.** A
-rostered check with no tab gets no empty tab; it is stated in coverage.
+rostered check with no tab gets no empty tab; it is stated in coverage. An `extract`
+step is such a row: kind `extract`, its status, and under *what was examined* the count
+of files it parsed from `cache/manifest.json`.
 
 ## 1. The workbook — `out/workbook.xlsx`
 

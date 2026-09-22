@@ -56,143 +56,15 @@ import tempfile
 import zipfile
 
 from openpyxl import Workbook
-from openpyxl.styles import Alignment, Border, Font, NamedStyle, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 HERE = pathlib.Path(__file__).resolve().parent
 
-# --- WORKBOOK_STYLE.md § 9, verbatim ---------------------------------------------------
-BAND, ACCENT, MARKER, TINT = "005C53", "0F756D", "2A9D90", "E1F0ED"
-INK, SLATE, HAIRLINE, MIST, WHITE = "1C2A2A", "566665", "D3DAD8", "F1F5F4", "FFFFFF"
-INPUT = "1F4FA3"
-BREAK_T, BREAK_F = "B42318", "FBEAE7"
-REVIEW_T, REVIEW_F = "9A5B00", "FFF3D1"
-TIED_T = "1E7B3C"
-FONT = "Arial"
-
-
-def font(size=10, bold=False, italic=False, color=INK, underline=None):
-    return Font(name=FONT, size=size, bold=bold, italic=italic, color=color, underline=underline)
-
-
-fill = lambda hex_: PatternFill("solid", fgColor=hex_)  # noqa: E731
-hair = Side(style="thin", color=HAIRLINE)
-thin = Side(style="thin", color=INK)
-dbl = Side(style="double", color=INK)
-FMT_AMOUNT = '#,##0;(#,##0);"–"'
-FMT_TEXT = "@"
-
-
-def grid(ws, first_row, last_row, first_col, last_col):
-    for r in range(first_row, last_row + 1):
-        for c in range(first_col, last_col + 1):
-            cell = ws.cell(row=r, column=c)
-            b = cell.border
-            keep = lambda side: side if (side is not None and side.style) else hair  # noqa: E731
-            cell.border = Border(left=hair, right=hair, top=keep(b.top), bottom=keep(b.bottom))
-
-
-def styles():
-    s = {}
-    s["Title"] = NamedStyle("cz_title", font=font(14, bold=True))
-    s["Subtitle"] = NamedStyle("cz_subtitle", font=font(10, color=SLATE))
-    s["Section"] = NamedStyle("cz_section", font=font(11, bold=True, color=ACCENT))
-    s["Header"] = NamedStyle("cz_header", font=font(10, bold=True, color=WHITE), fill=fill(BAND),
-                             alignment=Alignment(vertical="center"), border=Border(bottom=hair))
-    s["HeaderPlain"] = NamedStyle("cz_header_plain", font=font(10, bold=True), fill=fill(MIST),
-                                  alignment=Alignment(vertical="center"), border=Border(bottom=hair))
-    s["Body"] = NamedStyle("cz_body", font=font())
-    s["BodyInput"] = NamedStyle("cz_body_input", font=font(color=INPUT))
-    s["Subtotal"] = NamedStyle("cz_subtotal", font=font(bold=True), fill=fill(MIST), border=Border(top=hair))
-    s["Total"] = NamedStyle("cz_total", font=font(bold=True), border=Border(top=thin, bottom=dbl))
-    s["Note"] = NamedStyle("cz_note", font=font(9, italic=True, color=SLATE))
-    s["KeyFigure"] = NamedStyle("cz_key", font=font(12, bold=True), fill=fill(TINT))
-    s["StatusBreak"] = NamedStyle("cz_break", font=font(color=BREAK_T), fill=fill(BREAK_F))
-    s["StatusReview"] = NamedStyle("cz_review", font=font(color=REVIEW_T), fill=fill(REVIEW_F))
-    s["StatusTied"] = NamedStyle("cz_tied", font=font(color=TIED_T))
-    return s
-
-
-S = styles()
-STATUS = {"pass": "StatusTied", "supported": "StatusTied", "tied": "StatusTied",
-          "warn": "StatusReview", "candidate": "StatusReview",
-          "fail": "StatusBreak", "unexplained": "StatusBreak"}
-WIDTH = {"margin": 2, "id": 36, "id_ledger": 44, "description": 42, "amount": 14,
-         "period": 12, "percent": 9, "status": 12, "note": 48}
-
-
-# --- WORKBOOK.md § 7, the kit ----------------------------------------------------------
-def band(ws, title, subtitle, summary=None):
-    ws.column_dimensions["A"].width = WIDTH["margin"]
-    ws["B1"].value, ws["B1"].style = title, S["Title"]
-    ws["B2"].value, ws["B2"].style = subtitle, S["Subtitle"]
-    ws.row_dimensions[1].height, ws.row_dimensions[4].height = 24, 20
-    if summary:
-        ws["B3"].value, ws["B3"].style = summary, S["Body"]
-
-
-WRAP = Alignment(wrap_text=True, vertical="top")
-
-
-def header(ws, row, labels, widths, primary=True):
-    for i, (label, width) in enumerate(zip(labels, widths), start=2):
-        c = ws.cell(row=row, column=i, value=label)
-        c.style = S["Header"] if primary else S["HeaderPlain"]
-        ws.column_dimensions[get_column_letter(i)].width = WIDTH[width]
-        if width in ("amount", "period", "percent"):
-            c.alignment = Alignment(horizontal="right", vertical="center")
-
-
-def section(ws, row, text_):
-    ws.cell(row=row, column=2, value=text_).style = S["Section"]
-
-
-def ident(cell, id_):
-    cell.value, cell.style = id_, S["Body"]
-    cell.number_format = FMT_TEXT
-
-
-def text(cell, v, style="Body"):
-    cell.value, cell.style = v, S[style]
-    cell.data_type = "s"          # a label opening with `=` is a string, never a formula
-    cell.number_format = FMT_TEXT
-    ws = cell.parent
-    if (ws.column_dimensions[cell.column_letter].width or 0) >= WIDTH["description"]:
-        cell.alignment = WRAP      # description and note columns wrap, top-aligned
-
-
-def fit_rows(ws, first_row=5):
-    """An explicit height on every row holding a wrapped cell: the viewer does not fit
-    rows on open. Mirrors check_workbook.py `lines_needed` — change both."""
-    for row in ws.iter_rows(min_row=first_row):
-        lines = 1
-        for c in row:
-            if isinstance(c.value, str) and c.alignment.wrap_text:
-                width = ws.column_dimensions[c.column_letter].width or 8
-                lines = max(lines, -(-len(c.value) // int(width * 1.1)))
-        if lines > 1:
-            ws.row_dimensions[row[0].row].height = 13 * lines + 2
-
-
-def amount(cell, value, fmt=None, hard_input=False, style=None):
-    cell.value = value
-    cell.style = S[style] if style else (S["BodyInput"] if hard_input else S["Body"])
-    cell.number_format = fmt or FMT_AMOUNT
-
-
-def status(cell, word):
-    cell.value = word
-    cell.style = S[STATUS[word]] if word in STATUS else S["Note"]
-
-
-def finish(ws, table_last_row, ledger=False, header_row=4, freeze="B4"):
-    grid(ws, header_row, table_last_row, 2, ws.max_column)
-    fit_rows(ws)
-    ws.auto_filter.ref = f"B{header_row}:{get_column_letter(ws.max_column)}{table_last_row}"
-    ws.freeze_panes = freeze
-    ws.sheet_view.showGridLines = ledger
-    ws.sheet_properties.tabColor = SLATE if ledger else ACCENT
-    ws.print_title_rows = "1:4"
+# --- the kit: scripts/wbkit.py (WORKBOOK_STYLE.md § 9 + WORKBOOK.md § 7) ------------
+sys.path.insert(0, str(HERE))
+from wbkit import (ACCENT, BAND, FMT_AMOUNT, FMT_TEXT, MIST, S, SLATE, TINT,  # noqa: E402,F401
+                   WIDTH, amount, band, finish, fit_rows, grid, header, ident, section,
+                   status, text)
 
 
 # --- the fixture run ----------------------------------------------------------------

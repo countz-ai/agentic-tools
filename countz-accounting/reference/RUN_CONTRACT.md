@@ -56,6 +56,7 @@ ask, on a catalog miss only ([OBSERVABILITY.md](OBSERVABILITY.md) § 4).
 | `<run_dir>/engagement-preview.md` | `scripts/setup_run.py`, on every registration: the collected parameters, each source's location, and a metadata-only directory summary of every folder source (3 levels, file counts, KB) | the user, via preview, right after registration and before the first dispatch |
 | `<run_dir>/file_index.json` | the plan step: every registered file with its relevance verdict (`relevant: true`, `"context"` for a file kept for later explanation, or `false`). Plan-driven runs only | dispatched steps, `scripts/preview.py` |
 | `<run_dir>/sources/<id>.md` (+ `<id>.entities.json` where the source stacks several accounts, statements or entities) | the plan step, for each source its roster binds. Plan-driven runs only | the check steps |
+| `<run_dir>/cache/<id>.parquet` + `<run_dir>/cache/manifest.json` | the `extract` step, through `scripts/extract.py`: the data-room files the plan's steps read, parsed once into typed parquet, and the manifest — per file its source path, bytes and sha256, header row, columns with letters and dtypes, row count and control total. Plan-driven runs whose plan scheduled an extraction | the steps that name it in `params.cache_from` (`scripts/extract.py read`), `scripts/evidence.py span` for their citations. Excluded from `run_sync.tar.gz`: rebuilt by re-running the step, cited by nothing |
 | `<run_dir>/recipes/<recipe-name>.md` | `scripts/setup_run.py --recipe` (a served recipe, byte for byte) or the `create-recipe` step (a generated one, validated by `scripts/validate_recipe.py`); written once, never edited | the plan, review and report steps, through `run.json.plan.recipe` |
 | `<run_dir>/plan.md` + `<run_dir>/plan/<name>.json` | the plan step, once per draft; a revised draft rewrites both | the user (via preview), the relay, the playbook engine (the definition it executes) |
 | `<run_dir>/steps/<NNNN>-<step>.json` | the step that produced it, once, at its end | the relay (`run_state.py record`), the playbook engine, the review step |
@@ -179,8 +180,8 @@ around.
 ## The step record
 
 `<run_dir>/steps/<NNNN>-<step>.json`, `NNNN` the zero-padded seq from the dispatch args.
-Steps: `plan`, `recipe`, `tie`, `recon`, `completeness`, `vouch`, `cutoff`, `analyze`, `review`,
-`report`.
+Steps: `plan`, `recipe`, `extract`, `tie`, `recon`, `completeness`, `vouch`, `cutoff`,
+`analyze`, `review`, `report`.
 
 ```yaml
 schema: "countz-accounting/step@1"
@@ -201,6 +202,10 @@ blockers: [{what: "...", effect: "..."}] # what stopped the work or narrowed it:
                                     # source you could not reach, a dependency that did
                                     # not land; one entry each, with its effect
 findings: []                        # review only; see VALIDATION.md
+cache_defects: []                   # [{id, what, fix: {rows|types|header_row|control}}]:
+                                    # a cache id whose block the step found wrong, and
+                                    # the spec keys that correct it (agents/worker.md
+                                    # § Your procedure)
 notes: ""
 ```
 
@@ -271,8 +276,16 @@ After every wave, in this order:
 
 ## Review and report
 
+Before the review: a step record carrying `cache_defects` names a cache block the step
+found wrong and the spec keys that correct it. Re-dispatch the extract step that owns
+the id with `--mode fix` and `fix_input` holding those entries — it applies them as
+overrides and rewrites the block — then every step whose `params.reads` names the id,
+with `--mode fix` and `fix_input` naming the id, before the review runs. The step that
+found the defect computed from the source and needs no re-run.
+
 Dispatch `check-review` (`dispatch --step review`) over the checks not yet reviewed at
-their current seq. Put each actionable finding to the user from the review record
+their current seq. An `extract` step is not a check under review: it computes no
+figure, and its record is the cache manifest every consumer's citations re-state. Put each actionable finding to the user from the review record
 (severity, target, observation); with debug mode off the preview does not show them. The
 user rules on each:
 

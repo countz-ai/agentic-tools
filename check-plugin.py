@@ -1175,11 +1175,37 @@ def check(root: pathlib.Path) -> list[str]:
                  "after": []}])))
             cyclic = tdp / "cyclic.json"
             cyclic.write_text(json.dumps(wf("cyclic", [
-                {"id": "s1", "check": "tieout", "sources": ["a"], "after": ["s2"]},
+                {"id": "s1", "check": "tieout", "sources": ["a"], "after": ["s2"],
+                 "params": {"ties_from": "s2"}},
+                {"id": "s2", "check": "tieout", "sources": ["b"], "after": ["s1"],
+                 "params": {"ties_from": "s1"}}])))
+            # `after` is derived from the `_from` reads: an order no read justifies is
+            # refused, and an extract step's cache reads resolve against its file list.
+            unread = tdp / "unread.json"
+            unread.write_text(json.dumps(wf("unread", [
+                {"id": "s1", "check": "tieout", "sources": ["a"], "after": []},
                 {"id": "s2", "check": "tieout", "sources": ["b"], "after": ["s1"]}])))
+            files = [{"id": "gl_fy2026", "path": "gl.csv", "source": "a",
+                      "file_role": "system_export", "control": "amount"}]
+            cached = tdp / "cached.json"
+            cached.write_text(json.dumps(wf("cached", [
+                {"id": "x0", "check": "extract", "sources": ["a"], "after": [],
+                 "params": {"files": files}},
+                {"id": "s1", "check": "tieout", "sources": ["a", "b"], "after": ["x0"],
+                 "params": {"cache_from": "x0", "reads": ["gl_fy2026"]}}])))
+            unparsed = tdp / "unparsed.json"
+            unparsed.write_text(json.dumps(wf("unparsed", [
+                {"id": "x0", "check": "extract", "sources": ["a"], "after": [],
+                 "params": {"files": files}},
+                {"id": "s1", "check": "tieout", "sources": ["a", "b"], "after": ["x0"],
+                 "params": {"cache_from": "x0", "reads": ["tb_fy2026"]}}])))
             for f, want, label in ((good, 0, "a well-formed playbook"),
                                    (unknown, 1, "an unknown check kind"),
-                                   (cyclic, 1, "a dependency cycle")):
+                                   (cyclic, 1, "a dependency cycle"),
+                                   (unread, 1, "an `after` no `_from` read justifies"),
+                                   (cached, 0, "an extract step with a resolved cache read"),
+                                   (unparsed, 1, "a cache read of an id the extract step "
+                                                 "does not parse")):
                 r = run_cw(f)
                 if r.returncode != want:
                     bad.append(f"{rel(cw)}: {label} fixture exited {r.returncode}, want "
@@ -1215,7 +1241,7 @@ def check(root: pathlib.Path) -> list[str]:
                      {"id": "s1", "check": "tieout", "sources": ["a", "b"], "after": [],
                       "params": {"family": "c1"}},
                      {"id": "s2", "check": "recon", "sources": ["a", "b"],
-                      "after": ["s1"]}]}))
+                      "after": ["s1"], "params": {"items_from": "s1"}}]}))
             # s1 carries a recipe family and s2 none, so one run exercises both forms of
             # the SAY line: the family's title, and the bare id with its kind.
             recipe = tdp / "PB.md"
@@ -2202,6 +2228,171 @@ def check(root: pathlib.Path) -> list[str]:
                 if need not in txt:
                     bad.append(f"skills/{skill}/SKILL.md: does not name {need} - the deck is "
                                f"built and gated by script, never written by hand")
+
+    # 8w. The workbook kit is ONE module, scripts/wbkit.py: WORKBOOK_STYLE.md § 9's
+    #     constants and WORKBOOK.md § 7's helpers, imported by every tab script. Measured
+    #     2026-09-22 on one revenue run: WORKBOOK.md told every tab script to start from
+    #     the kit "verbatim", and eighteen worker scripts carried a typed copy each - the
+    #     largest class of generated code in the run. The module must self-check in the
+    #     plugin's own environment, no other shipped script may carry the palette with a
+    #     NamedStyle (a second copy drifts from the gate), and the two documents must send
+    #     the reader to the module rather than to a code block.
+    wk = root / "scripts" / "wbkit.py"
+    if wk.is_file():
+        import subprocess
+        r = subprocess.run(["uv", "run", "--project", str(root), "python3", str(wk)],
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            tail = " | ".join((r.stdout + r.stderr).strip().splitlines()[-3:])
+            bad.append(f"{rel(wk)}: self-check failed (exit {r.returncode}): {tail}")
+        for b in sorted(root.glob("scripts/*.py")):
+            if b == wk:
+                continue
+            t = b.read_text()
+            if "005C53" in t and "NamedStyle(" in t:
+                bad.append(f"{rel(b)}: carries its own copy of the workbook kit - import "
+                           f"scripts/wbkit.py instead")
+        for doc in ("reference/WORKBOOK.md", "reference/WORKBOOK_STYLE.md"):
+            df = root / doc
+            if df.is_file() and "scripts/wbkit.py" not in df.read_text():
+                bad.append(f"{rel(df)}: does not name scripts/wbkit.py - a tab script "
+                           f"reading it would type the kit again")
+
+    # 8x. scripts/extract.py reads a BLOCK, never a file: a text file that stacks a
+    #     second table under the first must land the first block alone, report the
+    #     lines below it, and land the second block when its anchors are named.
+    #     Measured 2026-09-22 on a fixture: before the block rule, a two-row rollforward
+    #     with a schedule under it cached as seven rows with an amount column degraded
+    #     to text and no warning.
+    ex = root / "scripts" / "extract.py"
+    if ex.is_file():
+        import subprocess
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            tdp = pathlib.Path(td)
+            room, rd = tdp / "room", tdp / "run"
+            room.mkdir()
+            rd.mkdir()
+            (room / "stacked.csv").write_text(
+                "Demo Corp\nRollforward\n\nperiod,opening,billings,closing\n"
+                "2024-10,100.00,50.00,150.00\n2024-11,150.00,60.00,210.00\n\n"
+                "By stream\nstream,balance\nsubscription,90.00\nservices,35.00\n")
+            (rd / "run.json").write_text(json.dumps({
+                "schema": "countz-accounting/run@1", "run_id": "fx.20260922-000000",
+                "sources": [{"id": "dataroom", "name": "room", "path": str(room),
+                             "kind": "folder"}], "checks": [], "dispatches": [],
+                "next_seq": 2}))
+            spec = json.dumps([
+                {"id": "roll", "path": "stacked.csv", "source": "dataroom",
+                 "file_role": "management_prepared", "control": "billings"},
+                {"id": "by_stream", "path": "stacked.csv", "source": "dataroom",
+                 "file_role": "management_prepared", "header_row": 9, "rows": "10:11"}])
+            r = subprocess.run(["uv", "run", "--project", str(root), "python3", str(ex),
+                                str(rd), "--files", spec], capture_output=True, text=True)
+            out = r.stdout + r.stderr
+            man = rd / "cache" / "manifest.json"
+            if r.returncode != 0 or not man.is_file():
+                bad.append(f"{rel(ex)}: the stacked fixture did not land (exit "
+                           f"{r.returncode}): {out.strip()[:160]}")
+            else:
+                files = {e["id"]: e for e in json.loads(man.read_text())["files"]}
+                roll, by = files.get("roll") or {}, files.get("by_stream") or {}
+                if roll.get("row_count") != 2 or (roll.get("control_total") or {}).get("value") != 110.0:
+                    bad.append(f"{rel(ex)}: the first block must stop at the blank line - "
+                               f"2 rows, billings 110.0; got {roll.get('row_count')} rows, "
+                               f"{roll.get('control_total')}")
+                if not roll.get("trailing") or "TRAILING: roll" not in out:
+                    bad.append(f"{rel(ex)}: lines below a block must be recorded as "
+                               f"`trailing` in the manifest and printed as TRAILING:")
+                if by.get("row_count") != 2 or (by.get("control_total") or {}).get("value") != 125.0 \
+                        or [c["name"] for c in by.get("columns", [])] != ["stream", "balance"]:
+                    bad.append(f"{rel(ex)}: a second block named by header_row and rows must "
+                               f"land as its own entry; got {by.get('columns')} "
+                               f"{by.get('row_count')} rows")
+            # The cache is checked, never trusted: a block holding a quoted newline, a
+            # repeated header, a total row and a second table's header must land with
+            # each named as a suspect, disagree with the planner's whole-block profile
+            # span and exit 1; an override cutting the rows that are not data must
+            # agree, retype the amount column and exit 0; and a source that changed
+            # under the cache must fail --reperform.
+            (room / "ar.csv").write_text(
+                'Demo Corp\nAR by customer\n\ncustomer,region,amount\n'
+                'Acme,"East\nCoast",100.00\nBeta,West,200.00\nGamma,East,300.00\n'
+                'customer,region,amount\nDelta,West,50.00\nTotal,,650.00\n'
+                'stream,note,balance\nsubscription,x,90.00\nservices,y,35.00\n')
+            (rd / "workpapers").mkdir(exist_ok=True)
+            (rd / "workpapers" / "evidence-profile-dataroom.yaml").write_text(
+                "- id: E.ar.whole\n  kind: span\n  file: ar.csv\n  source: dataroom\n"
+                "  file_role: management_prepared\n  header_at: A4\n  rows: '5:9'\n"
+                "  columns: [{name: amount, at: C, holds: values}]\n"
+                "  filter: none - full sheet consumed\n  row_count: 4\n"
+                "  control_total: {column: amount, value: 650.00}\n")
+            spec2 = json.dumps([{"id": "ar", "path": "ar.csv", "source": "dataroom",
+                                 "file_role": "management_prepared", "control": "amount"}])
+            r = subprocess.run(["uv", "run", "--project", str(root), "python3", str(ex),
+                                str(rd), "--files", spec2], capture_output=True, text=True)
+            out = r.stdout + r.stderr
+            ar = {e["id"]: e for e in json.loads(man.read_text())["files"]}.get("ar") or {}
+            reasons = " | ".join(su["reason"] for su in ar.get("suspects") or [])
+            if r.returncode != 1 or "DISAGREES: ar" not in out:
+                bad.append(f"{rel(ex)}: a block whose control total differs from the plan's "
+                           f"profile span must print DISAGREES and exit 1 (exit "
+                           f"{r.returncode}): {out.strip()[:160]}")
+            if ar.get("row_count") != 9:
+                bad.append(f"{rel(ex)}: a quoted newline inside a field must count as one "
+                           f"record - want 9 rows, got {ar.get('row_count')}")
+            for want in ("repeated header", "total row", "text in the numeric column"):
+                if want not in reasons:
+                    bad.append(f"{rel(ex)}: the manifest's suspects must name a `{want}`; "
+                               f"got: {reasons[:160]}")
+            r = subprocess.run(["uv", "run", "--project", str(root), "python3", str(ex),
+                                str(rd), "--files", spec2, "--override",
+                                '{"ar": {"rows": "5:7,9:9"}}'], capture_output=True, text=True)
+            out = r.stdout + r.stderr
+            ar = {e["id"]: e for e in json.loads(man.read_text())["files"]}.get("ar") or {}
+            dtype = {c["name"]: c["dtype"] for c in ar.get("columns", [])}.get("amount")
+            if r.returncode != 0 or "AGREES: ar" not in out or ar.get("row_count") != 4 \
+                    or dtype != "Float64" or not ar.get("overrides"):
+                bad.append(f"{rel(ex)}: an override cutting the rows that are not data must "
+                           f"agree with the profile, retype the amount column and record the "
+                           f"override (exit {r.returncode}, {ar.get('row_count')} rows, "
+                           f"amount {dtype}): {out.strip()[:160]}")
+            # The read and the citation are one query: evidence.py select over the
+            # cached block returns the rows and a span whose filter is the WHERE clause,
+            # whose row count and control total are measured over those rows, and whose
+            # file and anchors come from the manifest; a JOIN is refused.
+            ev = root / "scripts" / "evidence.py"
+            if ev.is_file():
+                r = subprocess.run(["uv", "run", "--project", str(root), "python3", str(ev),
+                                    "select", "SELECT customer FROM ar WHERE region = 'West'",
+                                    "--run-dir", str(rd), "--id", "E.ar.west"],
+                                   capture_output=True, text=True)
+                want = ("file: ar.csv", "header_at: A4", "rows: 5:7,9:9",
+                        "filter: region = 'West'", "row_count: 2", "value: 250.0",
+                        "at: A")
+                if r.returncode != 0 or not all(w in r.stdout for w in want):
+                    bad.append(f"{rel(ev)}: `select` must return the span of the rows the "
+                               f"statement selects - file, anchors and letters from the "
+                               f"manifest, the WHERE as filter, count and control measured "
+                               f"(exit {r.returncode}): {(r.stdout + r.stderr).strip()[:200]}")
+                r = subprocess.run(["uv", "run", "--project", str(root), "python3", str(ev),
+                                    "select", "SELECT a.customer FROM ar a JOIN ar b ON a.customer = b.customer",
+                                    "--run-dir", str(rd)], capture_output=True, text=True)
+                if r.returncode == 0 or "one table" not in (r.stdout + r.stderr):
+                    bad.append(f"{rel(ev)}: a JOIN in a span select must be refused naming "
+                               f"the one-table rule (exit {r.returncode})")
+            r = subprocess.run(["uv", "run", "--project", str(root), "python3", str(ex),
+                                str(rd), "--reperform", "ar"], capture_output=True, text=True)
+            if r.returncode != 0:
+                bad.append(f"{rel(ex)}: --reperform on an unchanged source must agree "
+                           f"(exit {r.returncode}): {(r.stdout + r.stderr).strip()[:160]}")
+            with (room / "ar.csv").open("a") as fh:
+                fh.write("Zeta,East,1.00\n")
+            r = subprocess.run(["uv", "run", "--project", str(root), "python3", str(ex),
+                                str(rd), "--reperform", "ar"], capture_output=True, text=True)
+            if r.returncode != 1 or "changed" not in (r.stdout + r.stderr):
+                bad.append(f"{rel(ex)}: --reperform must fail when the source changed under "
+                           f"the cache (exit {r.returncode}): {(r.stdout + r.stderr).strip()[:160]}")
 
     # 8p. One document names the preferred libraries and pyproject.toml pins them; the
     #     worker charter, the one place every computing step reads, must point at it.

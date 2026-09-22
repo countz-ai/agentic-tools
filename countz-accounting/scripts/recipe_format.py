@@ -21,6 +21,9 @@ INHERITED = {"Reperformance", "Exceptions", "The bar", "Rulings", "Coverage",
              "The source-class ladder", "The verdict ladder", "The headline walk"}
 FRONTMATTER_KEYS = {"name", "objective", "declares", "headline", "lead"}
 FAMILY = re.compile(r"^### ([A-Z])(\d) — .+ \(kind `([a-z]+)`, (.+)\)\s*$")
+# `(kind `x`, one check, after A0)`: an order in the header. The plan derives `after`
+# from the reads a family declares; a recipe never schedules.
+AFTER = re.compile(r"(?:^|,)\s*after\b", re.I)
 NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 # `## Report` (RECIPE_FORMAT.md § Report): the deck's opening and the schedules it
 # carries before its narrative, as one fenced ```json block —
@@ -213,6 +216,11 @@ def validate(text: str, kinds: set[str] | None = None) -> list[tuple[str, str]]:
             continue
         fid = (m.group(1) + m.group(2)).lower()
         fams[fid] = m.group(4)
+        if AFTER.search(m.group(4)):
+            bad.append(("family.after", f"family {fid.upper()} states an order (`after ...`) "
+                                        f"in its header; a family states what it reads from "
+                                        f"other families, and the plan derives the order "
+                                        f"from those reads (RECIPE_FORMAT.md § The families)"))
         if kinds and m.group(3) not in kinds:
             bad.append(("family.kind", f"family {fid.upper()} names kind `{m.group(3)}`, "
                                        f"which KINDS does not declare"))

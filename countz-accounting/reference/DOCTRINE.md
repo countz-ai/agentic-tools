@@ -51,7 +51,12 @@ On an expectation mismatch, try to resolve it first. Examples:
 
 1. **Did we misread a file?** E.g. wrong sheet, wrong block on a sheet that stacks several,
    a sign convention, gross on one side and net on the other, a subtotal row swept into a
-   column sum.
+   column sum. Where the read came through the run's cache, the cache may have misread
+   it the same way: re-perform the read against the source
+   (`scripts/evidence.py span <id> --reperform`, or `scripts/extract.py <run_dir>
+   --reperform <id>`) and read the block's `suspects` in `cache/manifest.json` before
+   anything else. A cache defect is recorded and corrected through the extract step
+   (`agents/worker.md` § Your procedure); a cached file is not edited.
 2. **Is it a known reconciling item?** Quantify it against a recorded figure — read the
    allowance off the books, list the in-transit deposits. Never infer it from the gap.
 3. **Is there a recorded explanation?** The data room may hold the explanation even when

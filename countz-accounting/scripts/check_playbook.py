@@ -39,7 +39,18 @@ KINDS = {
     "vouch": "check-vouch",
     "cutoff": "check-cutoff",
     "analysis": "check-analyze",
+    "extract": "check-extract",
 }
+
+# The one kind that computes no figure: `extract` parses the data-room files the plan's
+# steps read into `<run_dir>/cache/` (scripts/extract.py), once, ahead of the steps that
+# read them. Its `params.files` is the list to parse; a consumer names the extract step in
+# `params.cache_from` and the ids it reads in `params.reads`. Review skips it; the report
+# lists it on Coverage.
+EXTRACT = "extract"
+FILE_KEYS = {"id", "path", "source", "file_role", "header_row", "rows", "sheet", "types",
+             "control", "delimiter"}
+ROWS = re.compile(r"^\d+:\d+(?:\s*,\s*\d+:\d+)*$")
 
 # kind -> the params contract check_params enforces. `required`: keys every step or
 # check of the kind must carry; `one_of`: key groups of which at least one must be
@@ -50,6 +61,7 @@ PARAMS = {
     "vouch": {"one_of": [["items_from"],
                          ["items_file", "items_sheet", "items_range"]]},
     "cutoff": {"required": ["period_end", "window_days"]},
+    "extract": {"required": ["files"]},
 }
 
 # The most steps one recipe family may be planned as before the definition must say why.
@@ -113,8 +125,25 @@ def check_params(kind: str, params, *, after: list | None = None,
     if sr is not None and (not isinstance(sr, str) or not sr.strip()):
         bad.append(f"`params.split_reason` must be the measured fact that split the "
                    f"family, got {sr!r}")
+    bad.extend(check_files(kind, params))
+    reads = params.get("reads")
+    if reads is not None:
+        if kind == EXTRACT:
+            bad.append("an `extract` step reads no cache; `params.reads` belongs on the "
+                       "steps that read what it writes")
+        elif not isinstance(reads, list) or not reads \
+                or not all(isinstance(r, str) and SLUG.match(r) for r in reads):
+            bad.append(f"`params.reads` must be a non-empty list of cache file ids (slugs), "
+                       f"got {reads!r}")
+        elif not params.get("cache_from"):
+            bad.append("`params.reads` names cache files but `params.cache_from` names no "
+                       "extract step - a cache read is declared like any other dependency")
     for key, val in params.items():
         if not key.endswith("_from") or val is None:
+            continue
+        if kind == EXTRACT:
+            bad.append(f"`params.{key}`: an `extract` step reads only the files it parses, "
+                       f"never another step")
             continue
         refs = val if isinstance(val, list) else [val]
         if not refs or not all(isinstance(r, str) and SLUG.match(r) for r in refs):
@@ -129,6 +158,58 @@ def check_params(kind: str, params, *, after: list | None = None,
                 bad.append(f"`params.{key}` names `{ref}`, which is not a registered "
                            f"check")
     return bad
+
+
+def check_files(kind: str, params: dict) -> list[str]:
+    """Problems with an `extract` step's `params.files` (scripts/extract.py's spec)."""
+    files = params.get("files")
+    if kind != EXTRACT:
+        return ["`params.files` belongs to an `extract` step only"] if files is not None else []
+    if not isinstance(files, list) or not files:
+        return []                     # `required` already reported it
+    bad: list[str] = []
+    seen: set[str] = set()
+    for i, f in enumerate(files):
+        at = f"`params.files[{i}]`"
+        if not isinstance(f, dict):
+            bad.append(f"{at} is not an object")
+            continue
+        fid = f.get("id")
+        if not isinstance(fid, str) or not SLUG.match(fid):
+            bad.append(f"{at} has no valid `id` (a slug), got {fid!r}")
+        elif fid in seen:
+            bad.append(f"{at} repeats id `{fid}`")
+        else:
+            seen.add(fid)
+        if not isinstance(f.get("path"), str) or not f["path"].strip():
+            bad.append(f"{at} has no `path`")
+        for k in sorted(set(f) - FILE_KEYS):
+            bad.append(f"{at}: unknown key `{k}` (keys: {', '.join(sorted(FILE_KEYS))})")
+        hr = f.get("header_row")
+        if hr is not None and (isinstance(hr, bool) or not isinstance(hr, int) or hr < 1):
+            bad.append(f"{at}: `header_row` is a 1-based line number, got {hr!r}")
+        if f.get("types") is not None and not isinstance(f["types"], dict):
+            bad.append(f"{at}: `types` maps a column name to a dtype name")
+        rows = f.get("rows")
+        if rows is not None:
+            if not isinstance(rows, str) or not ROWS.match(rows.strip()):
+                bad.append(f"{at}: `rows` is \"first:last\" ranges, comma-separated, of "
+                           f"1-based inclusive data records, got {rows!r}")
+            elif not isinstance(hr, int) or isinstance(hr, bool):
+                bad.append(f"{at}: `rows` needs `header_row` - a block is anchored by both")
+            elif int(rows.split(":")[0]) != hr + 1:
+                bad.append(f"{at}: `rows` starts at {rows.split(':')[0]}, not under "
+                           f"header_row {hr}")
+    return bad
+
+
+def from_refs(params) -> set[str]:
+    """Every step id a step's `_from` params read."""
+    out: set[str] = set()
+    for key, val in (params or {}).items():
+        if key.endswith("_from") and val is not None:
+            out |= set(val if isinstance(val, list) else [val])
+    return out
 
 
 def validate(path: pathlib.Path, skills_dir: pathlib.Path | None) -> list[str]:
@@ -212,18 +293,45 @@ def validate(path: pathlib.Path, skills_dir: pathlib.Path | None) -> list[str]:
         if not isinstance(st.get("after", []), list):
             bad.append(f"{path}: step `{sid}` has a non-list `after`")
 
+    by_id = {st["id"]: st for st in steps if isinstance(st, dict) and st.get("id")}
     for st in steps:
         if not isinstance(st, dict) or not st.get("id"):
             continue
         for p in check_params(st.get("check"), st.get("params"),
                               after=st.get("after") or []):
             bad.append(f"{path}: step `{st['id']}` {p}")
+        reads = from_refs(st.get("params"))
         for dep in st.get("after") or []:
             if dep == st["id"]:
                 bad.append(f"{path}: step `{st['id']}` depends on itself")
             elif dep not in ids:
                 bad.append(f"{path}: step `{st['id']}` is after `{dep}`, which is not a "
                            f"declared step")
+            elif dep not in reads:
+                # `after` is derived from what the step reads, never declared on its own:
+                # the recipe knows no data room, so an order it cannot justify by a read
+                # is not one the plan carries (PLAYBOOKS.md § The file).
+                bad.append(f"{path}: step `{st['id']}` is after `{dep}` but no `_from` param "
+                           f"reads it - `after` is the set of steps the step's `_from` "
+                           f"params name, nothing more")
+        # A cache read resolves: the named step is an extract step, and it parses every
+        # id this step reads.
+        params = st.get("params") or {}
+        if isinstance(params.get("reads"), list) and isinstance(params.get("cache_from"), str):
+            src = by_id.get(params["cache_from"])
+            if src is None:
+                pass                  # check_params reported the missing dependency
+            elif src.get("check") != EXTRACT:
+                bad.append(f"{path}: step `{st['id']}` names `{params['cache_from']}` in "
+                           f"`cache_from`, which is a `{src.get('check')}` step, not `extract`")
+            else:
+                have = {f.get("id") for f in ((src.get("params") or {}).get("files") or [])
+                        if isinstance(f, dict)}
+                lost = [r for r in params["reads"] if r not in have]
+                if lost:
+                    bad.append(f"{path}: step `{st['id']}` reads {lost}, which "
+                               f"`{params['cache_from']}` does not parse - add the file to "
+                               f"its `params.files` or drop the read")
 
     # A family fanned out one step per entity: refused above FAMILY_STEP_MAX unless every
     # step of that family names the measured fact that split it.

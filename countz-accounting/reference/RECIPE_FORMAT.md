@@ -94,8 +94,11 @@ One `###` per family, headed exactly
 `### <F><n> — <title> (kind \`<kind>\`, <cardinality>)`. Example: `### C4 — the books meet
 the bank (kind \`recon\`, per bank account)`. `<F>` is one upper-case letter, `<n>` one
 digit, `<kind>` a key of `KINDS`. Number from 0 where family 0 is the population walk,
-from 1 otherwise. Each family states what it establishes, what it reads, and the families
-that precede it.
+from 1 otherwise. Each family states what it establishes, what it reads from the data
+room, and what it reads from other families — the reads the plan carries as `_from`
+params. A family never states an order: the plan derives each step's `after` from its
+reads (`PLAYBOOKS.md` § The file), because the order depends on the data room the
+recipe cannot see. `validate_recipe.py` refuses `after ...` in a family header.
 
 `<cardinality>` states the grain the family's procedure runs at — `per bank account`, `per
 fiscal year`, `one check`, `one check across accounts` — and never how many checks perform
