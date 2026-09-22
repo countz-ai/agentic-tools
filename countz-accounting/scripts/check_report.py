@@ -37,6 +37,12 @@ tab carrying every declared column and period, at the full population its `where
 `through` leave: every row's identity is on the deck, none is trimmed. A run with no
 recipe, or a recipe with no `## Report`, is not held to it.
 
+GATE 6 — the opening (REPORT.md § 1). The first page after the cover is the executive
+summary — headed `Executive summary`, its message a sentence, at least one stat tile, table
+or chart on it. On a recipe run the second page is the key-metrics page, headed as the
+recipe's `metrics.title`, carrying a figure block, and the first schedule sits at most one
+page after it.
+
 Parsed from the .pptx zip with the standard library only, like check_workbook.py.
 
 Usage:
@@ -58,7 +64,7 @@ import zipfile
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from check_prose import admitted_values  # noqa: E402
 from check_workbook import sheet_cells, sheet_order, shared_strings  # noqa: E402
-from recipe_format import report_schedules  # noqa: E402
+from recipe_format import report_metrics, report_schedules  # noqa: E402
 
 TITLE_MAX = 80                          # build_report.TITLE_MAX — a headline, not a sentence
 # The cover's budgets and patterns, restated from build_report.py (the SoT): this gate
@@ -298,7 +304,7 @@ def schedule_gate(schedules: list[dict], tabs: list[str], texts: dict[str, dict[
         candidates = [(k, body) for k, body in groups.items() if k[0] == tab]
         if not candidates:
             fails.append(f"schedule `{title}`: no page carries a table from `{tab}` — the recipe's "
-                         f"schedules open the deck (REPORT.md § 1)")
+                         f"schedules follow the opening pages (REPORT.md § 1)")
             continue
         match = None
         for k, body in candidates:
@@ -347,6 +353,70 @@ def schedule_gate(schedules: list[dict], tabs: list[str], texts: dict[str, dict[
         elif match[0] in trimmed:
             fails.append(f"schedule `{title}`: a table from `{tab}` states rows left on the tab — "
                          f"a recipe schedule is never trimmed")
+    return fails
+
+
+EXEC_TITLE = "executive summary"
+OPENING_MAX_EXTRA = 1     # pages allowed between the key-metrics page and the first schedule
+
+
+def has_figures(s: dict) -> bool:
+    """Whether a slide carries a figure block — a stat tile, a table copied from a tab or
+    a drawn chart — as against prose alone."""
+    return (any(n == "stat-value" for n, _ in s["shapes"]) or bool(s["tables"])
+            or any(CHARTVAL.match(n) for n, _ in s["shapes"]))
+
+
+def opening_gate(metrics: dict | None, schedules: list[dict] | None, tabs: list[str],
+                 slides: list[dict]) -> list[str]:
+    """GATE 6 — the opening (REPORT.md § 1). The first page after the cover is the
+    executive summary: headed `Executive summary`, carrying its message as a sentence and
+    at least one figure block. On a recipe run the second page is the key-metrics page,
+    headed as the recipe's `metrics.title`, carrying a figure block; and the first
+    schedule sits at most one page after it."""
+    fails: list[str] = []
+    body = [s for s in slides if s["name"] != "cover"]
+    if not body:
+        return fails
+    first = body[0]
+    if fold(first["title"].strip()) != fold(EXEC_TITLE):
+        fails.append(f"slide 2: the first page after the cover is headed `Executive summary`, "
+                     f"not `{first['title'].strip()[:50]}` — the elevator pitch opens the deck")
+    if not any(n == "message" and txt.strip() for n, txt in first["shapes"]):
+        fails.append("slide 2: the executive summary carries its message as a sentence under the headline")
+    if not has_figures(first):
+        fails.append("slide 2: the executive summary carries no stat tile, table or chart — "
+                     "not prose alone (REPORT.md § 1)")
+    if not metrics:
+        return fails
+    want = str(metrics.get("title") or "").strip()
+    if len(body) < 2:
+        fails.append(f"the deck has no key-metrics page headed `{want}` after the executive summary")
+        return fails
+    second = body[1]
+    if fold(second["title"].strip().removesuffix(CONTINUED)) != fold(want):
+        fails.append(f"slide 3: the key-metrics page is headed `{want}` (the recipe's `metrics.title`), "
+                     f"not `{second['title'].strip()[:50]}`")
+    if not has_figures(second):
+        fails.append(f"slide 3: the key-metrics page `{want}` carries no stat tile, table or chart")
+    if not schedules:
+        return fails
+    fam = fold(str(schedules[0].get("from", "")))
+    tab = next((x for x in tabs if fold(x.split(" ", 1)[0]) == fam), None)
+    if tab is None:
+        return fails
+    words = [str(w) for w in schedules[0].get("columns", [])]
+
+    def carries(s: dict) -> bool:
+        # the schedule's own table: from its tab, its header carrying every declared column
+        return any(":" in n and n.split(":", 1)[1] == tab and rows
+                   and all(header_at([h.strip() for h in rows[0]], w) is not None for w in words)
+                   for n, rows in s["tables"])
+    at = next((i for i, s in enumerate(body) if carries(s)), None)
+    if at is not None and at > 2 + OPENING_MAX_EXTRA:
+        fails.append(f"slide {at + 2}: the first schedule (`{schedules[0].get('title')}`) sits "
+                     f"{at - 2} pages after the key-metrics page; at most {OPENING_MAX_EXTRA} "
+                     f"(REPORT.md § 1)")
     return fails
 
 
@@ -515,18 +585,21 @@ def audit(deck: pathlib.Path, workbook: pathlib.Path, run_dir: pathlib.Path | No
             if shape_name in PROSE_SHAPES and text.strip() and not SENTENCE_END.search(text.strip()):
                 fails.append(f"slide {n}: {shape_name} `{text.strip()[:50]}` does not end with a full stop — "
                              f"a complete sentence")
-    # GATE 5 — the recipe's schedules, on a plan-driven run whose recipe declares them.
-    schedules = None
+    # GATE 5 — the recipe's schedules, on a plan-driven run whose recipe declares them;
+    # GATE 6 — the opening, on every deck, with the key-metrics page held to the recipe.
+    schedules = metrics = None
     if run_dir is not None and (run_dir / "run.json").is_file():
         try:
             run = json.loads((run_dir / "run.json").read_text())
             rpath = (run.get("plan") or {}).get("recipe")
             if rpath:
-                schedules = report_schedules(pathlib.Path(rpath).read_text())
+                rtext = pathlib.Path(rpath).read_text()
+                schedules, metrics = report_schedules(rtext), report_metrics(rtext)
         except (OSError, ValueError):
-            schedules = None
+            schedules = metrics = None
     if schedules:
         fails.extend(schedule_gate(schedules, tabs, workbook_texts(workbook), slides))
+    fails.extend(opening_gate(metrics, schedules, tabs, slides))
     return {"slides": len(slides), "failures": fails, "numbers": total, "unbacked": unbacked,
             "workbook_values": len(nums), "ledger_values": len(ledger_pool),
             "schedules": len(schedules or [])}

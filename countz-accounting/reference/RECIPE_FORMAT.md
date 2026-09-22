@@ -60,12 +60,11 @@ alone (WORKBOOK.md § 2).
 
 ### The body
 
-Six sections are required, in this order: `Population`, `Source classes`, `Granularity`,
-`The families`, `Exec summary`, `What the plan notes rather than checks`. One optional
-section, `Report`, sits between the last two. Other sections
-may sit between them. Each is described below with the rule it inherits; the recipe writes
-its own content under the heading and restates no inherited rule under a heading of its
-own.
+Seven sections are required, in this order: `Population`, `Source classes`,
+`Granularity`, `The families`, `Exec summary`, `Report`, `What the plan notes rather
+than checks`. Other sections may sit between them. Each is described below with the rule
+it inherits; the recipe writes its own content under the heading and restates no
+inherited rule under a heading of its own.
 
 #### `Population`
 
@@ -113,11 +112,15 @@ with. `check-report` writes that tab and the deck's executive summary from it
 
 #### Report
 
-Optional; between `Exec summary` and `What the plan notes rather than checks`. The
-schedules the deck carries before its narrative pages, in order (REPORT.md § 1): the
-tables a reader of this report type opens it for. Prose first — what each schedule shows
-and why the narrative refers to it rather than copying it — then exactly one fenced
-```` ```json ```` block, `{"schedules": [...]}`, one mapping per schedule:
+The deck's opening and the schedules it carries before its narrative pages (REPORT.md
+§ 1). Prose first — what the key-metrics page shows, what each schedule shows and why the
+narrative refers to it rather than copying it — then exactly one fenced ```` ```json ````
+block, `{"metrics": {...}, "schedules": [...]}`, with no other key.
+
+`metrics` is one mapping, `{"title": ...}`: the headline of the key-metrics page, the
+second page of the deck, naming the measure the report exists to state (`Adjusted
+EBITDA`, `Cash as substantiated`). `check_report.py` refuses a deck whose second page is
+headed otherwise. `schedules` is a non-empty list, one mapping per schedule:
 
 | key | |
 |---|---|
@@ -133,11 +136,11 @@ and why the narrative refers to it rather than copying it — then exactly one f
 | `ids` | optional; `true` keeps the id column |
 
 `check-report` builds each schedule as one `table:` block with the same keys, in the
-recipe's order, before any other page; `check_report.py` refuses a deck on which a
+recipe's order, directly after the opening; `check_report.py` refuses a deck on which a
 schedule is absent, lacks a declared column or period, or shows fewer rows than the tab
 holds under its `where` and `through` (REPORT.md § 5). `validate_recipe.py` refuses a
-block that does not parse, a schedule missing `title`, `from` or `columns`, a `from`
-naming no family, and an unknown key.
+block that does not parse, a missing or empty `metrics.title`, a schedule missing
+`title`, `from` or `columns`, a `from` naming no family, and an unknown key.
 
 #### `What the plan notes rather than checks`
 

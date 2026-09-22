@@ -16,16 +16,34 @@ process owner) unless the run declares a transaction reader (`RUN_CONTRACT.md`
 § Parameters). Do not infer a transaction from the data room's name or its files. With no
 declaration the deck closes on what the company does about what was found.
 
-The deck is two parts. **The schedules first**: the recipe's `## Report` declares the
-tables a reader of this report type opens it for (RECIPE_FORMAT.md § Report) — for a
-quality of earnings review, the EBITDA walk at item grain and the roster of every
-adjustment considered with its verdict and reason. Each is one page, continued over as
-many as it takes, at full population, in the recipe's order, before any other page. A
-run with no recipe, or a recipe with no `## Report`, has no part one. **The narrative
-after**: the findings, what they rest on, what is open — pages that refer to the
-schedules' rows by name and stat, and copy no schedule a second time. A table appears once
-on the deck; a figure a narrative page needs is a reference or a stat tile, never the
-schedule's rows again.
+The deck is three parts, in this order.
+
+**The opening.** Two pages, and at most one more:
+
+1. **Executive summary** — headed exactly that. The elevator pitch: `message` is the one
+   sentence an executive takes away, and it drives the rest of the deck — most of the
+   pages after exist to support it. Under it, the stat tiles, chart or table that carry
+   the message; never prose alone.
+2. **The key metrics** — the executive summary continued as figures. Its headline names
+   what it shows, the measure the report exists to state: the recipe's `## Report`
+   declares it as `metrics.title` (`Adjusted EBITDA` for a quality of earnings review,
+   `Days sales outstanding` for a revenue leak). Stat tiles, a chart or a short table per
+   period; the recipe's prose says which figures.
+3. Optionally one page that carries the story to the first schedule — a chart of the
+   trend, the split that explains the headline — where the schedule needs it.
+
+**The schedules.** The recipe's `## Report` declares the tables a reader of this report
+type opens it for (RECIPE_FORMAT.md § Report) — for a quality of earnings review, the
+EBITDA walk at item grain and the roster of every adjustment considered with its verdict
+and reason. Each is one page, continued over as many as it takes, at full population, in
+the recipe's order, directly after the opening. A run with no recipe has no schedules
+part; its opening is the executive summary alone, and the gate holds that page the same
+way.
+
+**The narrative.** The findings, what they rest on, what is open — pages that refer to
+the schedules' rows by name and stat, and copy no schedule a second time. A table
+appears once on the deck; a figure a narrative page needs is a reference or a stat tile,
+never the schedule's rows again.
 
 Three rules:
 
@@ -262,7 +280,7 @@ write the message yourself and reference the figures.
 
 ## 5. The gate
 
-`check_report.py` holds five mechanical things and nothing about the story:
+`check_report.py` holds six mechanical things and nothing about the story:
 
 - **The figures.** Every number on a slide is backed by a workbook numeric cell within
   the rounding tolerance of the precision shown, a number stated in a workbook text cell,
@@ -278,6 +296,10 @@ write the message yourself and reference the figures.
   deck as a table from its family's tab, carrying every declared column and period, at the
   full population its `where` and `through` leave: every row's identity is on the deck,
   and none is trimmed to `max_rows`.
+- **The opening.** The first page after the cover is headed `Executive summary`, carries a
+  `message` and at least one stat tile, table or chart. On a recipe run the second page is
+  headed as the recipe's `metrics.title` and carries a figure block, and the first
+  schedule sits at most one page after it.
 
 The author's pass is the brief (§ 1): the plan was written before the pages, the deck
 tells the workbook's story to a reader outside accounting in the voice of `DOCTRINE.md`,

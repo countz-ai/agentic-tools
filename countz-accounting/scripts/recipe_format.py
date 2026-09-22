@@ -16,16 +16,19 @@ import pathlib
 import re
 
 REQUIRED = ["Population", "Source classes", "Granularity", "The families",
-            "Exec summary", "What the plan notes rather than checks"]
+            "Exec summary", "Report", "What the plan notes rather than checks"]
 INHERITED = {"Reperformance", "Exceptions", "The bar", "Rulings", "Coverage",
              "The source-class ladder", "The verdict ladder", "The headline walk"}
 FRONTMATTER_KEYS = {"name", "objective", "declares", "headline", "lead"}
 FAMILY = re.compile(r"^### ([A-Z])(\d) — .+ \(kind `([a-z]+)`, (.+)\)\s*$")
 NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
-# `## Report` (RECIPE_FORMAT.md § Report): the schedules the deck carries before its
-# narrative, as one fenced ```json block — `{"schedules": [...]}`. Stdlib-parseable, so
-# the deck gate (check_report.py, plain python3) reads the same block this module validates.
+# `## Report` (RECIPE_FORMAT.md § Report): the deck's opening and the schedules it
+# carries before its narrative, as one fenced ```json block —
+# `{"metrics": {"title": ...}, "schedules": [...]}`. Stdlib-parseable, so the deck gate
+# (check_report.py, plain python3) reads the same block this module validates.
 REPORT = "Report"
+REPORT_KEYS = {"metrics", "schedules"}
+METRICS_KEYS = {"title"}
 SCHEDULE_KEYS = {"title", "from", "columns", "block", "where", "through", "periods", "scale",
                  "dense", "ids"}
 SCHEDULE_REQUIRED = ("title", "from", "columns")
@@ -69,9 +72,9 @@ def section_body(text: str, heading: str) -> str | None:
     return m.group(1) if m else None
 
 
-def report_schedules(text: str) -> list[dict] | None:
-    """The schedules `## Report` declares, in order; None when the recipe has no such
-    section, or the section carries no single parseable block (`validate` names why)."""
+def report_block(text: str) -> dict | None:
+    """The parsed `## Report` json block; None when the recipe has no such section, or
+    the section carries no single parseable block (`validate` names why)."""
     body = section_body(text, REPORT)
     if body is None:
         return None
@@ -82,8 +85,22 @@ def report_schedules(text: str) -> list[dict] | None:
         data = json.loads(blocks[0])
     except ValueError:
         return None
-    sched = data.get("schedules") if isinstance(data, dict) else None
+    return data if isinstance(data, dict) else None
+
+
+def report_schedules(text: str) -> list[dict] | None:
+    """The schedules `## Report` declares, in order; None when the block is absent."""
+    data = report_block(text)
+    sched = data.get("schedules") if data else None
     return sched if isinstance(sched, list) else None
+
+
+def report_metrics(text: str) -> dict | None:
+    """The `metrics` mapping `## Report` declares — the headline of the deck's
+    key-metrics page (`title`); None when the block is absent."""
+    data = report_block(text)
+    m = data.get("metrics") if data else None
+    return m if isinstance(m, dict) else None
 
 
 def _report_defects(text: str, fams: dict[str, str]) -> list[tuple[str, str]]:
@@ -99,10 +116,23 @@ def _report_defects(text: str, fams: dict[str, str]) -> list[tuple[str, str]]:
         data = json.loads(blocks[0])
     except ValueError as exc:
         return [("report.block", f"`## {REPORT}` json block does not parse: {exc}")]
-    sched = data.get("schedules") if isinstance(data, dict) else None
+    if not isinstance(data, dict):
+        return [("report.block", f"`## {REPORT}` json block is a mapping")]
+    for k in sorted(set(data) - REPORT_KEYS):
+        bad.append(("report.block", f"`## {REPORT}` json block: unknown key `{k}` "
+                                    f"(keys: {', '.join(sorted(REPORT_KEYS))})"))
+    metrics = data.get("metrics")
+    if not isinstance(metrics, dict) or not str(metrics.get("title") or "").strip():
+        bad.append(("report.metrics", f"`## {REPORT}` json block carries `\"metrics\": "
+                                      f"{{\"title\": ...}}` — the headline of the deck's key-metrics "
+                                      f"page, naming what it shows"))
+    elif set(metrics) - METRICS_KEYS:
+        bad.append(("report.metrics", f"`metrics`: unknown key(s) "
+                                      f"{', '.join(sorted(set(metrics) - METRICS_KEYS))}"))
+    sched = data.get("schedules")
     if not isinstance(sched, list) or not sched:
-        return [("report.block", f"`## {REPORT}` json block is `{{\"schedules\": [...]}}`, "
-                                 f"a non-empty list")]
+        return bad + [("report.block", f"`## {REPORT}` json block carries `\"schedules\": [...]`, "
+                                       f"a non-empty list")]
     for i, sc in enumerate(sched):
         at = f"schedules[{i}]"
         if not isinstance(sc, dict):
@@ -170,14 +200,6 @@ def validate(text: str, kinds: set[str] | None = None) -> list[tuple[str, str]]:
     if present != sorted(present):
         bad.append(("section.order", "required sections out of order - want "
                                      f"{' > '.join(REQUIRED)}"))
-    if REPORT in heads:
-        after, before = heads.index("Exec summary") if "Exec summary" in heads else None, \
-            heads.index("What the plan notes rather than checks") \
-            if "What the plan notes rather than checks" in heads else None
-        at = heads.index(REPORT)
-        if (after is not None and at < after) or (before is not None and at > before):
-            bad.append(("report.position", f"`## {REPORT}` sits between `## Exec summary` and "
-                                           f"`## What the plan notes rather than checks`"))
     for h in heads:
         if h in INHERITED:
             bad.append(("section.inherited", f"`## {h}` restates an inherited rule - "

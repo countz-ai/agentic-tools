@@ -33,6 +33,9 @@ the deck is tested over a workbook the plugin itself would seal. Then:
  11. a schedule declared `dense: true` is set at the dense size, and `where:` with
      `through:` keeps a walk's mechanics and its ruled rows and ends it at the closing
      line — the information line under it is not on the deck;
+ 13. the opening (REPORT.md § 1) is held by the gate: an executive summary page that is
+     not first, or carries no figure block, a key-metrics page not headed as the recipe
+     declares, and a first schedule two pages after it are each refused, named.
  12. the recipe's schedule (RECIPE_FORMAT.md § Report) is held by the gate: a deck whose
      walk is trimmed to `max_rows`, or carries no table from the walk's tab, is refused
      naming the schedule and the rows it lacks.
@@ -427,7 +430,8 @@ x
 ## Report
 
 ```json
-{"schedules": [
+{"metrics": {"title": "Adjusted EBITDA"},
+ "schedules": [
   {"title": "EBITDA walk", "from": "q6", "columns": ["line", "verdict"], "periods": "all",
    "where": {"verdict": "supported"}, "through": "= Diligence adjusted EBITDA", "dense": true}
 ]}
@@ -446,7 +450,7 @@ title: Quality of earnings review
 sections:
   - title: Executive summary
     pages:
-      - title: Diligence-adjusted EBITDA
+      - title: Executive summary
         message: "{Exec Summary!B3}"
         blocks:
           - stats:
@@ -454,7 +458,7 @@ sections:
               - {label: Diligence adjusted EBITDA · LTM Jul 2025, value: "{q6 | = Diligence adjusted EBITDA | LTM Jul 2025 | $}"}
           - heading: What this rests on
           - bullets: ["The FY2023 income statement ties to the trial balance with no exception (q1)."]
-      - title: EBITDA bridge
+      - title: Adjusted EBITDA
         blocks:
           - table: {from: q6, rows: ["= Reported EBITDA", "= Diligence adjusted EBITDA"], columns: [line, FY2023, FY2024, LTM Jul 2025], title: "EBITDA bridge, USD"}
           - chart: {type: column, from: q6, rows: ["= Reported EBITDA", "= Diligence adjusted EBITDA"], columns: [FY2023, FY2024, LTM Jul 2025]}
@@ -504,7 +508,7 @@ def structure(deck: pathlib.Path) -> list[str]:
     if not any('name="title"' in x and 'name="message"' not in x for x in pages):
         out.append("structure: a page written without a message must carry no message shape")
     titles = [html.unescape(m) for x in pages for m in re.findall(r'name="title".*?<a:t>(.*?)</a:t>', x, re.S)]
-    if "EBITDA bridge" not in titles or "Diligence-adjusted EBITDA" not in titles:
+    if "Executive summary" not in titles or "Adjusted EBITDA" not in titles:
         out.append(f"structure: titles are the headlines as written, found {titles}")
     tables = 0
     for x in pages:
@@ -624,12 +628,12 @@ def main() -> int:
                          f"{(r.stdout + r.stderr).strip()[:300]}")
 
         # 5. a sentence where a headline belongs: over the cap, and ending in a full stop
-        spec.write_text(GOOD_SPEC.replace("title: EBITDA bridge", f'title: "{SENTENCE_TITLE}"'))
+        spec.write_text(GOOD_SPEC.replace("title: Adjusted EBITDA", f'title: "{SENTENCE_TITLE}"'))
         r = run(build)
         if r.returncode != 1 or "pages[1].title" not in r.stdout or "headline" not in r.stdout:
             fails.append(f"5a: a sentence title must be refused as not a headline, named (exit {r.returncode}): "
                          f"{(r.stdout + r.stderr).strip()[:300]}")
-        spec.write_text(GOOD_SPEC.replace("title: EBITDA bridge", "title: The bridge foots."))
+        spec.write_text(GOOD_SPEC.replace("title: Adjusted EBITDA", "title: The bridge foots."))
         r = run(build)
         if r.returncode != 1 or "pages[1].title" not in r.stdout or "full stop" not in r.stdout:
             fails.append(f"5b: a title ending in a full stop must be refused, named (exit {r.returncode}): "
@@ -749,6 +753,37 @@ def main() -> int:
                 fails.append(f"12: a deck with no table from the walk's tab must be refused naming the "
                              f"schedule (exit {g.returncode}): {(g.stdout + g.stderr).strip()[:400]}")
 
+        # 13. the opening is held by the gate (REPORT.md § 1): the executive summary page
+        #     first, with a message and a figure block; the key-metrics page headed as the
+        #     recipe declares; the first schedule at most one page after it.
+        opening = {
+            "a": (GOOD_SPEC.replace("      - title: Executive summary\n", "      - title: Diligence-adjusted EBITDA\n", 1),
+                  "headed `Executive summary`"),
+            "b": (GOOD_SPEC.replace(
+                '          - stats:\n'
+                '              - {label: Reported EBITDA · LTM Jul 2025, value: "{q6 | = Reported EBITDA | LTM Jul 2025 | $}"}\n'
+                '              - {label: Diligence adjusted EBITDA · LTM Jul 2025, value: "{q6 | = Diligence adjusted EBITDA | LTM Jul 2025 | $}"}\n',
+                ''), "no stat tile, table or chart"),
+            "c": (GOOD_SPEC.replace("      - title: Adjusted EBITDA\n", "      - title: EBITDA\n", 1),
+                  "key-metrics page is headed `Adjusted EBITDA`"),
+            "d": (GOOD_SPEC.replace(
+                "      - title: EBITDA walk\n",
+                '      - title: Context first\n        blocks:\n          - text: "We set the scene here."\n'
+                '      - title: Context second\n        blocks:\n          - text: "We set more of the scene here."\n'
+                "      - title: EBITDA walk\n", 1), "2 pages after the key-metrics page"),
+        }
+        for case, (text_, want) in opening.items():
+            assert text_ != GOOD_SPEC, f"13{case}: the case did not change the spec"
+            spec.write_text(text_)
+            r = run(build)
+            if r.returncode != 0:
+                fails.append(f"13{case}: the spec must build (exit {r.returncode}): {(r.stdout + r.stderr).strip()[-300:]}")
+                continue
+            g = run(gate)
+            if g.returncode != 1 or want not in g.stdout:
+                fails.append(f"13{case}: the gate must refuse the opening naming `{want}` (exit {g.returncode}): "
+                             f"{(g.stdout + g.stderr).strip()[:400]}")
+
         # 6. a fragment where a sentence belongs: a text block with no full stop
         spec.write_text(GOOD_SPEC.replace(
             '- text: "Every rostered check is listed with what it examined and what it did not."',
@@ -769,7 +804,9 @@ def main() -> int:
           "carrying the company or the period and a schedule condensed past its own arithmetic "
           "are refused; a zero in a sentence reads $0, a dollar figure reads $8.4m and a "
           "declared schedule reads in thousands; a dense, filtered walk builds, and the recipe's "
-          "schedule trimmed or absent is refused.")
+          "schedule trimmed or absent is refused; the opening — the executive summary with its message "
+          "and a figure block, the key-metrics page headed as the recipe declares, the first schedule "
+          "at most one page after it — is held.")
     return 0
 
 

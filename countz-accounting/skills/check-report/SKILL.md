@@ -73,13 +73,19 @@ planning. What this step writes:
 
 - `out/.staging/report-plan.md` — the plan, before any page: the story in a few
   sentences, then the pages in order, each with its one message and the tabs it draws
-  on. The recipe's `## Report` schedules (RECIPE_FORMAT.md § Report; the recipe is at
-  `run.json.plan.recipe`) are the first pages, in the recipe's order, one `table:` block
-  each with the schedule's own keys (`from`, `columns`, `where`, `through`, `periods`,
-  `scale`, `dense`) — `columns:` on the block names the tab's actual headers that carry
-  the recipe's words, with every period column for `periods: all` and the last for
-  `latest`. Never `max_rows` on one: a long schedule continues over pages. The narrative
-  pages after refer to those rows and copy no schedule again.
+  on. The order is `REPORT.md` § 1: the opening — the `Executive summary` page, whose
+  `message` is the one sentence the deck exists to deliver, with the stat tiles, chart
+  or table that carry it; then the key-metrics page, headed as the recipe's
+  `metrics.title` (RECIPE_FORMAT.md § Report; the recipe is at `run.json.plan.recipe`)
+  and showing the figures its prose names; then at most one page carrying the story to
+  the first schedule. Then the recipe's `## Report` schedules, in the recipe's order,
+  one `table:` block each with the schedule's own keys (`from`, `columns`, `where`,
+  `through`, `periods`, `scale`, `dense`) — `columns:` on the block names the tab's
+  actual headers that carry the recipe's words, with every period column for
+  `periods: all` and the last for `latest`. Never `max_rows` on one: a long schedule
+  continues over pages. The narrative pages after refer to those rows and copy no
+  schedule again. A run with no recipe opens on the `Executive summary` page the same
+  way and goes straight to its narrative.
 - `out/.staging/report.yaml` — the pages to the plan (`REPORT.md` § 2). A page's
   `title` is its headline — the subject of a page of figures, the conclusion of a page
   that argues one — and the sentence stating the message, where the page needs one, is
