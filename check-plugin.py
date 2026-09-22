@@ -1744,7 +1744,7 @@ def check(root: pathlib.Path) -> list[str]:
             holding `cells`, or the `sheets` given as (name, cells) in tab order. With
             `design`, every tab is built to reference/WORKBOOK.md + WORKBOOK_STYLE.md as
             stored: Arial styles, B1 title, B2 subtitle, B3 the summary, the BAND header on
-            row 4, freeze panes at B5, gridlines off, the deliverable tab colour - and the
+            row 4, freeze panes at B4, gridlines off, the deliverable tab colour - and the
             cells land on rows 5+. Without it, the bare tab an unstyled writer produces."""
             ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
             rns = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -1755,8 +1755,9 @@ def check(root: pathlib.Path) -> list[str]:
 
             def sheet_xml(name: str, body: dict[str, str]) -> str:
                 if design:
-                    # The Exec Summary's band is rows 1-3, frozen at B4 (WORKBOOK.md § 7).
-                    split = 3 if name == "Exec Summary" else 4
+                    # Every tab's band is rows 1-3, frozen at B4 - the row-4 table header
+                    # is never frozen (WORKBOOK_STYLE.md § 4, WORKBOOK.md § 6).
+                    split = 3
                     rows = [f'<row r="1">{c("B1", "q6 · the bridge foots", 1)}</row>',
                             f'<row r="2">{c("B2", "Acme Corp · FY2023 · accrual · USD whole dollars", 3)}</row>',
                             f'<row r="3">{c("B3", "Every rung of the bridge foots to the ledger.", 0)}</row>',

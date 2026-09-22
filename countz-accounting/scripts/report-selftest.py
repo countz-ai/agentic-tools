@@ -185,7 +185,7 @@ def status(cell, word):
     cell.style = S[STATUS[word]] if word in STATUS else S["Note"]
 
 
-def finish(ws, table_last_row, ledger=False, header_row=4, freeze="B5"):
+def finish(ws, table_last_row, ledger=False, header_row=4, freeze="B4"):
     grid(ws, header_row, table_last_row, 2, ws.max_column)
     fit_rows(ws)
     ws.auto_filter.ref = f"B{header_row}:{get_column_letter(ws.max_column)}{table_last_row}"

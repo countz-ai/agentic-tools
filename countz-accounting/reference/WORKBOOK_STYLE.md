@@ -118,8 +118,11 @@ row after table = blank
 then Notes (9 italic SLATE): source line, method line, any caveat
 ```
 
-- **Freeze panes at B5** (header rows + the margin column). Never freeze deeper than 5
-  rows or 2 columns — a deep freeze fills a laptop screen and blocks scrolling.
+- **Freeze panes at B4** (title, subtitle, summary + the margin column). Never freeze a
+  table header row: the primary table's header on row 4 is not the header of the tables
+  below it, and a header pinned over a table it does not describe misleads the reader.
+  Never freeze deeper than 3 rows or 2 columns — a deep freeze fills a laptop screen and
+  blocks scrolling.
 - **Gridlines OFF** on deliverable tabs (`ws.sheet_view.showGridLines = False`). ON for
   raw-data and ledger tabs where the reader scans rows.
 - **One `BAND` per sheet.** The primary table's header. Secondary tables on the same
@@ -293,7 +296,7 @@ def styles():
 #   grid(ws, header_row, last_row, first_col, last_col)
 # per sheet:
 #   ws.sheet_view.showGridLines = False
-#   ws.freeze_panes = "B5"
+#   ws.freeze_panes = "B4"
 #   ws.column_dimensions["A"].width = 2
 #   ws.row_dimensions[1].height = 24 ; ws.row_dimensions[4].height = 20
 #   ws.sheet_properties.tabColor = ACCENT        # SLATE for ledgers, "9A5B00" for review tabs
@@ -335,7 +338,7 @@ F = {
 }
 # every table format above (header, body, input, amount, pct, subtotal, total, status)
 # also carries {"border": 1, "border_color": P["hairline"]}; note/section/title do not.
-# per sheet: ws.hide_gridlines(2); ws.freeze_panes("B5"); ws.set_column("A:A", 2);
+# per sheet: ws.hide_gridlines(2); ws.freeze_panes("B4"); ws.set_column("A:A", 2);
 #   ws.set_row(0, 24); ws.set_row(3, 20); ws.set_tab_color(P["accent"]);
 #   ws.repeat_rows(0, 3); ws.set_landscape(); ws.fit_to_pages(1, 0); ws.set_margins(0.5, 0.5, 0.5, 0.5);
 #   ws.set_footer('&L Confidential · Countz &C &A &R Page &P of &N'); ws.center_horizontally()
@@ -349,7 +352,7 @@ Open the produced workbook (or dump its XML) and confirm, per deliverable tab:
 
 1. Every cell font is Arial; sizes used ⊆ {9, 10, 11, 12, 14}.
 2. Exactly one `BAND`-filled row on the sheet.
-3. Freeze pane is `B5` or shallower; gridlines hidden.
+3. Freeze pane is `B4` — no table header row frozen; gridlines hidden.
 4. Column A width 2 and empty.
 5. Amount columns use a three-part format with parentheses and `"–"`; no red negatives.
 6. Total row has a double bottom border; subtotals have `MIST` fill; every table cell

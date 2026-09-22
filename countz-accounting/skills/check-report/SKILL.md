@@ -139,8 +139,8 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/check_report.py <run_dir>/out/.staging/rep
 reperformance contract — it refuses an external or broken link, an unwired id cell, a
 dead-end id (one cited but resolving nowhere), a number on the Exec Summary with no link
 to what it was copied from, an `E.` id in a workbook with no Evidence tab, a Sources tab missing the `root source` / `To reperform` columns, a figure row
-whose `To reperform` cell is empty, a pane frozen deeper than the header band
-(5 rows / 2 columns) on any tab, and a tab strip that is not the reader's path
+whose `To reperform` cell is empty, a pane frozen deeper than the title band
+(3 rows / 2 columns — never a table header row) on any tab, and a tab strip that is not the reader's path
 (WORKBOOK.md § 2) —
 with `--run-dir` it computes the order from the roster and the recipe's `lead` and
 names the strip it wants. `check_report.py` gates the deck (`REPORT.md` § 5): every number on

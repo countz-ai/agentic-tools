@@ -37,10 +37,12 @@ No merged cells, no hidden rows or columns, no comments, no images. A long title
 overflows to the right from B1; a merge breaks sort, filter, copy and every screen
 reader.
 
-### The frozen band — rows 1 to 4
+### The frozen band — rows 1 to 3
 
 Every check tab puts the following in the frozen band: a title and a quick summary of what
-the tab is trying to accomplish. It orients a user on how to approach the data below.
+the tab is trying to accomplish. It orients a user on how to approach the data below. The
+band is frozen at `B4`. A table header is never frozen: the primary table's header on
+row 4 describes that table alone, not the tables below it.
 
 - B1 the title, opening with the token (`q6 · Adjusted EBITDA reconciles to the ledger`).
 - B2 the subtitle: entity · period set · basis · unit · tolerance. A tab covering several
@@ -295,7 +297,7 @@ def fit_rows(ws, first_row=5):
 def finish(ws, table_last_row, ledger=False, header_row=4):
     grid(ws, header_row, table_last_row, 2, ws.max_column)   # the primary table's rules
     fit_rows(ws)
-    ws.freeze_panes = "B5"
+    ws.freeze_panes = "B4"
     ws.sheet_view.showGridLines = ledger
     ws.sheet_properties.tabColor = SLATE if ledger else ACCENT
     ws.auto_filter.ref = f"B{header_row}:{get_column_letter(ws.max_column)}{table_last_row}"
@@ -329,8 +331,8 @@ repair a tab it copied. What `check_prose.py` holds the tab to is `VALIDATION.md
 and refuses a tab at the check's own gate and again at the seal. The author's pass
 covers what a parser cannot judge — the style's § 10 checklist, then:
 
-- B1 title, B2 subtitle, B3 the summary; on a check tab row 4 the one `BAND` header,
-  freeze at `B5`; on Exec Summary freeze at `B4`;
+- B1 title, B2 subtitle, B3 the summary; on a check tab row 4 the one `BAND` header;
+  freeze at `B4` on every tab — the band alone, never a table header row;
 - the tab name is `<token> <Title>`, at most 31 characters; tab colour per
   `WORKBOOK_STYLE.md` § 4;
 - at the seal, the strip reads Exec Summary, the lead tabs, Basis of Preparation, the

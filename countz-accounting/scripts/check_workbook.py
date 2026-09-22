@@ -28,7 +28,7 @@ in the figure ledger. Two ways to satisfy it:
 
 GATE 4 — the design. Every tab is built to reference/WORKBOOK.md and
 WORKBOOK_STYLE.md, read from the stored styles: Arial in the five sizes, column A empty,
-exactly one BAND header row and it is row 4, freeze panes at B5, no merged cell, no
+exactly one BAND header row and it is row 4, freeze panes at B4, no merged cell, no
 numeric cell left in General, no table cell without its hairline border, prose only in a
 wrapped column at least 42 wide or in a cell overflowing an empty row, every row holding
 a wrapped cell sized to fit it, no cell cut mid-sentence, gridlines off on deliverable
@@ -84,11 +84,12 @@ Every figure row on Sources must let the reader re-perform in one hop:
     arithmetic · expected value);
   - every `F.` row's `To reperform` cell is non-empty.
 
-Also refused, per tab: a pane frozen deeper than the header band (more than 5 rows or
+Also refused, per tab: a pane frozen deeper than the title band (more than 3 rows or
 2 columns). Excel freezes everything above the split, so a preamble stacked over the
 header rides into the frozen band — measured on a live run: a 29-row frozen Evidence
 header filled a laptop screen and left the data unreachable by scrolling. The preamble
-belongs below the data (check-report SKILL § 1).
+belongs below the data (check-report SKILL § 1). A table header row is never frozen:
+the row-4 header belongs to the primary table alone, not to the tables below it.
 
 GATE 5 — the map, on a workbook that has an Exec Summary. The tab strip is the reader's
 path (reference/WORKBOOK.md § 2): Exec Summary first; then the lead tabs — the check
@@ -128,8 +129,9 @@ CELL = re.compile(r'<c r="([A-Z]+\d+)"[^>]*>(?:(?!</c>).)*?<f[^>]*>.*?</f>\s*(<v
 ANY_CELL = re.compile(r"<c\b([^>]*?)(?:/>|>((?:(?!</c>).)*)</c>)", re.S)
 HYPERLINK = re.compile(r"<hyperlink\b[^>]*/?>")
 PANE_EL = re.compile(r"<pane\b[^>]*/?>")
-# The most a frozen pane may hold: the header row(s) and the id column.
-FROZEN_ROWS_MAX = 5
+# The most a frozen pane may hold: the title band (rows 1-3) and the margin column.
+# Never a table header row - the row-4 header describes the primary table alone.
+FROZEN_ROWS_MAX = 3
 FROZEN_COLS_MAX = 2
 # Attribute order in XML is not guaranteed and differs by writer - openpyxl emits
 # Target before Id, Excel the reverse. Match each attribute independently.
@@ -425,9 +427,10 @@ def audit_links(z: zipfile.ZipFile, declared: set[str] | None = None) -> dict:
         if rows > FROZEN_ROWS_MAX or cols > FROZEN_COLS_MAX:
             pane_fails.append(
                 f"{tab}: frozen pane holds {rows} row(s) x {cols} column(s) — freeze the "
-                f"header band only (<= {FROZEN_ROWS_MAX} rows, <= {FROZEN_COLS_MAX} "
-                f"columns) and move any preamble below the data; a deep frozen band "
-                f"fills a laptop screen and blocks scrolling (check-report SKILL § 1)")
+                f"title band only (<= {FROZEN_ROWS_MAX} rows, <= {FROZEN_COLS_MAX} "
+                f"columns), never a table header row, and move any preamble below the "
+                f"data; a deep frozen band fills a laptop screen and blocks scrolling "
+                f"(check-report SKILL § 1)")
     has_sources = SOURCES in texts
     has_evidence = EVIDENCE in texts
 
@@ -666,7 +669,7 @@ def audit_design(z: zipfile.ZipFile) -> list[str]:
         xml = z.read(part).decode("utf-8", "replace")
         texts, stored = sheet_cells(xml, shared)
         ledger = tab in LEDGER_TABS
-        summary = tab == EXEC       # band rows 1-3, frozen at B4, tables anywhere below
+        summary = tab == EXEC       # band rows 1-3, no row-4 header rule, tables anywhere below
         bad_font, col_a, band_cells, general, unstyled, unruled = [], [], [], [], [], []
         cut, narrow, short_rows = [], [], []
         widths, heights = col_widths(xml), row_heights(xml)
@@ -739,9 +742,9 @@ def audit_design(z: zipfile.ZipFile) -> list[str]:
         if "<mergeCell " in xml:
             rule(tab, "merged cells", [], "WORKBOOK_STYLE.md § 4")
         rows, cols = frozen_pane(xml)
-        want_rows = 3 if summary else 4
-        if (rows, cols) != (want_rows, 1):
-            rule(tab, f"freeze panes at B{want_rows + 1} (found {rows} row(s) x {cols} column(s))", [],
+        if (rows, cols) != (3, 1):              # the band alone; never a table header row
+            rule(tab, f"freeze panes at B4 — the title band, never a table header "
+                      f"(found {rows} row(s) x {cols} column(s))", [],
                  "WORKBOOK.md § 6" if summary else "WORKBOOK_STYLE.md § 4")
         grid_off = re.search(r'<sheetView\b[^>]*showGridLines="0"', xml) is not None
         if grid_off == ledger:
@@ -1008,10 +1011,10 @@ def main() -> int:
         if len(design_fails) > a.max_report:
             print(f"    … and {len(design_fails) - a.max_report} more")
         print("\n  Fix: write the tab from the kit in WORKBOOK.md § 7 — one font, the band on")
-        print("  row 4, freeze B5, every number formatted, a claim per cell.")
+        print("  row 4, freeze B4, every number formatted, a claim per cell.")
     else:
         print(f"{a.workbook.name}: every tab built to the design — Arial, the band on row 4, "
-              f"freeze B5, no General number, no merged cell, no paragraph in a cell.")
+              f"freeze B4, no General number, no merged cell, no paragraph in a cell.")
     if order_fails:
         print(f"{a.workbook.name}: {len(order_fails)} map failure(s) — the tab strip is not "
               f"the reader's path.\n")
