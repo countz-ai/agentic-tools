@@ -44,9 +44,16 @@ tables is several entries, one id per block, each with its `header_row` and `row
 from the planner's anchors; a total row inside a block is cut the same way. A sheet
 reads `rows` as well; without it the sheet is read whole under its header.
 
-**Every block is checked.** Three checks run on every block and land in
+**Every block is checked.** Four checks run on every block and land in
 the manifest:
 
+- `header_check` — a `header_row` the spec gives is read as given, never detected, so
+  it is checked against the file itself: whether it starts its run of equal-width records
+  (a text file's layout; a data row sits inside a run that starts higher up), and
+  header names that are values (a number, a date), which a data row read as the header
+  carries. Printed as `HEADER: <id> — read at line N as the spec gives it; <why>`; it
+  exits 1. The profile's anchor is where the spec's `header_row` came from, so agreeing
+  with it is not a check.
 - `suspects` — rows inside the block that look like they are not data: a repeated
   header line (a paged export), a row of text in a column that is otherwise numeric (a
   second table's header, a note), and a total or subtotal row (a row whose amounts equal
@@ -69,8 +76,8 @@ recorded on the manifest entry as `overrides`.
 
 A file that will not parse is printed as `FAILED: <id> — <reason>`, left out of the
 manifest, and the exit is 1; the step records it as a blocker and every step that reads
-the id falls back to the source file. Exit 0 when every file landed and every profile
-check agrees.
+the id falls back to the source file. Exit 0 when every file landed, every header check
+passed and every profile check agrees.
 
 Requires polars (and fastexcel for xlsx) — run as
 `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 scripts/extract.py`.
@@ -328,7 +335,41 @@ def load_frame(path: pathlib.Path, spec: dict) -> tuple["object", dict]:
         df = _retype(_keep_ranges(df, rows, header_row))
         facts.update(header_row=header_row, sheet=None, preamble=preamble, delimiter=delim,
                      trailing=trailing)
+        if spec.get("header_row"):
+            facts["detected_header_row"] = run_start(path, header_row, delim)
     return df, facts
+
+
+def run_start(path: pathlib.Path, line: int, delim: str) -> int:
+    """The line the run of records holding `line` starts on: a run is consecutive
+    non-blank records of one field count, as a table's header and data lines are. A
+    header starts its run; a data row read as the header sits inside one that starts
+    higher up. Local to the block, so a second table stacked under a first is judged on
+    its own lines, never against the first table's header."""
+    start, width = None, None
+    for s, rec in records(path, delim):
+        n = len(rec) if any(f.strip() for f in rec) else 0
+        if n < 2 or n != width:
+            start = s if n >= 2 else None
+        width = n
+        if s >= line:
+            return start if s == line and start is not None else line
+    return line
+
+
+DATA_LIKE = re.compile(r"^\s*(?:[-+(]?[$€£]?\s*[\d,]*\.?\d+\)?%?|\d{1,4}[-/.]\d{1,2}[-/.]\d{1,4})\s*$")
+
+
+def header_check(columns: list[str], facts: dict) -> dict | None:
+    """Whether the row read as the header is one. A `header_row` the spec gives is read
+    as given, so it is checked two independent ways: whether it starts its run of
+    equal-width records (text files, `run_start`), and header names that are values — a number or a date — which a data
+    row read as the header carries. None when neither fires."""
+    given, detected = facts["header_row"], facts.get("detected_header_row", facts["header_row"])
+    data_like = [c for c in columns if DATA_LIKE.match(str(c))]
+    if detected == given and not data_like:
+        return None
+    return {"given": given, "detected": detected, "data_like": data_like}
 
 
 def pick_control(df, wanted: str | None) -> str | None:
@@ -653,6 +694,7 @@ def extract_one(run_dir: pathlib.Path, spec: dict, sources: dict[str, dict]) -> 
         "parquet": f"{CACHE_DIR}/{fid}.parquet",
         "suspects": suspects,
         "profile_check": check,
+        "header_check": header_check(list(back.columns), facts),
         "overrides": spec.get("_overrides"),
         "read_at": _now(),
     }
@@ -661,7 +703,8 @@ def extract_one(run_dir: pathlib.Path, spec: dict, sources: dict[str, dict]) -> 
 
 def extract(run_dir: pathlib.Path, files: list[dict], step: str | None = None) -> tuple[list[dict], list[str]]:
     """Cache every spec; (entries landed, problem lines). A problem line is `FAILED:`
-    (not cached) or `DISAGREES:` (cached, but the profile's read of the file differs)."""
+    (not cached), `HEADER:` (cached, but the row read as the header may not be one) or
+    `DISAGREES:` (cached, but the profile's read of the file differs)."""
     run = load_run(run_dir)
     sources = sources_by_id(run)
     man = read_manifest(run_dir)
@@ -678,6 +721,9 @@ def extract(run_dir: pathlib.Path, files: list[dict], step: str | None = None) -
             entry_["step"] = step
         kept[entry_["id"]] = entry_
         done.append(entry_)
+        hc = entry_.get("header_check")
+        if hc:
+            failed.append(header_line(fid, hc))
         pc = entry_.get("profile_check")
         if pc and not pc["agrees"]:
             failed.append(f"DISAGREES: {fid} — {pc['column']} sums to {pc['cache']:,} in the "
@@ -711,6 +757,16 @@ def scan(run_dir, file_id: str):
     return _pl().scan_parquet(pathlib.Path(run_dir) / entry(run_dir, file_id)["parquet"])
 
 
+def header_line(fid: str, hc: dict) -> str:
+    why = []
+    if hc["detected"] != hc["given"]:
+        why.append(f"it sits inside a run of records of its width that starts at line "
+                   f"{hc['detected']}")
+    if hc["data_like"]:
+        why.append(f"header names read as values: {', '.join(map(str, hc['data_like']))}")
+    return f"HEADER: {fid} — read at line {hc['given']} as the spec gives it; " + "; ".join(why)
+
+
 def describe(e: dict, checks: bool = True) -> str:
     ct = e["control_total"]
     cols = ", ".join(f"{c['name']}:{c['dtype']}" for c in e["columns"])
@@ -725,6 +781,8 @@ def describe(e: dict, checks: bool = True) -> str:
     for su in e.get("suspects") or []:
         line += (f"\nSUSPECT: {e['id']} row {su['row']} (line {e['header_row'] + su['row']}) "
                  f"— {su['reason']}: {su['values']}")
+    if checks and e.get("header_check"):
+        line += "\n" + header_line(e["id"], e["header_check"])
     pc = e.get("profile_check")
     if pc and (checks or pc["agrees"]):
         line += (f"\n{'AGREES' if pc['agrees'] else 'DISAGREES'}: {e['id']} — {pc['column']} "

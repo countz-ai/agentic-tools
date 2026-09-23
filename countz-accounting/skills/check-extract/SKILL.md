@@ -42,7 +42,19 @@ in the definition's `params.files` (`header_row`, `types`, `control`) — never 
 a cached file — and the script re-run. A row count that differs from the plan's is a
 note: the plan counted lines, the script counts rows.
 
-Four more lines the script prints, and what each is to you:
+The manifest's `header_row` is the spec's, and the spec's is the profile's anchor, so a
+manifest that matches the profile proves nothing about the file. The script's own check
+of the header is the `HEADER:` line below; a note that the header rows match the
+profile is not written.
+
+Five more lines the script prints, and what each is to you:
+
+- `HEADER: <id> — read at line N as the spec gives it; <why>` — the row read as the
+  header may be a data row or a preamble line: the file's own layout puts the header
+  elsewhere, or header names are values. Open the file's first lines and rule. A wrong
+  anchor is fixed in `header_row` (or dropped, so the script detects it) and the script
+  re-run. An anchor that is right is noted, and the note quotes the header line and the
+  line its run starts on. A `HEADER:` line you cannot rule on is a blocker.
 
 - `TRAILING: <id> — lines N..M below the block` — records the script did not read. A
   second table the plan anchored is its own entry, with `header_row` and `rows`, added
