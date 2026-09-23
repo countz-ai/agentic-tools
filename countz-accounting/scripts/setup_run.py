@@ -40,7 +40,8 @@ its frontmatter `name` taken, and its bytes copied to `<run_dir>/recipes/<name>.
 unchanged; `run.json.inputs.recipe` records `{name, version, path}`. `--recipe-version`
 is the `recipe_version` the connector served with the body (`<image>+<sha256[:12]>`);
 the sha is recomputed over the file and a mismatch is refused, so a body edited after it
-was served cannot pass as the served one. Without `--recipe-version` the recipe is a
+was served cannot pass as the served one. A recipe packaged by `make zip RECIPES=...`
+passes `bundled+<sha256[:12]>`, as `scripts/bundled_recipe.py` prints it. Without `--recipe-version` the recipe is a
 generated one (the `create-recipe` step wrote it under `<run_dir>/recipes/` already) and
 the version is minted as `generated+<sha256[:12]>`. A run pins one recipe; a second
 `--recipe` naming a different one is refused. `run_state.py approve-plan` copies name
@@ -348,7 +349,7 @@ def touch_session(run: dict, session_id: str | None, ts: str) -> bool:
 
 # The instructions and code that govern a run.
 STAMP_GLOBS = ("reference/*.md", "agents/*.md", "skills/*/SKILL.md", "scripts/*.py",
-               "playbook-recipes/*.md", ".claude-plugin/plugin.json", "plugin.json")
+               "playbook-recipes/*.md", "bundled-recipes/*.md", ".claude-plugin/plugin.json", "plugin.json")
 
 
 def plugin_stamp() -> dict:

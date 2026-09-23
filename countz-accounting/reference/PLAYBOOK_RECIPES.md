@@ -118,6 +118,12 @@ classification, and what every wave owes the user.
 
 ### 2. Fetch the recipe and register
 
+First look for a bundled copy:
+`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/bundled_recipe.py <your recipe's name>`. When it
+prints `RECIPE:` and `VERSION:`, the package was built with that recipe in it: say so to
+the user in one line, register with `--recipe <the RECIPE path> --recipe-version <the
+VERSION>`, and call no recipe tool. `NONE` (exit 1) means nothing is bundled: fetch.
+
 Call `get_recipe_for_countz_analysis(recipe="<your recipe's name>")` on the `countz`
 server — a named shim knows its name; `countz-analysis` matches the catalog first (its
 SKILL.md). The result carries `recipe_markdown`, `recipe_name` and `recipe_version`.

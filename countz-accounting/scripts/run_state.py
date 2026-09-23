@@ -453,9 +453,11 @@ def cmd_approve_plan(a) -> int:
     definition = validate_definition(def_path)
     # A plan-driven step's worker resolves its procedure from the recipe section
     # `params.family` names (each check-* SKILL.md § Resolve the procedure); without
-    # it the worker runs on the goal sentence alone, so the plan is refused here.
+    # it the worker runs on the goal sentence alone, so the plan is refused here. An
+    # `extract` step executes no recipe family - it parses files for the steps that do.
     unfamilied = [st["id"] for st in definition["steps"]
-                  if not (st.get("params") or {}).get("family")]
+                  if st.get("check") != check_playbook.EXTRACT
+                  and not (st.get("params") or {}).get("family")]
     if unfamilied:
         raise Refuse("every plan-driven step carries params.family - the recipe family "
                      "slug its worker executes; missing on: " + ", ".join(unfamilied))
