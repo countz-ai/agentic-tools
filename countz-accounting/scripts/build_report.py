@@ -816,6 +816,18 @@ def is_money(fmt: str | None) -> bool:
     f = fmt or ""
     return "%" not in f and bool(MONEY_FMT.search(f))
 
+
+# A count shares the whole-currency format on a tab (WORKBOOK_STYLE.md: `#,##0` serves
+# both), so the header decides: a column it names as a count of things, holding whole
+# numbers only, is never a dollar column and is never scaled.
+COUNT_HEADER = re.compile(r"^(number|count|no\.) of\b|\b(count|customers|logos|contracts|"
+                          r"invoices|lines|months|days)$", re.I)
+
+
+def is_count(header: str, cells) -> bool:
+    return bool(COUNT_HEADER.search(header.strip())) and all(
+        float(c.value).is_integer() for c in cells)
+
 CHART_KEYS = {"type", "from", "rows", "columns", "block", "title"}
 STAT_KEYS = {"label", "value", "note"}
 
@@ -1026,7 +1038,8 @@ def table_block(v, at: str, res: Resolver, book: Book) -> dict:
         for i, is_num in enumerate(t.numeric):
             cells = [row[i] for row in t.rows if isinstance(row[i].value, (int, float))
                      and not isinstance(row[i].value, bool)]
-            if not is_num or not cells or not all(is_money(c.fmt) for c in cells):
+            if not is_num or not cells or not all(is_money(c.fmt) for c in cells) \
+                    or is_count(t.headers[i], cells):
                 continue
             t.headers[i] = f"{t.headers[i]} ({suffix})"
             # Divide, never round: the stored value keeps full precision, and every check
