@@ -75,7 +75,8 @@ SLIDE_W, SLIDE_H = 13.333, 7.5          # inches, 16:9 (1280 x 720 px)
 MARGIN = 0.667                           # 64 px
 KICKER_Y, KICKER_H = 0.54, 0.2           # 52 px
 TITLE_Y = 0.81                           # 78 px
-BODY_Y, BODY_BOTTOM = 1.86, 6.55         # c4 body top 174 px; the band starts at 648 px
+BODY_Y, BODY_BOTTOM = 1.55, 6.55         # body top, tighter than c4's 174 px; the band starts at 648 px
+HEADER_GAP = 0.1                         # between the header (headline, message) and the body
 FOOTER_Y, FOOTER_H = 6.75, 0.75          # the band
 GAP = 0.13                               # between stacked blocks
 COL_GAP = 0.667                          # 64 px, the c4 column gap
@@ -1115,14 +1116,28 @@ def header_pt(t: Table) -> float:
     return PT["heading_xs"] if t.dense else PT["heading"]
 
 
+# A body row is its lines of text plus the row spacing — the cell's top and bottom margin
+# — and nothing else. The deck declares every body row at one line; PowerPoint grows a
+# row whose text wraps, so a row is never taller than its text needs. The line count
+# estimated here (text_w leans generous) only decides how many rows a page takes.
+ROW_SPACING = {True: 0.03, False: 0.045}     # inches, top and bottom margin; dense / not
+LINE_H = 1.2                                 # a line of table text, in multiples of its size
+
+
+def row_min(t: Table, pt: float) -> float:
+    """A one-line body row: the height every body row is declared at."""
+    return pt * LINE_H / 72 + 2 * ROW_SPACING[t.dense]
+
+
 def row_heights(t: Table, widths: list[float], pt: float) -> tuple[float, list[float]]:
     pad = 0.10 if t.dense else 0.14            # cell margins 0.05 top and bottom, and slack
     hh = max(text_h(h.upper(), w - 0.14, header_pt(t), bold=True, spacing=1.15) for h, w in zip(t.headers, widths)) + pad + RULE_H
     rows = []
     for row in t.rows:
-        h = max(text_h(fmt_value(c.value, c.fmt), w - 0.14, pt, spacing=1.2) for c, w in zip(row, widths))
-        rows.append(h + pad)
+        n = max(lines_for(fmt_value(c.value, c.fmt), w - 0.14, pt) for c, w in zip(row, widths))
+        rows.append(n * pt * LINE_H / 72 + 2 * ROW_SPACING[t.dense])
     return hh, rows
+
 
 
 def header_h(title: str, message: str = "") -> float:
@@ -1136,7 +1151,7 @@ def header_h(title: str, message: str = "") -> float:
 def body_top(title: str, message: str = "") -> float:
     """Where the body starts under this header: the c4 body top under a one-line
     headline, lower under a two-line one or a message."""
-    return max(BODY_Y, TITLE_Y + header_h(title, message) + 0.2)
+    return max(BODY_Y, TITLE_Y + header_h(title, message) + HEADER_GAP)
 
 
 def label_h(text: str, width: float) -> float:
@@ -1498,7 +1513,10 @@ class Deck:
         widths = col_widths(tb, w, pt)
         hh, rows = row_heights(tb, widths, pt)
         n_rows, n_cols = len(tb.rows) + 1, len(tb.headers)
-        gf = s.shapes.add_table(n_rows, n_cols, Inches(x), Inches(yy), Inches(sum(widths)), Inches(hh + sum(rows)))
+        # the frame is the declared rows, never the estimate: a renderer stretches the rows
+        # to fill a taller frame, which spreads the estimate's slack over every row
+        gf = s.shapes.add_table(n_rows, n_cols, Inches(x), Inches(yy), Inches(sum(widths)),
+                                Inches(hh + (n_rows - 1) * row_min(tb, pt)))
         gf.name = f"table:{tb.source}"
         tbl = gf.table
         tblPr = tbl._tbl.tblPr
@@ -1512,8 +1530,8 @@ class Deck:
         for i, cw in enumerate(widths):
             tbl.columns[i].width = Inches(cw)
         tbl.rows[0].height = Inches(hh)
-        for i, rh in enumerate(rows, 1):
-            tbl.rows[i].height = Inches(rh)
+        for i in range(1, n_rows):
+            tbl.rows[i].height = Inches(row_min(tb, pt))
         # one alignment rule, header and body alike: the first column — the row's label —
         # reads left, every other column reads right, so figures and their headers share
         # an edge and a text cell in a figure column does not break the rag
@@ -1521,7 +1539,7 @@ class Deck:
         for j, h in enumerate(tb.headers):
             # the c4 label over a 3 px teal rule, a hairline beneath
             self.cell(tbl.cell(0, j), h.upper(), header_pt(tb), bold=True, color=MUTED, align=align[j],
-                      top=(TEAL, 28575), bottom=(RULE, 9525), track=TRACK["heading"])
+                      top=(TEAL, 28575), bottom=(RULE, 9525), track=TRACK["heading"], header=True)
         last = len(tb.rows)
         for i, (row, kind) in enumerate(zip(tb.rows, tb.kinds), 1):
             for j, c in enumerate(row):
@@ -1540,7 +1558,7 @@ class Deck:
         return yy - y
 
     def cell(self, cell, text: str, pt: float, bold=False, color=BODY, align=PP_ALIGN.LEFT,
-             top=None, bottom=None, track=0.0):
+             top=None, bottom=None, track=0.0, header=False):
         """No fill (the ground shows through), no vertical rules: a horizontal hairline
         under each row, the c4 statements pattern. `top` / `bottom`: (colour, EMU) or
         None for no rule."""
@@ -1558,20 +1576,29 @@ class Deck:
             tcPr.append(ln)
         cell.fill.background()
         cell.margin_left = cell.margin_right = Inches(0.06)
-        cell.margin_top = cell.margin_bottom = Inches(0.03 if pt <= PT["table_xs"] else 0.05)
+        if header:
+            cell.margin_top = cell.margin_bottom = Inches(0.03 if pt <= PT["table_xs"] else 0.05)
+        else:
+            cell.margin_top = cell.margin_bottom = Inches(ROW_SPACING[pt <= PT["table_xs"]])
         cell.vertical_anchor = MSO_ANCHOR.MIDDLE
         tf = cell.text_frame
         tf.word_wrap = True
         p = tf.paragraphs[0]
         p.alignment = align
+        # a blank cell is a single space at the table's size: an empty paragraph is sized
+        # by the renderer's default (18pt in Keynote, whatever the end mark says), and
+        # that one cell grows its whole row
         r = p.add_run()
-        r.text = text
+        r.text = text or " "
         r.font.name = FONT
         r.font.size = Pt(pt)
         r.font.bold = bold
         r.font.color.rgb = rgb(color)
         if track:
             r._r.get_or_add_rPr().set("spc", str(int(round(track * pt * 100))))
+        end = p._p.get_or_add_endParaRPr()
+        end.set("sz", str(int(round(pt * 100))))
+        end.set("lang", "en-US")
 
     def chart(self, s, block: dict, x: float, y: float, w: float) -> float:
         """The chart, drawn.
