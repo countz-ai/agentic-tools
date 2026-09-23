@@ -69,7 +69,14 @@ Layout:
   parses the data-room files the plan's steps read into `<run_dir>/cache/` as typed
   parquet with a manifest, and the `read()` / `scan()` every consumer loads through),
   `evidence.py` (`span`: a citation measured on the file or the cache manifest — header,
-  rows, columns, row count, control total — never typed),
+  rows, columns, row count, control total — never typed), `figures.py` (the `Ledger`
+  every step mints its figures, populations, citations and ties through — each field
+  checked when minted, every reference resolved when written — and the formatter that
+  interpolates figures into prose), `periods.py` (the run's period set: keys, windows,
+  labels and the fiscal-year rule, from `params.columns` and `params.fiscal_year_end`),
+  `step_record.py` (a step's lifecycle: `step_start`, the staged tab placed behind its
+  gates, and the step record written with `step_end` — args from the brief, `consumed`
+  from the step's citations, `produced` from its own files),
   `build_report.py` (renders `out/report.pptx`
   from `report.yaml` and the sealed workbook — the deck mints nothing;
   `reference/REPORT.md`), `usage_report.py` (duration + estimated cost), `gather_debug.py`

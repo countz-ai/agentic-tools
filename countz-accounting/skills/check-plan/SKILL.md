@@ -228,7 +228,11 @@ without it; a cutoff's `period_end` and `window_days`;
 `items_from` and its `_from` siblings where the family reads another step's record,
 naming every step that covered the entities this one reads; `entities` — the ids of the
 entities the step covers, in the roster's order — and `split_reason` where the family runs
-as more than one step; declared tolerances; each `declared` option written verbatim into
+as more than one step; declared tolerances — `tolerance` (absolute, in the tie's unit)
+and `pct_tolerance` (a fraction: `0.005` is 0.5%), both where the user gave both;
+`columns` — the period set as id slugs (`fy2025`, `2025-12`, `ltm_2025-12`, `2026q1`,
+EVIDENCE.md § 0) on every step that reports by period, and `fiscal_year_end` (`"MM-DD"`)
+wherever a column is a fiscal year or quarter, the same value on every step; each `declared` option written verbatim into
 the steps the recipe directs to read it — required keys per kind are enforced by the
 validation below), `reads` and `cache_from` per the next subsection, and `after`
 derived from the step's `_from` params — exactly the steps they name.

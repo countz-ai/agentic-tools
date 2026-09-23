@@ -242,7 +242,9 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/check_workbook.py <run_dir>/out/.staging/<
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/check_prose.py <run_dir>/out/.staging/<tab>.xlsx --run-dir <run_dir>
 ```
 
-A non-zero exit from either is the author's to fix before the rename. `--run-dir` resolves
+`scripts/step_record.py`'s `place_tab(run_dir, seq)` runs both and renames the tab into
+`out/tabs/` only when both exit 0; otherwise it raises `GateRefused` with their output
+and the tab stays staged. A non-zero exit from either is the author's to fix before the rename. `--run-dir` resolves
 every `F.` / `P.` / `E.` id the tab cites against the run's own `workpapers/*.yaml`
 records, which gates the ids before any Sources or Evidence tab exists. An id cited but
 never recorded fails here, or it reaches the deliverable, where the report step may not

@@ -30,6 +30,9 @@ import pathlib
 import re
 import sys
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import periods  # noqa: E402  sibling, stdlib here: the period-key grammar and the year end
+
 # kind -> the worker skill that performs it. The playbook engine resolves dispatches
 # through this map; a kind absent here is not dispatchable anywhere in the plugin.
 KINDS = {
@@ -125,6 +128,18 @@ def check_params(kind: str, params, *, after: list | None = None,
     if sr is not None and (not isinstance(sr, str) or not sr.strip()):
         bad.append(f"`params.split_reason` must be the measured fact that split the "
                    f"family, got {sr!r}")
+    bad.extend(check_periods(params))
+    # A tie's declared bounds, as scripts/figures.py `Ledger.tie` reads them: `tolerance`
+    # absolute in the tie's unit, `pct_tolerance` a fraction of the reference side. Only a
+    # number is judged here; plans also carry described tolerances (`{kind, amount, ...}`).
+    for key in ("tolerance", "pct_tolerance"):
+        tol = params.get(key)
+        if isinstance(tol, (int, float)) and not isinstance(tol, bool) and tol < 0:
+            bad.append(f"`params.{key}` must be non-negative, got {tol!r}")
+    ptol = params.get("pct_tolerance")
+    if isinstance(ptol, (int, float)) and not isinstance(ptol, bool) and ptol >= 1:
+        bad.append(f"`params.pct_tolerance` is a fraction of the reference side - 0.005 is "
+                   f"0.5% - got {ptol!r}")
     bad.extend(check_files(kind, params))
     reads = params.get("reads")
     if reads is not None:
@@ -157,6 +172,32 @@ def check_params(kind: str, params, *, after: list | None = None,
             elif known_checks is not None and ref not in known_checks:
                 bad.append(f"`params.{key}` names `{ref}`, which is not a registered "
                            f"check")
+    return bad
+
+
+def check_periods(params: dict) -> list[str]:
+    """Problems with `params.columns` (the period set, EVIDENCE.md § 0 slugs) and
+    `params.fiscal_year_end` ("MM-DD"), as scripts/periods.py reads them."""
+    bad: list[str] = []
+    fye = params.get("fiscal_year_end")
+    if fye is not None:
+        try:
+            periods.parse_fiscal_year_end(fye)
+        except ValueError as exc:
+            bad.append(f"`params.fiscal_year_end`: {exc}")
+            fye = None
+    cols = params.get("columns")
+    if cols is None:
+        return bad
+    if not isinstance(cols, list) or not cols or not all(isinstance(c, str) for c in cols):
+        return bad + [f"`params.columns` must be a non-empty list of period keys, got {cols!r}"]
+    if len(set(cols)) != len(cols):
+        bad.append(f"`params.columns` repeats a period: {cols}")
+    for c in cols:
+        try:
+            periods.Period.parse(c, fye or "12-31")   # the grammar; the year end is checked
+        except ValueError as exc:                     # across steps in validate()
+            bad.append(f"`params.columns`: {exc}")
     return bad
 
 
@@ -332,6 +373,35 @@ def validate(path: pathlib.Path, skills_dir: pathlib.Path | None) -> list[str]:
                     bad.append(f"{path}: step `{st['id']}` reads {lost}, which "
                                f"`{params['cache_from']}` does not parse - add the file to "
                                f"its `params.files` or drop the read")
+
+    # One fiscal year end per run, declared wherever a period column needs one:
+    # scripts/periods.py reads it from the step, else from any step that declares it.
+    fyes: dict[str, list[str]] = {}
+    needs_fye: list[str] = []
+    for st in steps:
+        if not isinstance(st, dict) or not st.get("id"):
+            continue
+        params = st.get("params") or {}
+        if not isinstance(params, dict):
+            continue
+        if params.get("fiscal_year_end") is not None:
+            try:
+                m = periods.parse_fiscal_year_end(params["fiscal_year_end"])
+                fyes.setdefault(f"{m:02d}", []).append(st["id"])
+            except ValueError:
+                pass                  # check_params reported it
+        cols = params.get("columns")
+        if isinstance(cols, list) and any(isinstance(c, str) and (
+                periods.KEY_FY.match(c) or periods.KEY_QUARTER.match(c)) for c in cols):
+            needs_fye.append(st["id"])
+    if len(fyes) > 1:
+        bad.append(f"{path}: steps disagree on the fiscal year end: "
+                   + "; ".join(f"month {m} on {', '.join(v)}" for m, v in sorted(fyes.items())))
+    if needs_fye and not fyes:
+        bad.append(f"{path}: steps {', '.join(needs_fye)} report fiscal-year or quarter "
+                   f"columns but no step declares `params.fiscal_year_end` (\"MM-DD\", e.g. "
+                   f"\"09-30\") - scripts/periods.py cannot place a month in a fiscal year "
+                   f"without it")
 
     # A family fanned out one step per entity: refused above FAMILY_STEP_MAX unless every
     # step of that family names the measured fact that split it.

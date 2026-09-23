@@ -176,6 +176,14 @@ that entry covers the table's cells.
   disposition: measured               # measured | inferred | as_stated
 ```
 
+**Write the ledger through `scripts/figures.py`.** `Ledger(run_dir, check)` holds the
+check's figures, populations and citations. `fig()` checks each field below when it is
+minted. `write()` resolves every input, population, citation and `F.`/`P.`/`E.` id in an
+`expression` against the run's ledgers, and refuses the whole write, naming each dead
+end, when one does not resolve: the one-hop contract is kept at the check, not repaired
+at the seal. `Ledger.tie()` mints a tie's difference figure and classifies it
+(check-tie SKILL § 4). A step never writes its own `fig()`.
+
 - **`inputs[]` is never empty, and `role` is required.** `source_type` is one of
   `room_file` (with `citation_id`: a read of a file the user gave us), `figure` (with
   `figure_id`), `check_output` (with `citation_id`: a `run_artifact` read of another
@@ -200,7 +208,9 @@ write the formula with its result cached beside it. The gate is
 
 **Prose numbers are interpolated, never typed.** A sentence is authored as a template
 around a figure id; the code that writes the tab or the deck loads the ledger and
-substitutes the value, formatted per `DOCTRINE.md` § Number conventions. The gate is
+substitutes the value, formatted per `DOCTRINE.md` § Number conventions —
+`Ledger.sub("... {F.a5.nrr.fy2025} ...")` or `figures.fmt(value, unit)`, one formatter
+for every tab and the deck. The gate is
 `scripts/check_prose.py`: it extracts every dollar amount, percentage and multiple from
 text and refuses any that no ledger value backs within rounding tolerance. A declared
 tolerance a sentence states is admitted with `--allow`.

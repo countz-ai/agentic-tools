@@ -73,6 +73,12 @@ period set. Do analysis for the financial years. If there are more recent partia
 
 Label LTM and as-of column by end month (e.g. LTM July 2026, As of July 2026).
 
+The plan declares the period set once, as `params.columns` (the id slugs of
+EVIDENCE.md § 0), with the fiscal year end as `params.fiscal_year_end` (`"MM-DD"`).
+Every step takes its windows, its labels and its fiscal-year rule from
+`scripts/periods.py` (`Periods.load(run_dir, check)`), never from a table of its own: a
+label or window typed per check drifts between tabs.
+
 ## Voice
 
 - Report, don't advocate. State procedures performed, figures produced, and quantified

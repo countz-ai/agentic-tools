@@ -209,6 +209,17 @@ cache_defects: []                   # [{id, what, fix: {rows|types|header_row|co
 notes: ""
 ```
 
+**Write it with `scripts/step_record.py`.** `start(run_dir, seq)` appends `step_start`;
+`finish(run_dir, seq, conclusion=..., blockers=..., notes=..., consumed={...})` writes
+the record and appends `step_end` in one act. It reads `step`, `check_id` and `args`
+from the step's own brief (`dispatch/<NNNN>-<step>.md`) and `started_at` from its
+`step_start`; it builds `consumed` from the step's citations
+(`workpapers/evidence-<check>.yaml`, each resolved to its file) plus the brief, the plan
+and the recipe, and `produced` from the check's own files written since the start. The
+step passes only what no file records: the conclusion, the blockers, the notes, a read
+no citation covers (another check's record, a source profile) and, on a non-check step,
+what it produced. It refuses a record the relay could not classify.
+
 `error` is read before `outcome`. A step never marks itself successful; it reports, and
 `run_state.py record` classifies. A gate that refused is `outcome: blocked` with the
 gate's output in `blockers` and `error` null. Never put gate output in `error`.

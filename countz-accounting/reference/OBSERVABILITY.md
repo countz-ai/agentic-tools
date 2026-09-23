@@ -36,7 +36,8 @@ before writing a new event.
 | `note` | anyone | `text`: something a reader would want that no other event carries |
 
 **`step_start` and `step_end`.** Write `step_start` before any work and `step_end` as the
-last act before returning. An unmatched `step_start` is a step that died; the relay's
+last act before returning, both through `scripts/step_record.py` (`start`, then
+`finish`, which writes the step record with it). An unmatched `step_start` is a step that died; the relay's
 classifier reads it as one.
 
 **`ts`.** `ts` is the time the line is appended, never a time captured earlier or

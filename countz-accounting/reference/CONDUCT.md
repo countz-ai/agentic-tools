@@ -87,6 +87,9 @@ Do both of these on every file:
   the source again.
 - **openpyxl** — the workbook: every tab script and the assembler write through it,
   importing the kit from `scripts/wbkit.py` (`reference/WORKBOOK.md` § 7).
+- **figures and periods** — every figure ledger is written through `scripts/figures.py`
+  (`reference/EVIDENCE.md` § 3) and every period column through `scripts/periods.py`
+  (`reference/DOCTRINE.md` § Periods).
 - **python-pptx** — the report deck, written only by `scripts/build_report.py` from
   `report.yaml` (`reference/REPORT.md`); no skill writes slides directly.
 
@@ -94,7 +97,10 @@ Do both of these on every file:
 
 Append `step_start` before you start work and `step_end` as your last act. Fields, the
 `ts` rule and what may never appear in the file:
-`${CLAUDE_PLUGIN_ROOT}/reference/OBSERVABILITY.md` § 1.
+`${CLAUDE_PLUGIN_ROOT}/reference/OBSERVABILITY.md` § 1. Both go through
+`scripts/step_record.py`: `step_record.py start <run_dir> <seq>` first, and its
+`finish()` last, which writes your step record and `step_end` together
+(`RUN_CONTRACT.md` § The step record). Never hand-write either line or the record.
 
 ## Your return value
 

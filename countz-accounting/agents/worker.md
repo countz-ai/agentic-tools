@@ -71,7 +71,15 @@ entry per id — `{id, what, fix}` with `fix` the spec keys that correct it (`ro
 definition. The relay re-runs the extract step with your fixes and then every step that
 read the id (`RUN_CONTRACT.md` § Review and report). Your
 tab imports the kit from `scripts/wbkit.py` (`${CLAUDE_PLUGIN_ROOT}/reference/WORKBOOK.md`
-§ 7); never copy it into your script.
+§ 7); your figures, populations, citations and ties go through `scripts/figures.py`'s
+`Ledger` (`EVIDENCE.md` § 3), and every number in your prose through its `sub()` / `fmt()`;
+your period columns, windows, labels and fiscal years come from `scripts/periods.py`
+(`DOCTRINE.md` § Periods). Each module's docstring is its API
+(`python3 -c "import sys; sys.path.insert(0, '${CLAUDE_PLUGIN_ROOT}/scripts'); import figures; help(figures)"`).
+Your step opens with `scripts/step_record.py start <run_dir> <seq>`, places its tab with
+`place_tab()` and closes with `finish()` (`RUN_CONTRACT.md` § The step record).
+Never copy any of them into your script, and never write your own `fig()`, formatter,
+period table, `consumed` list or step record.
 
 ## What you never do
 
