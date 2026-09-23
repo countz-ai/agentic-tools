@@ -63,7 +63,7 @@ The walk never reads past the peek: a file whose peek does not settle its verdic
 a second bounded look — `--rows` up to the tool's ceiling, a page-ranged read of a PDF,
 a `head` of a text file — and a file that still does not settle is `"context"` with the
 open question in `why`, never a whole read. Every client-file read in this step is
-bounded per `reference/CONDUCT.md § Reading client files`; a Read with no `limit` or
+bounded per `${CLAUDE_PLUGIN_ROOT}/reference/CONDUCT.md § Reading client files`; a Read with no `limit` or
 `pages`, a `cat`, and a printed DataFrame are outside it, whatever the file's size.
 Relevance is judged per family, against each
 family's own question, never
@@ -230,7 +230,40 @@ naming every step that covered the entities this one reads; `entities` — the i
 entities the step covers, in the roster's order — and `split_reason` where the family runs
 as more than one step; declared tolerances; each `declared` option written verbatim into
 the steps the recipe directs to read it — required keys per kind are enforced by the
-validation below), and `after` only where the recipe declares a dependency.
+validation below), `reads` and `cache_from` per the next subsection, and `after`
+derived from the step's `_from` params — exactly the steps they name.
+
+### Schedule the reads, the extraction and the order
+
+You derive the order; the recipe states none. Three declarations per step:
+
+- **`params.reads`** — the ids of the data-room files the step's procedure computes
+  from, taken from the family section and your index: every `relevant: true` file the
+  family's reads name, and no `"context"` file. A file two families read appears in
+  both steps' `reads`.
+- **the `extract` step** — one step of kind `extract` per registered folder source (id
+  `extract_<slot>`), `after: []`, whose `params.files` is the union of every step's
+  `reads` under that source and nothing else: per file its `id` (the slug the readers
+  use), `path` relative to the source, `file_role` from the source class you assigned
+  in § 3, `header_row` where the peek showed a preamble above the header, `types` for
+  a column the peek showed as an amount or a date that would not parse as one, and
+  `control` — the column a check would agree a total to. A file whose profile anchors
+  several blocks — a second table below the first, a totals section — is several
+  entries, one id per block, each with its `header_row` and `rows` from the anchors §
+  2 recorded; `rows` takes several ranges (`"6:40,42:1204"`) to cut a subtotal row the
+  profile names inside a block. The script reads one block per entry and reports what
+  lies below it, the rows inside it that look like a header or a total, and whether
+  its control total agrees with your profile's whole-block span of the file — so
+  record one such span per file the extract step parses. The
+  full spec is the docstring of `${CLAUDE_PLUGIN_ROOT}/scripts/extract.py`. What no step
+  reads is not in the list.
+- **`params.cache_from`** on every step with a non-empty `reads`, naming that extract
+  step; it is one of the step's `_from` params, so the extract step is in its `after`
+  like any other read.
+
+`after` is the set of steps the step's `_from` params name, and nothing else.
+`check_playbook.py` refuses an `after` entry no read justifies, a read naming a step
+outside `after`, and a `reads` id the extract step does not parse.
 
 ## 4. Write
 
@@ -239,8 +272,9 @@ validation below), and `after` only where the recipe declares a dependency.
   and provisional ruling), the entity-by-period coverage table, each family's
   decision (what runs, at what grain, why — or why not, and what data would change
   that), how many steps each family runs as and which entities each covers — with, where
-  a family runs as more than one, the measured fact that split it — the declared options
-  as recorded, and every proposed parameter awaiting their
+  a family runs as more than one, the measured fact that split it — the extraction
+  (how many files the extract step parses, and the waves the derived order gives), the
+  declared options as recorded, and every proposed parameter awaiting their
   confirmation, windows first. State each declared option with its source — the user's
   words, or the recipe's default — and without a rationale you supplied for them. Example
   of that defect: *"`leak_stance: diligence` — the reader is a buyer"*, written on a run

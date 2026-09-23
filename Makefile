@@ -16,6 +16,7 @@ help:
 	@echo "make validate [PLUGIN=<name>]  claude plugin validate (the manifest)"
 	@echo "make check    [PLUGIN=<name>]  structural checks validate does not make"
 	@echo "make zip      [PLUGIN=<name>]  validate + check, then package into $(DIST)/"
+	@echo "              [RECIPES=\"a.md b.md\"]  also bundle these recipes; the run uses them, not the connector's"
 	@echo "make clean                     remove $(DIST)/"
 	@echo "make smoke-dso                 LIVE PAID DISPATCH: full DSO run on a synthetic room, then validate"
 	@echo "make smoke-dso-room            generate + verify the synthetic room only"
@@ -37,6 +38,10 @@ check:
 # `playbook-recipes/` is authored here and served by the Countz connector
 # (docs/arch/AUTH_MCP_OAUTH.md § 6.1); it never ships in the package. check-plugin.py
 # refuses a zip recipe (check 8u) so the exclusion cannot rot silently.
+# RECIPES="<file.md> ..." is the one exception, by hand: each file is validated and staged
+# into the zip as `<plugin>/bundled-recipes/<frontmatter name>.md`, never into the source
+# tree, and a run of that recipe pins the bundled copy instead of fetching it
+# (scripts/bundled_recipe.py, PLAYBOOK_RECIPES.md § 2).
 zip: validate check
 	@mkdir -p $(DIST)
 	@for p in $(PLUGIN); do \
@@ -49,6 +54,18 @@ zip: validate check
 		rm -f $$out; \
 		zip -qr $$out $$p -x '*.DS_Store' '*/__pycache__/*' '*.pyc' '*/.venv/*' '*/playbook-recipes/*'; \
 		echo "$$out  ($$n files, $$b bytes uncompressed)"; \
+		if [ -n "$(RECIPES)" ]; then \
+			stage=$(DIST)/.stage; rm -rf $$stage; mkdir -p $$stage/$$p/bundled-recipes; \
+			for r in $(RECIPES); do \
+				python3 $$p/scripts/validate_recipe.py $$r || { rm -f $$out; exit 1; }; \
+				rn=$$(python3 -c "import sys;sys.path.insert(0,'$$p/scripts');import bundled_recipe as b;print(b.frontmatter_name(open('$$r').read()) or '')"); \
+				if [ -z "$$rn" ]; then echo "$$r: no frontmatter name" >&2; rm -f $$out; exit 1; fi; \
+				cp $$r $$stage/$$p/bundled-recipes/$$rn.md; \
+				echo "  bundled recipe $$rn  <- $$r"; \
+			done; \
+			(cd $$stage && zip -qr $(abspath $(DIST))/$$(basename $$out) $$p); \
+			rm -rf $$stage; \
+		fi; \
 	done
 
 # `make -C models ci` fans out to this. Packaging is deliberately NOT part of it: `zip`

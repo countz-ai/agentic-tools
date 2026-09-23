@@ -86,9 +86,12 @@ BRIEF = """\
 
 This file is your entire instruction.
 
+`${{CLAUDE_PLUGIN_ROOT}}` is `{plug}`. Every file you read below writes paths with that
+token; expand it to that directory each time, including on a path you reach from inside
+another file.
+
 1. Read `{agent}` — your standing instructions.
 2. Read `{plug}/skills/{skill}/SKILL.md` — your procedure.
-3. Where those files say `${{CLAUDE_PLUGIN_ROOT}}`, use: `{plug}`
 
 Your arguments:
 
@@ -114,7 +117,7 @@ LAUNCH = ("LAUNCH: in ONE message, one general-purpose sub-agent per NEXT line, 
 # file preview. KIND_WORDS is the word a check kind takes in that line.
 KIND_WORDS = {"tieout": "tie-out", "recon": "reconciliation",
               "completeness": "completeness", "vouch": "vouching",
-              "cutoff": "cutoff", "analysis": "analysis"}
+              "cutoff": "cutoff", "analysis": "analysis", "extract": "extraction"}
 
 # A recipe's family header, as check-plugin.py gates it (PLAYBOOK_RECIPES.md § The body).
 FAMILY_HEADER = re.compile(r"^### ([A-Z]\d) — (.+?) \(kind `[a-z]+`, .+\)\s*$", re.M)
@@ -450,9 +453,11 @@ def cmd_approve_plan(a) -> int:
     definition = validate_definition(def_path)
     # A plan-driven step's worker resolves its procedure from the recipe section
     # `params.family` names (each check-* SKILL.md § Resolve the procedure); without
-    # it the worker runs on the goal sentence alone, so the plan is refused here.
+    # it the worker runs on the goal sentence alone, so the plan is refused here. An
+    # `extract` step executes no recipe family - it parses files for the steps that do.
     unfamilied = [st["id"] for st in definition["steps"]
-                  if not (st.get("params") or {}).get("family")]
+                  if st.get("check") != check_playbook.EXTRACT
+                  and not (st.get("params") or {}).get("family")]
     if unfamilied:
         raise Refuse("every plan-driven step carries params.family - the recipe family "
                      "slug its worker executes; missing on: " + ", ".join(unfamilied))

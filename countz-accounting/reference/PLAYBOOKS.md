@@ -54,7 +54,15 @@ at least one slot.
 - `steps[].check`: a check kind. The kind-to-skill map is `KINDS` in
   `scripts/check_playbook.py`. Adding a kind means adding a worker skill (its procedure
   and its item tables), a `KINDS` row and, where the kind requires params, a `PARAMS`
-  row, in the same change.
+  row, in the same change. One kind computes no figure: `extract` parses the data-room
+  files the other steps read into `<run_dir>/cache/`, once, ahead of them
+  (`scripts/extract.py`; the file table in `RUN_CONTRACT.md`). Its `params.files` lists the
+  blocks — id, path under a slot, header row and data rows, types and control column,
+  per the script's docstring; a file stacking several tables is several entries — and
+  it names no `_from`. A step that reads the cache carries
+  `params.cache_from` (the extract step) and `params.reads` (the ids it reads);
+  `check_playbook.py` refuses a read of an id the extract step does not parse. A file
+  the extract step could not parse is read from the source by the steps that name it.
 - `steps[].goal`: carried verbatim into the check dispatch. A step with no goal runs the
   kind's default procedure.
 - `steps[].params`: options the check must honor: declared tolerances, a cutoff's
@@ -70,10 +78,13 @@ at least one slot.
   family fanned out one entity per step makes every worker re-establish the same binding
   and scatters one family's work over a tab each.
 - `steps[].after`: step ids that must be terminal first. Steps whose `after` is
-  satisfied run together as one wave. `after` also grants reads: a step may read the
-  records and check files of the steps it names, and declares which in `params`
-  (`items_from` and the like). Declare a dependency only where the step reads the
-  other's record or must run later. No self-dependency, no cycle.
+  satisfied run together as one wave. `after` is **derived from the step's reads**: it
+  is exactly the set of steps the step's `_from` params name (`items_from`,
+  `cache_from`, `cube_from` and the like), and `check_playbook.py` refuses an `after`
+  entry no `_from` reads as much as a `_from` naming a step outside `after`. A step
+  reads the records and check files of the steps it names and no other. The recipe
+  declares what a family reads from another; the plan, which knows the data room,
+  derives the order — a recipe never states one. No self-dependency, no cycle.
 - `report`: the deliverable's title. The title names the work (`Month-end close checks`) and neither the
   company nor the period; the run carries both and the deck's cover prints them beside
   the title (`REPORT.md` § 2). `check_playbook.py` refuses a period token in `title` or
@@ -110,7 +121,8 @@ path of their choosing; the library is the default.
   from its filename.
 - `after` is copied from the definition the run executed (`run.json.playbook`) where one
   exists, with edges to left-out steps removed. An interactive session's checks had no
-  sequencing and get `after: []`; the user adds sequencing by editing the file.
+  sequencing and get `after: []`; the user adds sequencing by adding a `_from` read to
+  a step's `params` and the step it names to `after`.
 - Nothing is invented. A playbook contains only steps that ran.
 
 Validate before returning: `check_playbook.py <file>` must exit 0, or the save reports

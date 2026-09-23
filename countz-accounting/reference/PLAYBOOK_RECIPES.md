@@ -21,7 +21,13 @@ A step covering several entities keeps them apart end to end: one declared asser
 entity, with its own figures, citations, minted items and status, and no figure summed
 across entities except as a stated total of the group. A dependent family's step reads
 the step that covered its entity — `params.items_from` and its `_from` siblings name it,
-one id or several.
+one id or several — and those reads are the whole of its `after`: the plan derives the
+order from them, and a recipe never states one.
+
+The plan also schedules the data room's parsing. Every file a step reads is named in
+its `params.reads`; the union of those reads is parsed once by an `extract` step the
+plan adds ahead of them (`PLAYBOOKS.md` § The file), and every reader names it in
+`params.cache_from`. What no step reads is never parsed.
 
 ### The source-class ladder
 
@@ -111,6 +117,12 @@ classification, and what every wave owes the user.
   recipe; it reaches the plan step as an argument (§ 3).
 
 ### 2. Fetch the recipe and register
+
+First look for a bundled copy:
+`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/bundled_recipe.py <your recipe's name>`. When it
+prints `RECIPE:` and `VERSION:`, the package was built with that recipe in it: say so to
+the user in one line, register with `--recipe <the RECIPE path> --recipe-version <the
+VERSION>`, and call no recipe tool. `NONE` (exit 1) means nothing is bundled: fetch.
 
 Call `get_recipe_for_countz_analysis(recipe="<your recipe's name>")` on the `countz`
 server — a named shim knows its name; `countz-analysis` matches the catalog first (its

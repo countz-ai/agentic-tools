@@ -16,16 +16,34 @@ process owner) unless the run declares a transaction reader (`RUN_CONTRACT.md`
 § Parameters). Do not infer a transaction from the data room's name or its files. With no
 declaration the deck closes on what the company does about what was found.
 
-The deck is two parts. **The schedules first**: the recipe's `## Report` declares the
-tables a reader of this report type opens it for (RECIPE_FORMAT.md § Report) — for a
-quality of earnings review, the EBITDA walk at item grain and the roster of every
-adjustment considered with its verdict and reason. Each is one page, continued over as
-many as it takes, at full population, in the recipe's order, before any other page. A
-run with no recipe, or a recipe with no `## Report`, has no part one. **The narrative
-after**: the findings, what they rest on, what is open — pages that refer to the
-schedules' rows by name and stat, and copy no schedule a second time. A table appears once
-on the deck; a figure a narrative page needs is a reference or a stat tile, never the
-schedule's rows again.
+The deck is three parts, in this order.
+
+**The opening.** Two pages, and at most one more:
+
+1. **Executive summary** — headed exactly that. The elevator pitch: `message` is the one
+   sentence an executive takes away, and it drives the rest of the deck — most of the
+   pages after exist to support it. Under it, the stat tiles, chart or table that carry
+   the message; never prose alone.
+2. **The key metrics** — the executive summary continued as figures. Its headline names
+   what it shows, the measure the report exists to state: the recipe's `## Report`
+   declares it as `metrics.title` (`Adjusted EBITDA` for a quality of earnings review,
+   `Days sales outstanding` for a revenue leak). Stat tiles, a chart or a short table per
+   period; the recipe's prose says which figures.
+3. Optionally one page that carries the story to the first schedule — a chart of the
+   trend, the split that explains the headline — where the schedule needs it.
+
+**The schedules.** The recipe's `## Report` declares the tables a reader of this report
+type opens it for (RECIPE_FORMAT.md § Report) — for a quality of earnings review, the
+EBITDA walk at item grain and the roster of every adjustment considered with its verdict
+and reason. Each is one page, continued over as many as it takes, at full population, in
+the recipe's order, directly after the opening. A run with no recipe has no schedules
+part; its opening is the executive summary alone, and the gate holds that page the same
+way.
+
+**The narrative.** The findings, what they rest on, what is open — pages that refer to
+the schedules' rows by name and stat, and copy no schedule a second time. A table
+appears once on the deck; a figure a narrative page needs is a reference or a stat tile,
+never the schedule's rows again.
 
 Three rules:
 
@@ -205,11 +223,30 @@ that month end. Both entries fall inside FY2025, so cash at 30 September 2025 is
 unaffected."*, not *"One intragroup settlement posts its two legs a month apart, at $458k
 a leg."*
 
-**Run vocabulary.** State the basis in words: *prepared on a buy-side diligence basis, as
-instructed*. Do not print a parameter name (`leak_stance`, `maturity_basis`), `the user`
-for the client, `this run` for the report, `bucket` for a category, or a test's internal
-shorthand (`direction`, `grain`) in place of what it tests. Where a copied tab
-title carries one, retitle the table with `title:`; the figures stay copied.
+**Run vocabulary.** State the basis only where the user chose it: *prepared on a buy-side
+diligence basis, as instructed*. Where the recipe set that parameter by default, say nothing
+about it. Where the recipe says the deliverable does not state a parameter, leave it out.
+
+Do not print a parameter name (`leak_stance`, `maturity_basis`), `the user` for the client,
+`this run` for the report, `bucket` for a category, or a test's internal shorthand
+(`direction`, `grain`) in place of what it tests.
+
+A copied table arrives with the heading the tab gave it. Where that heading carries one of
+these, select the block by the name the tab uses and set `title:` to what the slide shows.
+The figures stay copied and the tab is untouched. Example: a tab heads a block `The bridge
+with each of the five events of A0's register removed`, which names a check rather than the
+schedule. The page selects that block and retitles it:
+
+```yaml
+- table:
+    from: a5
+    block: The bridge with each of the five events of A0's register removed
+    title: Diligence ARR with each event removed
+```
+
+Where a copied CELL carries one of these, or any id `WORKBOOK.md` § 3 Language keeps off a
+tab, the tab is wrong and the owning check fixes it: name the cell and the check, and end the
+step `blocked`. Do not rewrite the tab, and do not drop the column to hide the cell.
 
 **Shares.** A percentage or ratio names the population it is a share of. Where a page
 carries two populations, name both. Example: *a third of the past-due balance* beside
@@ -262,7 +299,7 @@ write the message yourself and reference the figures.
 
 ## 5. The gate
 
-`check_report.py` holds five mechanical things and nothing about the story:
+`check_report.py` holds six mechanical things and nothing about the story:
 
 - **The figures.** Every number on a slide is backed by a workbook numeric cell within
   the rounding tolerance of the precision shown, a number stated in a workbook text cell,
@@ -278,6 +315,10 @@ write the message yourself and reference the figures.
   deck as a table from its family's tab, carrying every declared column and period, at the
   full population its `where` and `through` leave: every row's identity is on the deck,
   and none is trimmed to `max_rows`.
+- **The opening.** The first page after the cover is headed `Executive summary`, carries a
+  `message` and at least one stat tile, table or chart. On a recipe run the second page is
+  headed as the recipe's `metrics.title` and carries a figure block, and the first
+  schedule sits at most one page after it.
 
 The author's pass is the brief (§ 1): the plan was written before the pages, the deck
 tells the workbook's story to a reader outside accounting in the voice of `DOCTRINE.md`,

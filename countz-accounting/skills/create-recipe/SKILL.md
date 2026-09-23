@@ -23,7 +23,7 @@ Read `${CLAUDE_PLUGIN_ROOT}/reference/RECIPE_FORMAT.md` whole — it is the cont
 write to — then `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py reference/PLAYBOOK_RECIPES.md "What every recipe inherits"`,
 then `run.json`. Its registered sources are the data room; you read them under
 `agents/planner.md`'s rules, through `scripts/peek.py`, bounded per
-`reference/CONDUCT.md § Reading client files`. You write a recipe, not a plan: no file
+`${CLAUDE_PLUGIN_ROOT}/reference/CONDUCT.md § Reading client files`. You write a recipe, not a plan: no file
 index, no profiles, no definition. `check-plan` does that against the recipe you leave.
 
 ## Draft pass (no `answers`)
@@ -51,7 +51,12 @@ Write `<run_dir>/recipes/<name>.md`, `name` kebab-case and not a name the catalo
 carries. Frontmatter per `RECIPE_FORMAT.md`: `name`, `objective` (from the confirmed
 answer, verbatim), `declares` for any option the answers left to the user, `headline`
 naming the one-check family whose walk the deliverable leads with, `lead` where more
-than one tab follows the Exec Summary. The six required sections in order. Families
+than one tab follows the Exec Summary. The seven required sections in order, `## Report`
+among them: its `metrics.title` is the headline of the deck's key-metrics page — the
+measure the deliverable exists to state — and its `schedules` are the tables from the
+headline and lead families' tabs a reader of this report type opens it for, each
+naming header words the family's section says its tab carries (RECIPE_FORMAT.md
+§ Report). Families
 composed only from `KINDS` in `${CLAUDE_PLUGIN_ROOT}/scripts/check_playbook.py`,
 headed exactly as the contract states, numbered from 0 where family 0 is the population
 walk; each says what it establishes, what it reads, and the families before it. Write

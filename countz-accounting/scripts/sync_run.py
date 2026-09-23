@@ -27,8 +27,14 @@ them without opening the state file.
 The run's own code comes back with the data - run-local code and scripts, `dispatch/`
 (each sub-agent's entire launch instruction), `events.jsonl`, `steps/*.json`,
 `out/usage.json`: what a later performance analysis reads, none of it recoverable from
-the deliverable alone. Excluded: `__pycache__/`, `*.pyc`, `*.tmp`, `.DS_Store`, and the
-archive itself.
+the deliverable alone. `sync.json` also carries `plugin_executed` - the version and tree
+digest of the plugin the run registered under, so a triage reads a finished run against
+the instructions that produced it rather than the checkout on its own disk. Excluded:
+`__pycache__/`, `*.pyc`, `*.tmp`, `.DS_Store`, and the archive itself.
+
+`--transcripts` additionally copies each session's `.jsonl` into `<run>/transcripts/`. It
+is the only record of which instruction files a worker opened. It carries client data, so
+it is opt-in: pass it on a debug run, not on a client sync.
 
 Stdlib only. Exit 0 on success, 2 on refusal (no run.json; --dest target already exists).
 """
@@ -48,6 +54,10 @@ from datetime import datetime, timezone
 
 ARCHIVE_NAME = "run_sync.tar.gz"
 EXCLUDE_DIRS = {"__pycache__"}
+# `<run_dir>/cache/` is the extract step's typed copy of the data room (the file table in
+# RUN_CONTRACT.md): rebuilt by re-running scripts/extract.py, cited by nothing, and the size
+# of the room. Skipped at the run root only.
+EXCLUDE_ROOT_DIRS = {"cache"}
 EXCLUDE_FILES = ("*.pyc", "*.tmp", ".DS_Store")
 
 
@@ -84,6 +94,11 @@ def _manifest(run: dict, run_dir: pathlib.Path, top: str, now_iso: str) -> bytes
         "synced_at": now_iso,
         "source_run_dir": str(run_dir),
         "plugin": _plugin(),
+        # The plugin the run actually EXECUTED under, stamped at registration. A triage
+        # compares this tree digest with the checkout it is reading; they differ, the
+        # instructions differed, and `files` in run.json names which.
+        "plugin_executed": {k: v for k, v in (run.get("plugin") or {}).items()
+                            if k != "files"},
         "run_schema": run.get("schema"),
         "run_id": run.get("run_id"),
         "goal": run.get("goal"),
@@ -92,9 +107,36 @@ def _manifest(run: dict, run_dir: pathlib.Path, top: str, now_iso: str) -> bytes
     return (json.dumps(doc, indent=2) + "\n").encode()
 
 
+def _collect_transcripts(run: dict, run_dir: pathlib.Path) -> int:
+    """Copy this run's session transcripts into <run_dir>/transcripts/.
+
+    Claude Code writes one `<session_id>.jsonl` per session under ~/.claude/projects/<cwd
+    slug>/ and ~/.claude/traces/. Nothing under the run directory records which instruction
+    files a worker opened, so without these a question like "did the report worker read
+    REPORT.md § 3" has no answer after the fact."""
+    ids = [s.get("session_id") for s in ((run.get("inputs") or {}).get("sessions") or [])
+           if s.get("session_id")]
+    if not ids:
+        return 0
+    dest = run_dir / "transcripts"
+    dest.mkdir(exist_ok=True)
+    n = 0
+    home = pathlib.Path.home() / ".claude"
+    for sid in ids:
+        for src in list(home.glob(f"projects/*/{sid}.jsonl")) + list(
+                home.glob(f"traces/{sid}.jsonl")):
+            out = dest / f"{src.parent.name}-{src.name}"
+            if not out.exists():
+                shutil.copy2(src, out)
+                n += 1
+    return n
+
+
 def _walk_files(run_dir: pathlib.Path, skip: set):
     for dirpath, dirnames, filenames in os.walk(run_dir):
-        dirnames[:] = sorted(d for d in dirnames if d not in EXCLUDE_DIRS)
+        at_root = pathlib.Path(dirpath) == pathlib.Path(run_dir)
+        dirnames[:] = sorted(d for d in dirnames if d not in EXCLUDE_DIRS
+                             and not (at_root and d in EXCLUDE_ROOT_DIRS))
         for fn in sorted(filenames):
             p = pathlib.Path(dirpath) / fn
             if _excluded(fn) or p in skip:
@@ -150,6 +192,10 @@ def main() -> int:
     ap.add_argument("--dest", help="result root to copy or land the run into")
     ap.add_argument("--name",
                     help="short name for the synced copy (default: the run's goal)")
+    ap.add_argument("--transcripts", action="store_true",
+                    help="also copy each session transcript into <run>/transcripts/ before "
+                         "syncing - the only record of which instruction files a worker "
+                         "read. Carries client data, so it is opt-in and for a debug run")
     a = ap.parse_args()
 
     run_dir = pathlib.Path(a.run_dir).expanduser().resolve()
@@ -166,6 +212,10 @@ def main() -> int:
         print(f"sync_run: {run_json} did not parse ({exc}) - syncing with an empty "
               f"manifest", file=sys.stderr)
         run = {}
+
+    if a.transcripts:
+        n = _collect_transcripts(run, run_dir)
+        print(f"transcripts:\t{n} copied into {run_dir / 'transcripts'}")
 
     now = datetime.now(timezone.utc)
     short = a.name or _short_name(run) or run.get("goal") or "run"

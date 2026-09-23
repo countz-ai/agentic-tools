@@ -37,10 +37,12 @@ No merged cells, no hidden rows or columns, no comments, no images. A long title
 overflows to the right from B1; a merge breaks sort, filter, copy and every screen
 reader.
 
-### The frozen band — rows 1 to 4
+### The frozen band — rows 1 to 3
 
 Every check tab puts the following in the frozen band: a title and a quick summary of what
-the tab is trying to accomplish. It orients a user on how to approach the data below.
+the tab is trying to accomplish. It orients a user on how to approach the data below. The
+band is frozen at `B4`. A table header is never frozen: the primary table's header on
+row 4 describes that table alone, not the tables below it.
 
 - B1 the title, opening with the token (`q6 · Adjusted EBITDA reconciles to the ledger`).
 - B2 the subtitle: entity · period set · basis · unit · tolerance. A tab covering several
@@ -53,6 +55,15 @@ the tab is trying to accomplish. It orients a user on how to approach the data b
 Another accountant reads this workbook to re-perform the work, so it is written in the
 vocabulary of a workpaper. Use standard accounting terms. Do not coin terms, and do not
 carry the run's own machine vocabulary onto a tab. Voice is `DOCTRINE.md` § Voice.
+
+A cell that states a status, a class or a verdict shows words, not the id the run computes
+with. Declare the words beside the id wherever the id is declared. An id belongs in the tab's
+id column, where the links resolve it, not inside a cell that reads as a sentence such as a
+reason, a condition or a note. Name what was done, not which step did it.
+
+Examples: the class `one_time_event` shows as *Non-recurring events*; the status `withheld`
+as *unable to establish from the records provided*; a reason reads *the management ARR agreed
+to the waterfall*, not *as a2_management_arr footed it*.
 
 ## 4. The blocks of a check tab
 
@@ -173,7 +184,7 @@ examined | what was not examined, and why`, one row per rostered check, coloured
 
 **Open Items** — three tables under three `Section` headings — review calls, questions
 for management, data requests — the first with the `BAND` header, the other two
-`HeaderPlain`. Each `id | matter | size | what closes it | owner | from_finding`. A `Q.`
+`HeaderPlain`. Each `id | matter | size | what closes it | owner | raised by`. The last column holds the review finding's id; its header is the reader's words, not the record's field name (§ 3 Language). A `Q.`
 or `D.` id the check raises is stated on that check's own tab as well, so the row's id
 resolves there and the reader lands on the schedule that raised it; a row whose only link
 is the check's name sends them to the top of a tab to search.
@@ -204,100 +215,22 @@ link) go below the last ledger row under a `Source roots` line.
 
 ## 7. Writing it
 
-Every tab script starts from one kit: the style's § 9 constants and `styles()` verbatim,
-plus the helpers below, which place the band and the blocks.
+Every tab script imports one kit, `scripts/wbkit.py` — the style's § 9 constants and
+`styles()`, and the helpers that place the band and the blocks: `band`, `header`,
+`section`, `ident`, `text`, `amount`, `status`, `fit_rows`, `finish`. The script opens:
 
 ```python
-from openpyxl.styles import Alignment
-from openpyxl.utils import get_column_letter
-# from WORKBOOK_STYLE § 9: ACCENT, SLATE, MIST, FMT_AMOUNT, FMT_PCT, FMT_TEXT, fill, grid, styles
-
-S = styles()
-STATUS = {"pass": "StatusTied", "supported": "StatusTied", "tied": "StatusTied",
-          "warn": "StatusReview", "candidate": "StatusReview",
-          "fail": "StatusBreak", "unexplained": "StatusBreak"}
-WIDTH = {"margin": 2, "id": 36, "id_ledger": 44, "description": 42, "amount": 14,
-         "period": 12, "percent": 9, "status": 12, "note": 48}
-
-
-def band(ws, title, subtitle, summary=None):
-    ws.column_dimensions["A"].width = WIDTH["margin"]
-    ws["B1"].value, ws["B1"].style = title, S["Title"]
-    ws["B2"].value, ws["B2"].style = subtitle, S["Subtitle"]
-    ws.row_dimensions[1].height, ws.row_dimensions[4].height = 24, 20
-    if summary:
-        ws["B3"].value, ws["B3"].style = summary, S["Body"]
-
-
-def header(ws, row, labels, widths, primary):
-    for i, (label, width) in enumerate(zip(labels, widths), start=2):
-        c = ws.cell(row=row, column=i, value=label)
-        c.style = S["Header"] if primary else S["HeaderPlain"]
-        ws.column_dimensions[get_column_letter(i)].width = WIDTH[width]
-        if width in ("amount", "period", "percent"):
-            c.alignment = Alignment(horizontal="right", vertical="center")
-
-
-def section(ws, row, text):
-    ws.cell(row=row, column=2, value=text).style = S["Section"]
-
-
-def ident(cell, id_):
-    cell.value, cell.style = id_, S["Body"]     # style first: it resets number_format
-    cell.number_format = FMT_TEXT
-
-
-WRAP = Alignment(wrap_text=True, vertical="top")
-
-
-def text(cell, v, style="Body"):
-    cell.value, cell.style = v, S[style]
-    cell.data_type = "s"                        # a label opening with `=` is not a formula
-    cell.number_format = FMT_TEXT
-    ws = cell.parent
-    if (ws.column_dimensions[cell.column_letter].width or 0) >= WIDTH["description"]:
-        cell.alignment = WRAP                   # description and note columns wrap
-
-
-def amount(cell, value, fmt=None, hard_input=False):
-    cell.value = value
-    cell.style = S["BodyInput"] if hard_input else S["Body"]
-    cell.number_format = fmt or FMT_AMOUNT
-
-
-def status(cell, word):
-    cell.value = word
-    cell.style = S[STATUS[word]] if word in STATUS else S["Note"]
-
-
-def fit_rows(ws, first_row=5):
-    """An explicit height on every row holding a wrapped cell: the viewer does not fit
-    rows on open. Mirrors check_workbook.py `lines_needed` — change both."""
-    for row in ws.iter_rows(min_row=first_row):
-        lines = 1
-        for c in row:
-            if isinstance(c.value, str) and c.alignment.wrap_text:
-                width = ws.column_dimensions[c.column_letter].width or 8
-                lines = max(lines, -(-len(c.value) // int(width * 1.1)))
-        if lines > 1:
-            ws.row_dimensions[row[0].row].height = 13 * lines + 2
-
-
-def finish(ws, table_last_row, ledger=False, header_row=4):
-    grid(ws, header_row, table_last_row, 2, ws.max_column)   # the primary table's rules
-    fit_rows(ws)
-    ws.freeze_panes = "B5"
-    ws.sheet_view.showGridLines = ledger
-    ws.sheet_properties.tabColor = SLATE if ledger else ACCENT
-    ws.auto_filter.ref = f"B{header_row}:{get_column_letter(ws.max_column)}{table_last_row}"
-    ws.print_title_rows = "1:4"
-    ws.page_setup.orientation, ws.page_setup.fitToWidth, ws.page_setup.fitToHeight = "landscape", 1, 0
-    ws.sheet_properties.pageSetUpPr.fitToPage = True
-    for side in ("left", "right", "top", "bottom"):
-        setattr(ws.page_margins, side, 0.5)
-    ws.print_options.horizontalCentered = True
-    # the footer text is the style's § 7 — set it exactly as written there
+import sys; sys.path.insert(0, "<${CLAUDE_PLUGIN_ROOT}>/scripts")   # the token expanded
+from wbkit import *
 ```
+
+and never carries a copy of any of it: the module is the one place the kit is written,
+and `check_workbook.py` GATE 4 verifies the stored workbook against the same values. Each
+helper's contract is its docstring and signature in the module (`python3
+${CLAUDE_PLUGIN_ROOT}/scripts/wbkit.py` self-checks it); the rules they implement are §
+3 to § 5 above. `finish(ws, table_last_row, ledger=False)` sets the per-sheet settings
+of the style's § 9 — the primary table's rules, row heights, the `B4` freeze, gridlines,
+tab colour, the filter, print setup and the § 7 footer — after the last row is written.
 
 ## 8. Before the tab leaves staging
 
@@ -320,8 +253,8 @@ repair a tab it copied. What `check_prose.py` holds the tab to is `VALIDATION.md
 and refuses a tab at the check's own gate and again at the seal. The author's pass
 covers what a parser cannot judge — the style's § 10 checklist, then:
 
-- B1 title, B2 subtitle, B3 the summary; on a check tab row 4 the one `BAND` header,
-  freeze at `B5`; on Exec Summary freeze at `B4`;
+- B1 title, B2 subtitle, B3 the summary; on a check tab row 4 the one `BAND` header;
+  freeze at `B4` on every tab — the band alone, never a table header row;
 - the tab name is `<token> <Title>`, at most 31 characters; tab colour per
   `WORKBOOK_STYLE.md` § 4;
 - at the seal, the strip reads Exec Summary, the lead tabs, Basis of Preparation, the

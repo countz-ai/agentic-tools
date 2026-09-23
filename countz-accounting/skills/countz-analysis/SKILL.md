@@ -32,7 +32,9 @@ which for this skill runs as:
    related analysis the catalog does not carry is a miss, never a near-match: a false
    match runs the wrong analysis, a miss authors the right one. Say which entry matched
    and why in one line, or that none did.
-3. **On a match**, call `get_recipe_for_countz_analysis(recipe=<the entry's name>)` and
+3. **On a match**, run `scripts/bundled_recipe.py <the entry's name>` first and pin the
+   bundled copy when it prints one (`PLAYBOOK_RECIPES.md § Fetch the recipe and register`).
+   Otherwise call `get_recipe_for_countz_analysis(recipe=<the entry's name>)` and
    continue as a named shim does: write `recipe_markdown` to a file and register with
    `--recipe <that file> --recipe-version <recipe_version>`
    (`PLAYBOOK_RECIPES.md § Fetch the recipe and register`).

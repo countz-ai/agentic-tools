@@ -80,9 +80,13 @@ Do both of these on every file:
   `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 <script>`. Never install into the
   user's environment.
 - **polars** — use polars for dataframe manipulation and calculation. Use `scan_csv` for
-  large csv files.
-- **openpyxl** — the workbook: every tab script and the assembler write through it
-  (`reference/WORKBOOK.md` § 7).
+  large csv files. On a run whose plan scheduled an `extract` step, a file your step
+  reads is already parsed and typed under `<run_dir>/cache/`: read each population with
+  one SQL statement through `scripts/evidence.py`'s `select()`, which returns the rows
+  and the citation of the same rows (`reference/EVIDENCE.md` § 1), instead of parsing
+  the source again.
+- **openpyxl** — the workbook: every tab script and the assembler write through it,
+  importing the kit from `scripts/wbkit.py` (`reference/WORKBOOK.md` § 7).
 - **python-pptx** — the report deck, written only by `scripts/build_report.py` from
   `report.yaml` (`reference/REPORT.md`); no skill writes slides directly.
 

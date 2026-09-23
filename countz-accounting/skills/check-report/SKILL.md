@@ -17,12 +17,14 @@ block — the note goes on the deck's first page).
 
 Read `${CLAUDE_PLUGIN_ROOT}/reference/DOCTRINE.md` § Voice and § Number conventions,
 `${CLAUDE_PLUGIN_ROOT}/reference/WORKBOOK.md` (where the reader's eye lands on every tab —
-the map, the frozen band, the run-level tabs), `reference/WORKBOOK_STYLE.md` (how a
-cell looks; the kit every tab script starts from) and `reference/REPORT.md` (the deck:
-the brief, `report.yaml`, the gate), then `run.json` (the check roster and
+the map, the frozen band, the run-level tabs), `${CLAUDE_PLUGIN_ROOT}/reference/WORKBOOK_STYLE.md` (how a
+cell looks; the kit every tab script starts from) and `${CLAUDE_PLUGIN_ROOT}/reference/REPORT.md`
+(the deck: the brief, `report.yaml`, the gate), then `run.json` (the check roster and
 statuses), the latest review record, every `checks/<check>.md`, and the ledgers. Each
 check wrote its own tab; **you copy tabs, cached values intact — never rewrite one.** A
-rostered check with no tab gets no empty tab; it is stated in coverage.
+rostered check with no tab gets no empty tab; it is stated in coverage. An `extract`
+step is such a row: kind `extract`, its status, and under *what was examined* the count
+of files it parsed from `cache/manifest.json`.
 
 ## 1. The workbook — `out/workbook.xlsx`
 
@@ -73,26 +75,33 @@ planning. What this step writes:
 
 - `out/.staging/report-plan.md` — the plan, before any page: the story in a few
   sentences, then the pages in order, each with its one message and the tabs it draws
-  on. The recipe's `## Report` schedules (RECIPE_FORMAT.md § Report; the recipe is at
-  `run.json.plan.recipe`) are the first pages, in the recipe's order, one `table:` block
-  each with the schedule's own keys (`from`, `columns`, `where`, `through`, `periods`,
-  `scale`, `dense`) — `columns:` on the block names the tab's actual headers that carry
-  the recipe's words, with every period column for `periods: all` and the last for
-  `latest`. Never `max_rows` on one: a long schedule continues over pages. The narrative
-  pages after refer to those rows and copy no schedule again.
+  on. The order is `REPORT.md` § 1: the opening — the `Executive summary` page, whose
+  `message` is the one sentence the deck exists to deliver, with the stat tiles, chart
+  or table that carry it; then the key-metrics page, headed as the recipe's
+  `metrics.title` (RECIPE_FORMAT.md § Report; the recipe is at `run.json.plan.recipe`)
+  and showing the figures its prose names; then at most one page carrying the story to
+  the first schedule. Then the recipe's `## Report` schedules, in the recipe's order,
+  one `table:` block each with the schedule's own keys (`from`, `columns`, `where`,
+  `through`, `periods`, `scale`, `dense`) — `columns:` on the block names the tab's
+  actual headers that carry the recipe's words, with every period column for
+  `periods: all` and the last for `latest`. Never `max_rows` on one: a long schedule
+  continues over pages. The narrative pages after refer to those rows and copy no
+  schedule again. A run with no recipe opens on the `Executive summary` page the same
+  way and goes straight to its narrative.
 - `out/.staging/report.yaml` — the pages to the plan (`REPORT.md` § 2). A page's
   `title` is its headline — the subject of a page of figures, the conclusion of a page
   that argues one — and the sentence stating the message, where the page needs one, is
   `message`; every sentence on a slide is complete.
 
-Read `REPORT.md` § 3 for the words and § 4 for the numbers before writing pages; no
-other check reads either. Rules a finished deck got wrong:
+Read `${CLAUDE_PLUGIN_ROOT}/reference/REPORT.md` § 3 for the words and § 4 for the
+numbers before writing pages; no other check reads either. Rules a finished deck got wrong:
 
 - Write to the company's own executives and operators unless the run declares a
   transaction reader.
-- State the basis in words: *as instructed*, not *as the user declared*; *this report*,
-  not *this run*; a category, not a *bucket*. Retitle a copied table with `title:` where
-  its own title carries one of these.
+- State the basis only where the user chose it, and in the reader's words: *as instructed*,
+  not *as the user declared*. Say nothing about a parameter the recipe set by default. Write
+  *this report*, not *this run*, and a category, not a *bucket*. Retitle a copied table with
+  `title:` where its own title carries one of these.
 - Call a measure what the workbook calls it: *best-possible days sales outstanding*, not
   *the floor*.
 - Cut a line whose point is its phrasing; state the finding instead.
@@ -132,8 +141,8 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/check_report.py <run_dir>/out/.staging/rep
 reperformance contract — it refuses an external or broken link, an unwired id cell, a
 dead-end id (one cited but resolving nowhere), a number on the Exec Summary with no link
 to what it was copied from, an `E.` id in a workbook with no Evidence tab, a Sources tab missing the `root source` / `To reperform` columns, a figure row
-whose `To reperform` cell is empty, a pane frozen deeper than the header band
-(5 rows / 2 columns) on any tab, and a tab strip that is not the reader's path
+whose `To reperform` cell is empty, a pane frozen deeper than the title band
+(3 rows / 2 columns — never a table header row) on any tab, and a tab strip that is not the reader's path
 (WORKBOOK.md § 2) —
 with `--run-dir` it computes the order from the roster and the recipe's `lead` and
 names the strip it wants. `check_report.py` gates the deck (`REPORT.md` § 5): every number on

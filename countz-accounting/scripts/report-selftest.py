@@ -33,6 +33,9 @@ the deck is tested over a workbook the plugin itself would seal. Then:
  11. a schedule declared `dense: true` is set at the dense size, and `where:` with
      `through:` keeps a walk's mechanics and its ruled rows and ends it at the closing
      line — the information line under it is not on the deck;
+ 13. the opening (REPORT.md § 1) is held by the gate: an executive summary page that is
+     not first, or carries no figure block, a key-metrics page not headed as the recipe
+     declares, and a first schedule two pages after it are each refused, named.
  12. the recipe's schedule (RECIPE_FORMAT.md § Report) is held by the gate: a deck whose
      walk is trimmed to `max_rows`, or carries no table from the walk's tab, is refused
      naming the schedule and the rows it lacks.
@@ -53,143 +56,15 @@ import tempfile
 import zipfile
 
 from openpyxl import Workbook
-from openpyxl.styles import Alignment, Border, Font, NamedStyle, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 HERE = pathlib.Path(__file__).resolve().parent
 
-# --- WORKBOOK_STYLE.md § 9, verbatim ---------------------------------------------------
-BAND, ACCENT, MARKER, TINT = "005C53", "0F756D", "2A9D90", "E1F0ED"
-INK, SLATE, HAIRLINE, MIST, WHITE = "1C2A2A", "566665", "D3DAD8", "F1F5F4", "FFFFFF"
-INPUT = "1F4FA3"
-BREAK_T, BREAK_F = "B42318", "FBEAE7"
-REVIEW_T, REVIEW_F = "9A5B00", "FFF3D1"
-TIED_T = "1E7B3C"
-FONT = "Arial"
-
-
-def font(size=10, bold=False, italic=False, color=INK, underline=None):
-    return Font(name=FONT, size=size, bold=bold, italic=italic, color=color, underline=underline)
-
-
-fill = lambda hex_: PatternFill("solid", fgColor=hex_)  # noqa: E731
-hair = Side(style="thin", color=HAIRLINE)
-thin = Side(style="thin", color=INK)
-dbl = Side(style="double", color=INK)
-FMT_AMOUNT = '#,##0;(#,##0);"–"'
-FMT_TEXT = "@"
-
-
-def grid(ws, first_row, last_row, first_col, last_col):
-    for r in range(first_row, last_row + 1):
-        for c in range(first_col, last_col + 1):
-            cell = ws.cell(row=r, column=c)
-            b = cell.border
-            keep = lambda side: side if (side is not None and side.style) else hair  # noqa: E731
-            cell.border = Border(left=hair, right=hair, top=keep(b.top), bottom=keep(b.bottom))
-
-
-def styles():
-    s = {}
-    s["Title"] = NamedStyle("cz_title", font=font(14, bold=True))
-    s["Subtitle"] = NamedStyle("cz_subtitle", font=font(10, color=SLATE))
-    s["Section"] = NamedStyle("cz_section", font=font(11, bold=True, color=ACCENT))
-    s["Header"] = NamedStyle("cz_header", font=font(10, bold=True, color=WHITE), fill=fill(BAND),
-                             alignment=Alignment(vertical="center"), border=Border(bottom=hair))
-    s["HeaderPlain"] = NamedStyle("cz_header_plain", font=font(10, bold=True), fill=fill(MIST),
-                                  alignment=Alignment(vertical="center"), border=Border(bottom=hair))
-    s["Body"] = NamedStyle("cz_body", font=font())
-    s["BodyInput"] = NamedStyle("cz_body_input", font=font(color=INPUT))
-    s["Subtotal"] = NamedStyle("cz_subtotal", font=font(bold=True), fill=fill(MIST), border=Border(top=hair))
-    s["Total"] = NamedStyle("cz_total", font=font(bold=True), border=Border(top=thin, bottom=dbl))
-    s["Note"] = NamedStyle("cz_note", font=font(9, italic=True, color=SLATE))
-    s["KeyFigure"] = NamedStyle("cz_key", font=font(12, bold=True), fill=fill(TINT))
-    s["StatusBreak"] = NamedStyle("cz_break", font=font(color=BREAK_T), fill=fill(BREAK_F))
-    s["StatusReview"] = NamedStyle("cz_review", font=font(color=REVIEW_T), fill=fill(REVIEW_F))
-    s["StatusTied"] = NamedStyle("cz_tied", font=font(color=TIED_T))
-    return s
-
-
-S = styles()
-STATUS = {"pass": "StatusTied", "supported": "StatusTied", "tied": "StatusTied",
-          "warn": "StatusReview", "candidate": "StatusReview",
-          "fail": "StatusBreak", "unexplained": "StatusBreak"}
-WIDTH = {"margin": 2, "id": 36, "id_ledger": 44, "description": 42, "amount": 14,
-         "period": 12, "percent": 9, "status": 12, "note": 48}
-
-
-# --- WORKBOOK.md § 7, the kit ----------------------------------------------------------
-def band(ws, title, subtitle, summary=None):
-    ws.column_dimensions["A"].width = WIDTH["margin"]
-    ws["B1"].value, ws["B1"].style = title, S["Title"]
-    ws["B2"].value, ws["B2"].style = subtitle, S["Subtitle"]
-    ws.row_dimensions[1].height, ws.row_dimensions[4].height = 24, 20
-    if summary:
-        ws["B3"].value, ws["B3"].style = summary, S["Body"]
-
-
-WRAP = Alignment(wrap_text=True, vertical="top")
-
-
-def header(ws, row, labels, widths, primary=True):
-    for i, (label, width) in enumerate(zip(labels, widths), start=2):
-        c = ws.cell(row=row, column=i, value=label)
-        c.style = S["Header"] if primary else S["HeaderPlain"]
-        ws.column_dimensions[get_column_letter(i)].width = WIDTH[width]
-        if width in ("amount", "period", "percent"):
-            c.alignment = Alignment(horizontal="right", vertical="center")
-
-
-def section(ws, row, text_):
-    ws.cell(row=row, column=2, value=text_).style = S["Section"]
-
-
-def ident(cell, id_):
-    cell.value, cell.style = id_, S["Body"]
-    cell.number_format = FMT_TEXT
-
-
-def text(cell, v, style="Body"):
-    cell.value, cell.style = v, S[style]
-    cell.data_type = "s"          # a label opening with `=` is a string, never a formula
-    cell.number_format = FMT_TEXT
-    ws = cell.parent
-    if (ws.column_dimensions[cell.column_letter].width or 0) >= WIDTH["description"]:
-        cell.alignment = WRAP      # description and note columns wrap, top-aligned
-
-
-def fit_rows(ws, first_row=5):
-    """An explicit height on every row holding a wrapped cell: the viewer does not fit
-    rows on open. Mirrors check_workbook.py `lines_needed` — change both."""
-    for row in ws.iter_rows(min_row=first_row):
-        lines = 1
-        for c in row:
-            if isinstance(c.value, str) and c.alignment.wrap_text:
-                width = ws.column_dimensions[c.column_letter].width or 8
-                lines = max(lines, -(-len(c.value) // int(width * 1.1)))
-        if lines > 1:
-            ws.row_dimensions[row[0].row].height = 13 * lines + 2
-
-
-def amount(cell, value, fmt=None, hard_input=False, style=None):
-    cell.value = value
-    cell.style = S[style] if style else (S["BodyInput"] if hard_input else S["Body"])
-    cell.number_format = fmt or FMT_AMOUNT
-
-
-def status(cell, word):
-    cell.value = word
-    cell.style = S[STATUS[word]] if word in STATUS else S["Note"]
-
-
-def finish(ws, table_last_row, ledger=False, header_row=4, freeze="B5"):
-    grid(ws, header_row, table_last_row, 2, ws.max_column)
-    fit_rows(ws)
-    ws.auto_filter.ref = f"B{header_row}:{get_column_letter(ws.max_column)}{table_last_row}"
-    ws.freeze_panes = freeze
-    ws.sheet_view.showGridLines = ledger
-    ws.sheet_properties.tabColor = SLATE if ledger else ACCENT
-    ws.print_title_rows = "1:4"
+# --- the kit: scripts/wbkit.py (WORKBOOK_STYLE.md § 9 + WORKBOOK.md § 7) ------------
+sys.path.insert(0, str(HERE))
+from wbkit import (ACCENT, BAND, FMT_AMOUNT, FMT_TEXT, MIST, S, SLATE, TINT,  # noqa: E402,F401
+                   WIDTH, amount, band, finish, fit_rows, grid, header, ident, section,
+                   status, text)
 
 
 # --- the fixture run ----------------------------------------------------------------
@@ -281,7 +156,7 @@ def make_run(rd: pathlib.Path) -> None:
             text(ws.cell(row=i, column=2 + j), v)
     grid(ws, 4, 6, 2, 5)
     section(ws, 8, "Procedures not performed")
-    text(ws.cell(row=9, column=2), "The capex bridge was dropped: the room carries no capitalized-cost accounts (D.q6.capex).")
+    text(ws.cell(row=9, column=2), "The capex bridge was dropped: the room carries no capitalized-cost accounts.")
     section(ws, 11, "How to read this workbook")
     header(ws, 12, ["prefix", "meaning"], ["status", "description"], primary=False)
     text(ws.cell(row=13, column=2), "F.")
@@ -329,7 +204,7 @@ def make_run(rd: pathlib.Path) -> None:
 
     ws = wb.create_sheet("Open Items")
     band(ws, "Open Items", "Acme Corp · review calls, questions for management, data requests")
-    header(ws, 4, ["id", "matter", "size", "what closes it", "owner", "from_finding"],
+    header(ws, 4, ["id", "matter", "size", "what closes it", "owner", "raised by"],
            ["id", "description", "amount", "note", "status", "id"])
     ident(ws.cell(row=5, column=2), "Q.q6.mgmt_residual")
     text(ws.cell(row=5, column=3), "Q.q6.mgmt_residual. Which schedule version produced the published figure?")
@@ -339,7 +214,7 @@ def make_run(rd: pathlib.Path) -> None:
     text(ws.cell(row=5, column=7), "")
     grid(ws, 4, 5, 2, 7)
     section(ws, 7, "Data requests")
-    header(ws, 8, ["id", "matter", "size", "what closes it", "owner", "from_finding"],
+    header(ws, 8, ["id", "matter", "size", "what closes it", "owner", "raised by"],
            ["id", "description", "amount", "note", "status", "id"], primary=False)
     ident(ws.cell(row=9, column=2), "D.q6.capex")
     text(ws.cell(row=9, column=3), "D.q6.capex. The capitalized-cost accounts, for the capex bridge.")
@@ -427,7 +302,8 @@ x
 ## Report
 
 ```json
-{"schedules": [
+{"metrics": {"title": "Adjusted EBITDA"},
+ "schedules": [
   {"title": "EBITDA walk", "from": "q6", "columns": ["line", "verdict"], "periods": "all",
    "where": {"verdict": "supported"}, "through": "= Diligence adjusted EBITDA", "dense": true}
 ]}
@@ -446,7 +322,7 @@ title: Quality of earnings review
 sections:
   - title: Executive summary
     pages:
-      - title: Diligence-adjusted EBITDA
+      - title: Executive summary
         message: "{Exec Summary!B3}"
         blocks:
           - stats:
@@ -454,7 +330,7 @@ sections:
               - {label: Diligence adjusted EBITDA · LTM Jul 2025, value: "{q6 | = Diligence adjusted EBITDA | LTM Jul 2025 | $}"}
           - heading: What this rests on
           - bullets: ["The FY2023 income statement ties to the trial balance with no exception (q1)."]
-      - title: EBITDA bridge
+      - title: Adjusted EBITDA
         blocks:
           - table: {from: q6, rows: ["= Reported EBITDA", "= Diligence adjusted EBITDA"], columns: [line, FY2023, FY2024, LTM Jul 2025], title: "EBITDA bridge, USD"}
           - chart: {type: column, from: q6, rows: ["= Reported EBITDA", "= Diligence adjusted EBITDA"], columns: [FY2023, FY2024, LTM Jul 2025]}
@@ -474,7 +350,7 @@ sections:
         blocks:
           - text: "Every rostered check is listed with what it examined and what it did not."
           - text: "No owner-compensation adjustment was taken: the amount is {q6 | Owner compensation, no adjustment taken | LTM Jul 2025 | $}."
-          - table: {from: Coverage}
+          - table: {from: Coverage, columns: ["token · title", status, "what was examined", "what was not examined, and why"]}
           - lines: {from: Basis of Preparation, block: Procedures not performed}
 """
 SENTENCE_TITLE = ("Reported EBITDA walks to diligence adjusted EBITDA through supported adjustments "
@@ -504,7 +380,7 @@ def structure(deck: pathlib.Path) -> list[str]:
     if not any('name="title"' in x and 'name="message"' not in x for x in pages):
         out.append("structure: a page written without a message must carry no message shape")
     titles = [html.unescape(m) for x in pages for m in re.findall(r'name="title".*?<a:t>(.*?)</a:t>', x, re.S)]
-    if "EBITDA bridge" not in titles or "Diligence-adjusted EBITDA" not in titles:
+    if "Executive summary" not in titles or "Adjusted EBITDA" not in titles:
         out.append(f"structure: titles are the headlines as written, found {titles}")
     tables = 0
     for x in pages:
@@ -624,12 +500,12 @@ def main() -> int:
                          f"{(r.stdout + r.stderr).strip()[:300]}")
 
         # 5. a sentence where a headline belongs: over the cap, and ending in a full stop
-        spec.write_text(GOOD_SPEC.replace("title: EBITDA bridge", f'title: "{SENTENCE_TITLE}"'))
+        spec.write_text(GOOD_SPEC.replace("title: Adjusted EBITDA", f'title: "{SENTENCE_TITLE}"'))
         r = run(build)
         if r.returncode != 1 or "pages[1].title" not in r.stdout or "headline" not in r.stdout:
             fails.append(f"5a: a sentence title must be refused as not a headline, named (exit {r.returncode}): "
                          f"{(r.stdout + r.stderr).strip()[:300]}")
-        spec.write_text(GOOD_SPEC.replace("title: EBITDA bridge", "title: The bridge foots."))
+        spec.write_text(GOOD_SPEC.replace("title: Adjusted EBITDA", "title: The bridge foots."))
         r = run(build)
         if r.returncode != 1 or "pages[1].title" not in r.stdout or "full stop" not in r.stdout:
             fails.append(f"5b: a title ending in a full stop must be refused, named (exit {r.returncode}): "
@@ -749,6 +625,37 @@ def main() -> int:
                 fails.append(f"12: a deck with no table from the walk's tab must be refused naming the "
                              f"schedule (exit {g.returncode}): {(g.stdout + g.stderr).strip()[:400]}")
 
+        # 13. the opening is held by the gate (REPORT.md § 1): the executive summary page
+        #     first, with a message and a figure block; the key-metrics page headed as the
+        #     recipe declares; the first schedule at most one page after it.
+        opening = {
+            "a": (GOOD_SPEC.replace("      - title: Executive summary\n", "      - title: Diligence-adjusted EBITDA\n", 1),
+                  "headed `Executive summary`"),
+            "b": (GOOD_SPEC.replace(
+                '          - stats:\n'
+                '              - {label: Reported EBITDA · LTM Jul 2025, value: "{q6 | = Reported EBITDA | LTM Jul 2025 | $}"}\n'
+                '              - {label: Diligence adjusted EBITDA · LTM Jul 2025, value: "{q6 | = Diligence adjusted EBITDA | LTM Jul 2025 | $}"}\n',
+                ''), "no stat tile, table or chart"),
+            "c": (GOOD_SPEC.replace("      - title: Adjusted EBITDA\n", "      - title: EBITDA\n", 1),
+                  "key-metrics page is headed `Adjusted EBITDA`"),
+            "d": (GOOD_SPEC.replace(
+                "      - title: EBITDA walk\n",
+                '      - title: Context first\n        blocks:\n          - text: "We set the scene here."\n'
+                '      - title: Context second\n        blocks:\n          - text: "We set more of the scene here."\n'
+                "      - title: EBITDA walk\n", 1), "2 pages after the key-metrics page"),
+        }
+        for case, (text_, want) in opening.items():
+            assert text_ != GOOD_SPEC, f"13{case}: the case did not change the spec"
+            spec.write_text(text_)
+            r = run(build)
+            if r.returncode != 0:
+                fails.append(f"13{case}: the spec must build (exit {r.returncode}): {(r.stdout + r.stderr).strip()[-300:]}")
+                continue
+            g = run(gate)
+            if g.returncode != 1 or want not in g.stdout:
+                fails.append(f"13{case}: the gate must refuse the opening naming `{want}` (exit {g.returncode}): "
+                             f"{(g.stdout + g.stderr).strip()[:400]}")
+
         # 6. a fragment where a sentence belongs: a text block with no full stop
         spec.write_text(GOOD_SPEC.replace(
             '- text: "Every rostered check is listed with what it examined and what it did not."',
@@ -769,7 +676,9 @@ def main() -> int:
           "carrying the company or the period and a schedule condensed past its own arithmetic "
           "are refused; a zero in a sentence reads $0, a dollar figure reads $8.4m and a "
           "declared schedule reads in thousands; a dense, filtered walk builds, and the recipe's "
-          "schedule trimmed or absent is refused.")
+          "schedule trimmed or absent is refused; the opening — the executive summary with its message "
+          "and a figure block, the key-metrics page headed as the recipe declares, the first schedule "
+          "at most one page after it — is held.")
     return 0
 
 
