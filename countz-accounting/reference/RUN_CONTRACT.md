@@ -46,7 +46,8 @@ server (`get_recipe_for_countz_analysis`) and runs everything else locally.
 
 `get_countz_config` takes no arguments. Nothing from a run — no path, no figure,
 no file name — goes to the server; the one text that may cross is the scrubbed pre-run
-ask, on a catalog miss only ([OBSERVABILITY.md](OBSERVABILITY.md) § 4).
+ask, on a catalog miss only, scrubbed by an agent under [SCRUB.md](SCRUB.md)
+([OBSERVABILITY.md](OBSERVABILITY.md) § 4).
 
 ## The files, and who writes each
 
@@ -56,7 +57,7 @@ ask, on a catalog miss only ([OBSERVABILITY.md](OBSERVABILITY.md) § 4).
 | `<run_dir>/engagement-preview.md` | `scripts/setup_run.py`, on every registration: the collected parameters, each source's location, and a metadata-only directory summary of every folder source (3 levels, file counts, KB) | the user, via preview, right after registration and before the first dispatch |
 | `<run_dir>/file_index.json` | the plan step: every registered file with its relevance verdict (`relevant: true`, `"context"` for a file kept for later explanation, or `false`). Plan-driven runs only | dispatched steps, `scripts/preview.py` |
 | `<run_dir>/sources/<id>.md` (+ `<id>.entities.json` where the source stacks several accounts, statements or entities) | the plan step, for each source its roster binds. Plan-driven runs only | the check steps |
-| `<run_dir>/cache/<id>.parquet` + `<run_dir>/cache/manifest.json` | the `extract` step, through `scripts/extract.py`: the data-room files the plan's steps read, parsed once into typed parquet, and the manifest — per file its source path, bytes and sha256, header row, columns with letters and dtypes, row count and control total. Plan-driven runs whose plan scheduled an extraction | the steps that name it in `params.cache_from` (`scripts/extract.py read`), `scripts/evidence.py span` for their citations. Excluded from `run_sync.tar.gz`: rebuilt by re-running the step, cited by nothing |
+| `<run_dir>/cache/<id>.parquet` + `<run_dir>/cache/manifest.json` | the `extract` step's script (`workpapers/extract-<check>.py`), through `scripts/cache.py`: each table the plan's steps read, parsed once into typed parquet, and the manifest — per table its source file, sha256 and bytes, header and row coordinates in the file, columns with where each sits and how it was parsed, row count, control total and any stated total; tables seen and not extracted under `not_extracted`. Plan-driven runs whose plan scheduled an extraction | the steps that name it in `params.cache_from` (`scripts/cache.py read`), `scripts/evidence.py select` for their citations. Excluded from `run_sync.tar.gz`: rebuilt by re-running the step's script, cited by nothing |
 | `<run_dir>/recipes/<recipe-name>.md` | `scripts/setup_run.py --recipe` (a served recipe, byte for byte) or the `create-recipe` step (a generated one, validated by `scripts/validate_recipe.py`); written once, never edited | the plan, review and report steps, through `run.json.plan.recipe` |
 | `<run_dir>/plan.md` + `<run_dir>/plan/<name>.json` | the plan step, once per draft; a revised draft rewrites both | the user (via preview), the relay, the playbook engine (the definition it executes) |
 | `<run_dir>/steps/<NNNN>-<step>.json` | the step that produced it, once, at its end | the relay (`run_state.py record`), the playbook engine, the review step |
@@ -202,9 +203,9 @@ blockers: [{what: "...", effect: "..."}] # what stopped the work or narrowed it:
                                     # source you could not reach, a dependency that did
                                     # not land; one entry each, with its effect
 findings: []                        # review only; see VALIDATION.md
-cache_defects: []                   # [{id, what, fix: {rows|types|header_row|control}}]:
-                                    # a cache id whose block the step found wrong, and
-                                    # the spec keys that correct it (agents/worker.md
+cache_defects: []                   # [{id, what, fix}]: a cache id whose table the
+                                    # step found wrong, and in words what the extract
+                                    # script must do differently (agents/worker.md
                                     # § Your procedure)
 notes: ""
 ```
@@ -287,10 +288,10 @@ After every wave, in this order:
 
 ## Review and report
 
-Before the review: a step record carrying `cache_defects` names a cache block the step
-found wrong and the spec keys that correct it. Re-dispatch the extract step that owns
-the id with `--mode fix` and `fix_input` holding those entries — it applies them as
-overrides and rewrites the block — then every step whose `params.reads` names the id,
+Before the review: a step record carrying `cache_defects` names a cache table the step
+found wrong and what the extract script must do differently. Re-dispatch the extract
+step that owns the id with `--mode fix` and `fix_input` holding those entries — it edits
+its script, re-runs it, and records the control total before and after — then every step whose `params.reads` names the id,
 with `--mode fix` and `fix_input` naming the id, before the review runs. The step that
 found the defect computed from the source and needs no re-run.
 
@@ -300,8 +301,8 @@ figure, and its record is the cache manifest every consumer's citations re-state
 (severity, target, observation); with debug mode off the preview does not show them. The
 user rules on each:
 
-- **fix**: re-dispatch the named checks with `--mode fix`. Each fix verifies its own
-  change by diff; that closes the finding and ends the round. No re-review follows a fix.
+- **fix**: re-dispatch the named checks with `--mode fix`. Each fix snapshots its
+  check first and verifies its own change by diff (`${CLAUDE_PLUGIN_ROOT}/scripts/rework.py`); that closes the finding and ends the round. No re-review follows a fix.
 - **proceed**: the findings are carried into the deliverable as stated limitations.
 
 A further round, when the user directs one, is a fresh `check-review` with `carry_from`
@@ -312,7 +313,7 @@ proceeded past silently: the affected figure is withheld and the deliverable say
 Then `check-report` (`dispatch --step report`). Re-dispatch it whenever later checks or
 fixes land after a seal; the report step reassembles from all current records.
 
-The relay relays. It does not open client files, compute figures, or summarise a step's
+The relay relays. It does not open client files, compute figures, or summarize a step's
 output. The preview puts the deliverables in front of the user; the review's findings
 are put to them from its record.
 

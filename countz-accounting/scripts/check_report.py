@@ -22,8 +22,10 @@ workbook has, and every table on the page comes from a tab the footer names. A r
 figure names its own tab; a page whose figures are typed declares `source:`.
 
 GATE 3 — the cover. The cover is four strings and each fact is on it once: the title names
-the work — never the company, never the period — the subtitle the entity detail and the
-period, the kicker and the prepared line the company and the date.
+the work — never the period — the subtitle the entity detail and the period, the kicker
+and the prepared line the company and the date. That the title and subtitle name no
+company is the critic's judgment (skills/check-review), not a pattern: a company's name
+in any language and legal form is not something a regex holds.
 
 GATE 4 — the message. Every page title is a headline — at most 80 characters and no
 full stop (`(continued)` on a flowed page is not counted) — and every sentence the
@@ -65,18 +67,16 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from check_prose import admitted_values  # noqa: E402
 from check_workbook import sheet_cells, sheet_order, shared_strings  # noqa: E402
 from recipe_format import report_metrics, report_schedules  # noqa: E402
+import style  # noqa: E402
 
 TITLE_MAX = 80                          # build_report.TITLE_MAX — a headline, not a sentence
 # The cover's budgets and patterns, restated from build_report.py (the SoT): this gate
 # reads the stored deck with the standard library only and imports nothing from it.
 COVER_TITLE_MAX, COVER_SUB_MAX = 60, 72
-MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August",
-          "September", "October", "November", "December")
+MONTHS = style.MONTHS
 PERIOD_TOKEN = re.compile(
     rf"\b(?:FY|CY)\s?(?:19|20)?\d\d\b|\b(?:19|20)\d\d\b|\b\d{{4}}-\d{{2}}-\d{{2}}\b"
     rf"|\b(?:{'|'.join(m[:3] for m in MONTHS)})[a-z]*\.?\s+\d{{1,4}}\b", re.I)
-LEGAL_FORM = re.compile(r"[\s,]*\b(?:inc|llc|l\.l\.c|ltd|limited|corp|corporation|co|company|plc|"
-                        r"gmbh|s\.a|sa|sas|bv|nv|ag|pty|llp|lp|holdings?|group)\b\.?", re.I)
 CONTINUED = " (continued)"
 PROSE_SHAPES = {"message", "body-text"}  # the shapes the builder sets as sentences
 SENTENCE_END = re.compile(r"[.?!][)\]\"'”’]*$")
@@ -88,23 +88,22 @@ SKIP_SHAPES = {"kicker", "footer-page", "footer-left", "footer-source", "table-m
 # each plotted value on its shape's name: `chartval:<tab>:<value>`.
 CHARTVAL = re.compile(r"^chartval:(.+):(-?[\d.eE+-]+)$")
 
-# A schedule of dollars is shown at a scale, its column headed with it (REPORT.md § 4);
-# the figure behind such a cell is the workbook's, times that scale.
-COL_SCALE = ((re.compile(r"\$'000|\$000|\$ ?in thousands", re.I), 1e-3),
-             (re.compile(r"\(\$m\)|\$ ?in millions", re.I), 1e-6),
-             (re.compile(r"\(\$bn\)|\$ ?in billions", re.I), 1e-9))
-NUM = r"\d[\d,]*(?:\.\d+)?"
+# A schedule of money is shown at a scale, its table's title stating it (REPORT.md § 4) in
+# any currency — `$ in thousands`, `€ in millions`; the figure behind such a cell is the
+# workbook's, times that scale. The patterns are scripts/style.py's, the table the
+# builder writes with, so the two cannot drift.
+COL_SCALE = style.COL_SCALE
+NUM = style.NUM
+_SUF = style.SUFFIX_RE
+_CUR_CHARS = "".join(sorted({ch for c in style.CURRENCIES.values() for ch in c.symbol}))
 TOKEN = re.compile(
-    rf"\(\$?\s?(?P<neg>{NUM})\s*(?P<nsuf>bn\b|[KMBkmb]\b)?%?\)"        # (1,234)  ($1.2m)  (3.1%)
-    rf"|\$\s?(?P<money>{NUM})\s*(?P<suffix>bn\b|[KMBkmb]\b|thousand\b|million\b|billion\b)?"
-    rf"|(?<![\d.,\-–+$])(?P<days>{NUM})[\s-]days?\b"
+    rf"(?:{style.MONEY_TOKEN})"                                       # $9.4M  €1,204  EUR 5,000
+    rf"|\((?P<neg>{NUM})\s*(?P<nsuf>{_SUF})?(?P<npct>%)?\)"            # (1,234)  (3.1%)
+    rf"|(?<![\d.,\-–+{re.escape(_CUR_CHARS)}])(?P<days>{NUM})[\s-]days?\b"
     rf"|(?<![\d.,])(?P<pct>{NUM})\s?%"
     rf"|(?<![\d.,])(?P<mult>{NUM})x\b"
-    rf"|(?<![\w.,$])(?P<plain>\d{{1,3}}(?:,\d{{3}})+(?:\.\d+)?|\d+\.\d+|\d{{3,}})(?![\w.,%]|\s?days?\b)")
-# The deck writes `$50.5m`, `$81k`, `$1.2bn` (REPORT.md § 4); a workbook text cell may
-# carry the spelled form.
-SCALE = {"k": 1e3, "thousand": 1e3, "m": 1e6, "million": 1e6,
-         "b": 1e9, "bn": 1e9, "billion": 1e9}
+    rf"|(?<![\w.,{re.escape(_CUR_CHARS)}])(?P<plain>\d{{1,3}}(?:,\d{{3}})+(?:\.\d+)?|\d+\.\d+|\d{{3,}})"
+    rf"(?![\w.,%]|\s?days?\b)")
 YEAR = re.compile(r"^(?:19|20)\d\d$")
 ATTR = lambda name: re.compile(rf'\b{name}="([^"]*)"')
 REL_EL = re.compile(r"<Relationship\b[^>]*/?>")
@@ -138,6 +137,17 @@ def para_text(xml: str) -> str:
     return "\n".join(lines)
 
 
+OFF = re.compile(r"<a:off\b[^>]*\bx=\"(-?\d+)\"[^>]*\by=\"(-?\d+)\"")
+# A table's title is the `table-title` shape drawn above it at the same left edge (EMU).
+TITLE_X_SLACK = 12700
+
+
+def offset(xml: str) -> tuple[int, int]:
+    """A shape's top-left corner in EMU, from its first `<a:off>`."""
+    m = OFF.search(xml)
+    return (int(m.group(1)), int(m.group(2))) if m else (0, 0)
+
+
 def read_slide(z: zipfile.ZipFile, part: str) -> dict:
     xml = z.read(part).decode("utf-8", "replace")
     name = ""
@@ -145,10 +155,14 @@ def read_slide(z: zipfile.ZipFile, part: str) -> dict:
     if m:
         name = html.unescape(m.group(1))
     shapes: list[tuple[str, str]] = []
+    titles: list[tuple[int, int, str]] = []            # (x, y, text) of each table title
     for sp in re.findall(r"<p:sp\b.*?</p:sp>", xml, re.S):
         nm = re.search(r"<p:cNvPr\b[^>]*\bname=\"([^\"]*)\"", sp)
         shapes.append((html.unescape(nm.group(1)) if nm else "", para_text(sp)))
+        if shapes[-1][0] == "table-title":
+            titles.append((*offset(sp), shapes[-1][1]))
     tables: list[tuple[str, list[list[str]]]] = []
+    table_titles: list[str] = []                       # the title drawn above each table
     charts: list[tuple[str, list[float]]] = []
     rel_part = part.replace("slides/", "slides/_rels/") + ".rels"
     rels = {}
@@ -174,6 +188,9 @@ def read_slide(z: zipfile.ZipFile, part: str) -> dict:
             for tr in re.findall(r"<a:tr\b.*?</a:tr>", gf, re.S):
                 rows.append([para_text(tc) for tc in re.findall(r"<a:tc\b.*?</a:tc>", tr, re.S)])
             tables.append((gname, rows))
+            tx, ty = offset(gf)
+            above = [(y, t) for x, y, t in titles if abs(x - tx) <= TITLE_X_SLACK and y <= ty]
+            table_titles.append(max(above)[1] if above else "")
         cm = re.search(r"<c:chart\b[^>]*r:id=\"([^\"]+)\"", gf)
         if cm and cm.group(1) in rels:
             cpart = "ppt/" + rels[cm.group(1)].lstrip("/").replace("../", "")
@@ -184,6 +201,7 @@ def read_slide(z: zipfile.ZipFile, part: str) -> dict:
                     vals += [float(v) for v in re.findall(r"<c:v>(-?[\d.eE+-]+)</c:v>", cache)]
                 charts.append((gname, vals))
     return {"part": part, "name": name, "shapes": shapes, "tables": tables, "charts": charts,
+            "table_titles": table_titles,
             "kicker": next((t for n, t in shapes if n == "kicker"), ""),
             "title": next((t for n, t in shapes if n == "title"), ""),
             "footer_source": next((t for n, t in shapes if n == "footer-source"), "")}
@@ -265,11 +283,14 @@ def header_at(headers: list[str], word: str) -> int | None:
 
 
 def schedule_gate(schedules: list[dict], tabs: list[str], texts: dict[str, dict[int, dict[int, str]]],
-                  slides: list[dict]) -> list[str]:
+                  slides: list[dict], plan: list | None = None) -> list[str]:
     """GATE 5 — the recipe's schedules (RECIPE_FORMAT.md § Report): each is on the deck as
     a table from its family's tab, carrying every declared column and period, at the
     full population the schedule's `where` / `through` leave — every row's identity
-    (the first declared column) present, none trimmed."""
+    (the first declared column) present, none trimmed. A period column is one naming a
+    period the plan declares (`plan`, scripts/periods.py); on a run that declares none,
+    one whose header reads as a period. `latest` is the latest by the plan's dates, else
+    the last such column."""
     fails: list[str] = []
     # every table on the deck, grouped by its tab and its header row: a table continued
     # over pages is one schedule, and two schedules from one tab differ in their headers
@@ -295,12 +316,18 @@ def schedule_gate(schedules: list[dict], tabs: list[str], texts: dict[str, dict[
             fails.append(f"schedule `{title}`: `{tab}` has no "
                          + (f"block titled `{sc['block']}`" if sc.get("block") else "primary table"))
             continue
-        periods = [h for h in headers if PERIOD_TOKEN.search(h)]
+        if plan:
+            dated = [(h, period_of(h, plan)) for h in headers]
+            dated = [(h, p.end) for h, p in dated if p is not None]
+        else:
+            dated = [(h, None) for h in headers if PERIOD_TOKEN.search(h)]
+        periods = [h for h, _ in dated]
         want = list(words)
         if sc.get("periods") == "all":
             want += periods
         elif sc.get("periods") == "latest" and periods:
-            want.append(periods[-1])
+            known = [(h, d) for h, d in dated if d is not None]
+            want.append(max(known, key=lambda x: x[1])[0] if known else periods[-1])
         candidates = [(k, body) for k, body in groups.items() if k[0] == tab]
         if not candidates:
             fails.append(f"schedule `{title}`: no page carries a table from `{tab}` — the recipe's "
@@ -313,8 +340,10 @@ def schedule_gate(schedules: list[dict], tabs: list[str], texts: dict[str, dict[
                 match = (k, body)
                 break
         if match is None:
-            k = candidates[0][0]
-            missing = [w for w in want if header_at(list(k[1]), w) is None]
+            # name what the nearest table lacks: the candidate missing the fewest columns,
+            # and of those the one carrying the most of the declared (non-period) columns
+            missing = min(([w for w in want if header_at(list(k[1]), w) is None] for k, _ in candidates),
+                          key=lambda ms: (len(ms), sum(1 for w in ms if w in words)))
             fails.append(f"schedule `{title}`: no table from `{tab}` carries the column(s) "
                          f"{', '.join(f'`{m}`' for m in missing)} the recipe declares")
             continue
@@ -450,39 +479,107 @@ def workbook_values(path: pathlib.Path) -> tuple[list[str], list[float], list[fl
 
 
 def tokenize(text: str):
-    """Yield (token, value, tolerance, variants) for every figure-looking number."""
+    """Yield (token, value, tolerance, variants) for every figure-looking number. `value` is
+    the magnitude: a written sign is not checked. A bare year (1900–2099) is a period, not
+    a figure."""
     for m in TOKEN.finditer(text):
         g = m.groupdict()
-        raw = g["neg"] or g["money"] or g["days"] or g["pct"] or g["mult"] or g["plain"]
+        raw = g["money"] or g["money2"] or g["neg"] or g["days"] or g["pct"] or g["mult"] or g["plain"]
         if raw is None:
             continue
+        raw = raw.rstrip(",")
         if g["plain"] and YEAR.match(raw):
             continue
-        if g["neg"] and re.fullmatch(r"\d{1,2}", raw) and not (g["nsuf"] or m.group(0).rstrip(")").endswith("%")):
+        if g["neg"] and re.fullmatch(r"\d{1,2}", raw) and not (g["nsuf"] or g["npct"]):
             continue                       # "(3)" is a count in a heading, not a negative
-        suffix = (g["suffix"] or g["nsuf"] or "").strip()
-        scale = SCALE.get(suffix.lower(), 1.0)
+        suffix = (g["suffix"] or g["suffix2"] or g["nsuf"] or "").strip()
+        scale = style.scale_of(suffix)
         decimals = len(raw.split(".")[1]) if "." in raw else 0
         value = float(raw.replace(",", "")) * scale
         tol = 0.5 * scale * 10 ** -decimals
-        is_pct = bool(g["pct"]) or (g["neg"] is not None and m.group(0).rstrip(")").endswith("%"))
+        is_pct = bool(g["pct"]) or bool(g["npct"])
         variants = (1.0, 100.0) if is_pct else (1.0,)
-        yield m.group(0).strip(), value, tol, variants
+        yield m.group(0).strip().rstrip(","), value, tol, variants
+
+
+# A title that states the scale alone, a multi-currency table's form: `(in thousands)`.
+BARE_SCALE = re.compile(r"\bin (thousands|millions|billions)\b", re.I)
+
+
+def table_scale(title: str) -> float | None:
+    """The factor a table's title states (`EBITDA bridge ($ in thousands)` → 1e-3), else
+    None. The currency's own form first (scripts/style.py COL_SCALE), then the bare
+    `in thousands` of a table in more than one currency."""
+    if not title:
+        return None
+    hit = next((f for pat, f in COL_SCALE if pat.search(title)), None)
+    if hit is not None:
+        return hit
+    m = BARE_SCALE.search(title)
+    return {"thousands": 1e-3, "millions": 1e-6, "billions": 1e-9}[m.group(1).lower()] if m else None
 
 
 def backed(value: float, tol: float, variants, pool: list[float]) -> bool:
+    """Whether a magnitude on the deck is the magnitude of a value of the pool."""
     for av in pool:
-        a = abs(av)
         for f in variants:
-            if abs(a * f - value) <= tol:
+            if abs(abs(av) * f - value) <= tol:
                 return True
     return False
 
 
-def company_phrase(company: str) -> str:
-    """The company without its legal form — `Demo DGII Corp` reads `demo dgii` — for
-    matching a mention of it in another cover string (build_report.company_phrase)."""
-    return " ".join(LEGAL_FORM.sub(" ", company or "").split()).strip(" ,.-").lower()
+# --- the plan's periods ------------------------------------------------------------------
+def plan_periods(run_dir: pathlib.Path | None) -> list | None:
+    """Every period the run's checks declare (`params.columns`, scripts/periods.py), or
+    None when the run declares none — the gate then reads periods off the headers."""
+    if run_dir is None or not (run_dir / "run.json").is_file():
+        return None
+    try:
+        from periods import Periods  # noqa: PLC0415
+        run = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    except (ImportError, OSError, ValueError):
+        return None
+    out, seen = [], set()
+    for c in run.get("checks") or []:
+        if not (c.get("params") or {}).get("columns") or not c.get("id"):
+            continue
+        try:
+            # periods.py resolves the check's own columns, year end, calendar and labels
+            ps = Periods.load(run_dir, c["id"])
+        except (ValueError, TypeError, KeyError):
+            continue
+        for p in ps:
+            if p.key not in seen:
+                seen.add(p.key)
+                out.append(p)
+    return out or None
+
+
+def period_names(p) -> set[str]:
+    """The folded forms a header may name period `p` by: its key, its labels, and each with
+    month names long or short (`LTM July 2025` / `LTM Jul 2025`)."""
+    names = {p.key}
+    for basis in ("flow", "snapshot"):
+        try:
+            names.add(p.label(basis))
+        except (TypeError, ValueError):
+            names.add(p.label())
+    more = set()
+    for n in names:
+        for full, short in zip(style.MONTHS, style.MONTHS_SHORT):
+            if full in n:
+                more.add(n.replace(full, short))
+    return {fold(n) for n in names | more if n}
+
+
+def period_of(header: str, periods: list) -> object | None:
+    """The plan period a column header names, or None."""
+    h = fold(header)
+    hits = [p for p in periods for n in period_names(p)
+            if re.search(rf"(?:^|_){re.escape(n)}(?:_|$)", h)]
+    if not hits:
+        return None
+    return max(hits, key=lambda p: max(len(n) for n in period_names(p)))
 
 
 # --- the audit -------------------------------------------------------------------------
@@ -495,6 +592,7 @@ def audit(deck: pathlib.Path, workbook: pathlib.Path, run_dir: pathlib.Path | No
     if run_dir is not None and (run_dir / "workpapers").is_dir():
         ledger_pool = [v for v, _ in admitted_values(run_dir, [])]
     pool += ledger_pool
+    plan = plan_periods(run_dir)
     fails: list[str] = []
     if not slides:
         return {"slides": 0, "failures": ["the deck holds no slides"], "numbers": 0, "unbacked": []}
@@ -507,14 +605,11 @@ def audit(deck: pathlib.Path, workbook: pathlib.Path, run_dir: pathlib.Path | No
     if cover is not None:
         shp = {n: t.strip() for n, t in cover["shapes"]}
         ctitle, csub = shp.get("cover-title", ""), shp.get("cover-subtitle", "")
-        company = shp.get("cover-company", "")
-        name = company_phrase(company)
+        # That neither names the company is the critic's judgment (skills/check-review):
+        # a name in any language and legal form is not a pattern this gate can hold.
         if len(ctitle) > COVER_TITLE_MAX:
             fails.append(f"the cover title is {len(ctitle)} characters; it names the work, "
                          f"at most {COVER_TITLE_MAX}")
-        if name and name in company_phrase(ctitle):
-            fails.append(f"the cover title names the company (`{company}`) — the kicker and the "
-                         f"prepared line carry it")
         m = PERIOD_TOKEN.search(ctitle)
         if m:
             fails.append(f"the cover title carries the period (`{m.group(0)}`) — the period is the "
@@ -522,9 +617,6 @@ def audit(deck: pathlib.Path, workbook: pathlib.Path, run_dir: pathlib.Path | No
         if len(csub) > COVER_SUB_MAX:
             fails.append(f"the cover subtitle is {len(csub)} characters; the entity and the period, "
                          f"at most {COVER_SUB_MAX}")
-        if name and name in company_phrase(csub):
-            fails.append(f"the cover subtitle names the company (`{company}`) — the kicker and the "
-                         f"prepared line carry it")
 
     # GATE 1 — the figures; GATE 2 — the sources; GATE 4 — the message.
     total = 0
@@ -541,24 +633,25 @@ def audit(deck: pathlib.Path, workbook: pathlib.Path, run_dir: pathlib.Path | No
                 figures_here += 1
                 if not backed(value, tol, variants, pool):
                     unbacked.append({"slide": n, "where": shape_name or "text", "token": token})
-        for tname, rows in s["tables"]:
-            head = rows[0] if rows else []
-            scales = [next((f for pat, f in COL_SCALE if pat.search(h)), None) for h in head]
+        for (tname, rows), ttitle in zip(s["tables"], s.get("table_titles") or [""] * len(s["tables"])):
+            # The scale is stated once, in the table's title (REPORT.md § 4).
+            title_scale = table_scale(ttitle)
             for r, row in enumerate(rows):
                 if r == 0:
                     continue                       # the header row: period labels, counts of columns
-                for ci, cell in enumerate(row):
-                    at_scale = scales[ci] if ci < len(scales) else None
+                for cell in row:
                     for token, value, tol, variants in tokenize(cell):
                         total += 1
-                        if at_scale is not None:
-                            variants = tuple(v * at_scale for v in variants)
+                        if title_scale is not None and "%" not in token:
+                            # a title scale covers the money columns; a count or a
+                            # multiple in the same table is read at face value
+                            variants = tuple(variants) + tuple(v * title_scale for v in variants)
                         if not backed(value, tol, variants, pool):
                             unbacked.append({"slide": n, "where": tname, "token": token})
         for cname, vals in s["charts"]:
             for v in vals:
                 total += 1
-                if not backed(abs(v), 0.5, (1.0,), pool):
+                if not backed(v, 0.5, (1.0,), pool):
                     unbacked.append({"slide": n, "where": cname, "token": f"{v:g}"})
         has_figures = bool(s["tables"] or s["charts"] or figures_here
                            or any(n_ in ("stat-value", "kv-value") for n_, _ in s["shapes"]))
@@ -590,15 +683,15 @@ def audit(deck: pathlib.Path, workbook: pathlib.Path, run_dir: pathlib.Path | No
     schedules = metrics = None
     if run_dir is not None and (run_dir / "run.json").is_file():
         try:
-            run = json.loads((run_dir / "run.json").read_text())
+            run = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
             rpath = (run.get("plan") or {}).get("recipe")
             if rpath:
-                rtext = pathlib.Path(rpath).read_text()
+                rtext = pathlib.Path(rpath).read_text(encoding="utf-8")
                 schedules, metrics = report_schedules(rtext), report_metrics(rtext)
         except (OSError, ValueError):
             schedules = metrics = None
     if schedules:
-        fails.extend(schedule_gate(schedules, tabs, workbook_texts(workbook), slides))
+        fails.extend(schedule_gate(schedules, tabs, workbook_texts(workbook), slides, plan))
     fails.extend(opening_gate(metrics, schedules, tabs, slides))
     return {"slides": len(slides), "failures": fails, "numbers": total, "unbacked": unbacked,
             "workbook_values": len(nums), "ledger_values": len(ledger_pool),

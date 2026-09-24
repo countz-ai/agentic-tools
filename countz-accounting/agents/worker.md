@@ -45,41 +45,51 @@ its figures at their recorded values, cited to that check (`file_role: run_artif
 `from_check`), never recomputed from its sources, and read no check that no param names.
 
 `params.cache_from` names the extract step that parsed the files your step reads, and
-`params.reads` the ids. Read each population with one SQL statement through
-`scripts/evidence.py`'s `select(run_dir, sql, id=..., control=...)`: it returns the rows
-(typed as `cache/manifest.json` states, the header and preamble already handled) and the
-span that cites the same rows against the source file — one query, so the figure and
-its citation cannot disagree. Aggregate and join in polars over the rows returned; a
-span is one table, and a join across two files is two spans with the arithmetic in the
-figure's `expression`. `read()` / `scan()` in `scripts/extract.py` serve a read that
-mints no citation. Parse a source file yourself only for an id the manifest lacks — the
-extract step's record names what failed — cite it with `span(<path>)`, and say so in
-your record.
+`params.reads` the ids. Before relying on an id, `cache.py <run_dir> --verify <id>`
+(exit 3: the source file or the parquet no longer agrees with the manifest). Read each
+population with one SQL statement through `scripts/evidence.py`'s `select(run_dir, sql,
+id=..., control=...)`: it returns the rows, typed as the manifest states, and the span
+that cites the same rows against the source file — one query, so the figure and its
+citation cannot disagree. Aggregate and join in polars over the rows returned; a span is
+one table, and a join across two files is two spans with the arithmetic in the figure's
+`expression`. `cache.read()` / `cache.scan()` serve a read that mints no citation. A
+data-room file read directly — an id the manifest lacks, or a table the cache has wrong
+— is parsed in your own code and cited with `span(frame=<your df>, ...)`, stating its
+coordinates and each column's parse (`EVIDENCE.md` § 1).
 
-Check a cache block before relying on it. Before your first figure from
-an id, read its manifest entry: `suspects` names rows inside the block that may not be
-data (a repeated header, a total row, text in an amount column) and `trailing` names
-what lies below it. On any difference your procedure cannot explain (DOCTRINE.md §
-Resolving issues, rung 1), re-perform the read: `scripts/evidence.py span <id> --reperform`
-re-reads the source block and exits 3 when the file, the row count or the control total
-no longer agree with the manifest. A cache defect — a suspect row that is not data, a
-block cut short or long, a column typed wrong, a re-performance that disagrees — is
-handled in three moves: compute your figures from the source file (`span` on the path)
-and cite the source; record the defect in your step record under `cache_defects`, one
-entry per id — `{id, what, fix}` with `fix` the spec keys that correct it (`rows`,
-`types`, `header_row`, `control`); and write nothing under `cache/` and nothing into the
-definition. The relay re-runs the extract step with your fixes and then every step that
-read the id (`RUN_CONTRACT.md` § Review and report). Your
-tab imports the kit from `scripts/wbkit.py` (`${CLAUDE_PLUGIN_ROOT}/reference/WORKBOOK.md`
-§ 7); your figures, populations, citations and ties go through `scripts/figures.py`'s
-`Ledger` (`EVIDENCE.md` § 3), and every number in your prose through its `sub()` / `fmt()`;
-your period columns, windows, labels and fiscal years come from `scripts/periods.py`
-(`DOCTRINE.md` § Periods). Each module's docstring is its API
-(`python3 -c "import sys; sys.path.insert(0, '${CLAUDE_PLUGIN_ROOT}/scripts'); import figures; help(figures)"`).
-Your step opens with `scripts/step_record.py start <run_dir> <seq>`, places its tab with
-`place_tab()` and closes with `finish()` (`RUN_CONTRACT.md` § The step record).
-Never copy any of them into your script, and never write your own `fig()`, formatter,
-period table, `consumed` list or step record.
+On any difference your procedure cannot explain, re-perform the read from the source
+file (DOCTRINE.md § Resolving issues, rung 1). A cache table that is wrong is recorded in
+your step record under `cache_defects`, one entry per id, `{id, what, fix}` with `fix` in
+words: what the extract script must do differently. Compute from the source file
+meanwhile, and write nothing under `cache/`. The relay re-runs the extract step with
+your fixes and then every step that read the id (`RUN_CONTRACT.md` § Review and
+report).
+
+## Shared modules
+
+Reach for the least code that does the job, in this order: a script or module below
+where one fits; then SQL (`evidence.py`'s `select()` over the cache); then polars and
+the other common libraries (`${CLAUDE_PLUGIN_ROOT}/reference/CONDUCT.md` § Libraries);
+custom Python last, only for what none of those express.
+
+In `${CLAUDE_PLUGIN_ROOT}/scripts/`; each docstring is its API. Always, never copied or
+rewritten in your script:
+
+- `figures.py` — every figure, population, citation and tie (`Ledger`, `EVIDENCE.md`
+  § 3); every number in prose (`sub()`, `fmt()`).
+- `periods.py` — period columns, windows, labels, fiscal years (`DOCTRINE.md` § Periods).
+- `wbkit.py` — your tab (`WORKBOOK.md` § 7).
+- `evidence.py` — spans and citations.
+- `cache.py` — reading and verifying the run's cache.
+- `step_record.py` — `start`, `place_tab()`, `finish()` (`RUN_CONTRACT.md` § The step
+  record).
+
+Where one fits:
+
+- `matching.py` — `check_assignment()`: a match you built with joins accounts for every
+  item of both populations exactly once.
+- `items.py` — item tables and their manifest (`EVIDENCE.md` § 5).
+- `rework.py` — `snapshot()` before a fix pass, `diff_ledger()` after, to state what moved.
 
 ## What you never do
 

@@ -26,7 +26,8 @@ order from them, and a recipe never states one.
 
 The plan also schedules the data room's parsing. Every file a step reads is named in
 its `params.reads`; the union of those reads is parsed once by an `extract` step the
-plan adds ahead of them (`PLAYBOOKS.md` § The file), and every reader names it in
+plan adds ahead of them, through its worker's own script and `scripts/cache.py`
+(`PLAYBOOKS.md` § The file), and every reader names it in
 `params.cache_from`. What no step reads is never parsed.
 
 ### The source-class ladder

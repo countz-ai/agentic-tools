@@ -14,6 +14,10 @@ from __future__ import annotations
 import json
 import pathlib
 import re
+import sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from style import CURRENCIES, SCALES  # noqa: E402
 
 REQUIRED = ["Population", "Source classes", "Granularity", "The families",
             "Exec summary", "Report", "What the plan notes rather than checks"]
@@ -33,10 +37,9 @@ REPORT = "Report"
 REPORT_KEYS = {"metrics", "schedules"}
 METRICS_KEYS = {"title"}
 SCHEDULE_KEYS = {"title", "from", "columns", "block", "where", "through", "periods", "scale",
-                 "dense", "ids"}
+                 "currency", "dense", "ids"}
 SCHEDULE_REQUIRED = ("title", "from", "columns")
 PERIODS = {"all", "latest", "none"}
-SCALES = {"thousands", "millions"}
 FENCE = re.compile(r"^```json\s*\n(.*?)^```\s*$", re.S | re.M)
 
 
@@ -65,7 +68,7 @@ def kinds_from(check_playbook: pathlib.Path) -> set[str]:
     file is absent, in which case the kind rule is not applied."""
     if not check_playbook.is_file():
         return set()
-    m = re.search(r"^KINDS\s*=\s*\{(.*?)^\}", check_playbook.read_text(), re.S | re.M)
+    m = re.search(r"^KINDS\s*=\s*\{(.*?)^\}", check_playbook.read_text(encoding="utf-8"), re.S | re.M)
     return set(re.findall(r'"([a-z]+)":', m.group(1))) if m else set()
 
 
@@ -164,7 +167,10 @@ def _report_defects(text: str, fams: dict[str, str]) -> list[tuple[str, str]]:
         if sc.get("periods") is not None and sc["periods"] not in PERIODS:
             bad.append(("report.schedule", f"{at}: `periods` is {' | '.join(sorted(PERIODS))}"))
         if sc.get("scale") is not None and sc["scale"] not in SCALES:
-            bad.append(("report.schedule", f"{at}: `scale` is {' | '.join(sorted(SCALES))}"))
+            bad.append(("report.schedule", f"{at}: `scale` is {' | '.join(SCALES)}"))
+        if sc.get("currency") is not None and str(sc["currency"]).lower() not in CURRENCIES:
+            bad.append(("report.schedule", f"{at}: `currency` is a lower-case ISO 4217 code "
+                                           f"scripts/style.py defines (`usd`, `eur`, ...)"))
         for k in ("dense", "ids"):
             if sc.get(k) is not None and not isinstance(sc[k], bool):
                 bad.append(("report.schedule", f"{at}: `{k}` is true or false"))

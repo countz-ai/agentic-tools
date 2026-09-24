@@ -28,7 +28,7 @@ what goes where.
 short Title Case title: `q1 FY2021 statements`, `q6 EBITDA bridge`. At most 31
 characters, no underscores, no slashes. The token leads so a cell that opens with it
 links to the tab (`link_workbook.py` rule 5) and the gate can pair the tab with its
-check. Run-level tabs keep their fixed names. Tab colours and gridlines:
+check. Run-level tabs keep their fixed names. Tab colors and gridlines:
 `WORKBOOK_STYLE.md` § 4.
 
 ## 3. Tab body
@@ -45,9 +45,11 @@ band is frozen at `B4`. A table header is never frozen: the primary table's head
 row 4 describes that table alone, not the tables below it.
 
 - B1 the title, opening with the token (`q6 · Adjusted EBITDA reconciles to the ledger`).
-- B2 the subtitle: entity · period set · basis · unit · tolerance. A tab covering several
-  entities names the group and its count (`13 bank accounts`); the entities themselves are
-  the primary table's first column, each with its own rows, subtotal and status.
+- B2 the subtitle: entity · period set · basis · unit · tolerance. The unit carries the
+  primary table's currency and scale (`$ in thousands`); a column header never carries the
+  scale. A tab covering several entities names the group and its count (`13 bank
+  accounts`); the entities themselves are the primary table's first column, each with its
+  own rows, subtotal and status.
 - B3 the summary, at most 160 characters
 
 ### Language
@@ -134,8 +136,9 @@ grain the two records carry (DOCTRINE.md § Materiality).
 
 A column holds one kind of number, formatted by column (style § 3): whole currency on
 schedules, cents only on an item schedule that must foot to the cent, `0.0%` for shares,
-`#,##0` for counts, `d mmm yyyy` for dates. No currency symbol in cells — the unit is in
-the subtitle and the header. Period columns carry the period label as text (`FY2023`,
+`FMT_COUNT` for counts (written with `count()`), `mmm d, yyyy` for dates (`Sep 30, 2025`).
+No currency symbol in cells — the currency is in the subtitle, and in each money column's
+header when a tab holds more than one (`header(..., currency=...)`). Period columns carry the period label as text (`FY2023`,
 `LTM Jul 2023`), right-aligned, in the order the plan fixed, on every tab that has
 periods, so a reader compares tabs column for column.
 
@@ -152,8 +155,8 @@ is Coverage), not the list of open items (Open Items), and not the background of
   basis · unit; B3 the position in one sentence. Frozen at `B4`; the body starts on
   row 4.
 - A number in a sentence is interpolated (`EVIDENCE.md` § 4).
-- Every numeric cell is a copy from a check tab, in a table whose title names that tab
-  and whose row labels and column headers are copied verbatim. `link_workbook.py` wires
+- Every numeric cell is a copy from a check tab, in a table whose title carries the marker
+  `from: <tab>` (the tab's full name or its token, `REPORT.md` § 2) and whose row labels and column headers are copied verbatim. `link_workbook.py` wires
   each amount to the cell it was copied from; `check_workbook.py` refuses one it cannot.
   A number that is not a figure (a year in a header) is written as text.
 - A chart draws on the cells of such a table, on this tab.
@@ -180,7 +183,7 @@ Tables, not paragraphs, in this order:
    reader never opens `EVIDENCE.md`; this block is their copy of it.
 
 **Coverage** — primary table `token · title | kind | step | status | what was
-examined | what was not examined, and why`, one row per rostered check, coloured per `WORKBOOK_STYLE.md` § 5.
+examined | what was not examined, and why`, one row per rostered check, colored per `WORKBOOK_STYLE.md` § 5.
 
 **Open Items** — three tables under three `Section` headings — review calls, questions
 for management, data requests — the first with the `BAND` header, the other two
@@ -217,7 +220,8 @@ link) go below the last ledger row under a `Source roots` line.
 
 Every tab script imports one kit, `scripts/wbkit.py` — the style's § 9 constants and
 `styles()`, and the helpers that place the band and the blocks: `band`, `header`,
-`section`, `ident`, `text`, `amount`, `status`, `fit_rows`, `finish`. The script opens:
+`section`, `ident`, `text`, `amount`, `count`, `status`, `fit_rows`, `finish` (and
+`register_status` for a recipe's own status words). The script opens:
 
 ```python
 import sys; sys.path.insert(0, "<${CLAUDE_PLUGIN_ROOT}>/scripts")   # the token expanded
@@ -230,7 +234,7 @@ helper's contract is its docstring and signature in the module (`python3
 ${CLAUDE_PLUGIN_ROOT}/scripts/wbkit.py` self-checks it); the rules they implement are §
 3 to § 5 above. `finish(ws, table_last_row, ledger=False)` sets the per-sheet settings
 of the style's § 9 — the primary table's rules, row heights, the `B4` freeze, gridlines,
-tab colour, the filter, print setup and the § 7 footer — after the last row is written.
+tab color, the filter, print setup and the § 7 footer — after the last row is written.
 
 ## 8. Before the tab leaves staging
 
@@ -257,7 +261,7 @@ covers what a parser cannot judge — the style's § 10 checklist, then:
 
 - B1 title, B2 subtitle, B3 the summary; on a check tab row 4 the one `BAND` header;
   freeze at `B4` on every tab — the band alone, never a table header row;
-- the tab name is `<token> <Title>`, at most 31 characters; tab colour per
+- the tab name is `<token> <Title>`, at most 31 characters; tab color per
   `WORKBOOK_STYLE.md` § 4;
 - at the seal, the strip reads Exec Summary, the lead tabs, Basis of Preparation, the
   roster, the tail (§ 2);
@@ -267,7 +271,7 @@ covers what a parser cannot judge — the style's § 10 checklist, then:
 - every table has a header in every column, the id first, the status last, a `Total`
   row where it foots, and the hairline on every side of every cell; secondary tables
   use `HeaderPlain`;
-- colour appears only on status cells, a break row's variance cell, `BodyInput` figures
+- color appears only on status cells, a break row's variance cell, `BodyInput` figures
   and links;
 - Notes then To reperform close a check tab, one line per row.
 

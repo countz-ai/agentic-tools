@@ -1,7 +1,7 @@
 # Countz workbook style — palette, type, and application rules for xlsx financial reports
 
 Companion to the "Find Fast, Fix Faster" slide (Paper, 2026-09-04). Same hue family, same
-restraint: one accent, neutrals do the work, colour only where it carries meaning.
+restraint: one accent, neutrals do the work, color only where it carries meaning.
 Ground is WHITE — the slide's bone ground does not transfer to spreadsheets (cells default
 to white, tints print badly, and a tinted ground fights the gridlines).
 
@@ -13,14 +13,14 @@ to set. Hex values are given without `#`; openpyxl wants `RRGGBB`, xlsxwriter wa
 
 ## 1. Palette
 
-Twelve colours, three groups. Contrast ratios are measured against white.
+Twelve colors, three groups. Contrast ratios are measured against white.
 
 ### 1a. Structure (the brand teal, three steps)
 
 | Token      | Hex      | Role                                                                                  | Contrast |
 |------------|----------|---------------------------------------------------------------------------------------|----------|
 | `BAND`     | `005C53` | Fill of the ONE header band per sheet (title bar or primary table header). White text on it. | 7.9 |
-| `ACCENT`   | `0F756D` | Section headings, hyperlink/id text, tab colour of deliverable tabs, the rule under the title. | 5.5 |
+| `ACCENT`   | `0F756D` | Section headings, hyperlink/id text, tab color of deliverable tabs, the rule under the title. | 5.5 |
 | `MARKER`   | `2A9D90` | Decorative only: chart series 3, sparkline, bullet dots. NEVER body text (3.3 fails at 10pt). | 3.3 |
 | `TINT`     | `E1F0ED` | Fill of the headline figure cell and of a "current period" column when one must stand out. Ink text on it (12.7). | — |
 
@@ -29,7 +29,7 @@ Twelve colours, three groups. Contrast ratios are measured against white.
 | Token      | Hex      | Role                                                                   | Contrast |
 |------------|----------|------------------------------------------------------------------------|----------|
 | `INK`      | `1C2A2A` | All body text and computed numbers. Not pure black.                    | 14.9 |
-| `SLATE`    | `566665` | Subtitle, notes, footnotes, source lines, secondary labels, ledger-tab colour. | 6.0 |
+| `SLATE`    | `566665` | Subtitle, notes, footnotes, source lines, secondary labels, ledger-tab color. | 6.0 |
 | `HAIRLINE` | `D3DAD8` | Every border: under headers, above subtotals, table rules. Never darker. | — |
 | `MIST`     | `F1F5F4` | Fill of subtotal rows and of plain (non-band) header rows.             | — |
 | `WHITE`    | `FFFFFF` | Ground. Text on `BAND`.                                                | — |
@@ -38,14 +38,14 @@ Twelve colours, three groups. Contrast ratios are measured against white.
 
 | Token       | Hex text | Hex fill | Role                                                                    | Contrast (text on fill) |
 |-------------|----------|----------|-------------------------------------------------------------------------|---------|
-| `INPUT`     | `1F4FA3` | none     | Font colour of values transcribed from a client file (hard inputs). Computed values stay `INK`. | 7.8 on white |
+| `INPUT`     | `1F4FA3` | none     | Font color of values transcribed from a client file (hard inputs). Computed values stay `INK`. | 7.8 on white |
 | `BREAK`     | `B42318` | `FBEAE7` | Does not tie, material exception, failed check. Text always; fill on the status cell only. | 5.7 |
 | `REVIEW`    | `9A5B00` | `FFF3D1` | Needs review, immaterial variance, open item.                           | 5.0 |
 | `TIED`      | `1E7B3C` | `E5F3E8` | Agreed / tied / passed status cells. Text only by default; fill optional. | 4.7 |
 
 Negative numbers are NOT red. They are in parentheses (§ 3). Red means "exception".
 
-Chart series order: `ACCENT`, `SLATE`, `MARKER`, `REVIEW` text colour. Prior-period
+Chart series order: `ACCENT`, `SLATE`, `MARKER`, `REVIEW` text color. Prior-period
 comparison series: `HAIRLINE`. Never more than four series in one chart.
 
 ---
@@ -60,11 +60,11 @@ control. A font the reader lacks is substituted silently and every column width 
 Arial is present on Windows, macOS, iOS, Google Sheets, and LibreOffice (metric-identical
 Liberation Sans), has tabular digits, and is the closest ubiquitous grotesque to Inter.
 If — and only if — every reader is on Microsoft 365, Aptos is the closer match to Inter;
-pick one for the whole organisation and never mix.
+pick one for the whole organization and never mix.
 
 Scale (points). No sheet uses more than four sizes; nothing below 9.
 
-| Style       | Size | Weight      | Colour   | Use                                                        |
+| Style       | Size | Weight      | Color   | Use                                                        |
 |-------------|------|-------------|----------|------------------------------------------------------------|
 | `Title`     | 14   | bold        | `INK`    | B1: sheet title (e.g. "Cash tie-out — Dec 2025").          |
 | `Subtitle`  | 10   | regular     | `SLATE`  | B2: entity · period · basis · unit ("Acme Corp · FY2025 · accrual · USD"). |
@@ -91,13 +91,16 @@ column of zeros reads as "nothing here", not as data.
 |-----------------------|----------------------------------------|----------------------------------------------------|
 | Whole currency        | `#,##0;(#,##0);"–"`                    | Default for schedules and summaries.               |
 | Currency with cents   | `#,##0.00;(#,##0.00);"–"`              | Detail/ledger tabs only.                           |
-| Thousands             | `#,##0,;(#,##0,);"–"`                  | Trailing comma divides by 1,000 in Excel. State the unit in the header: "USD 000s". |
-| Percent               | `0.0%;(0.0%);"–"`                      | One decimal. Two only for rates below 1%.          |
-| Ratio / days / count  | `0.0` / `0` / `#,##0`                  | DSO, DPO, turns, counts.                           |
-| Date                  | `d mmm yyyy`                           | "31 Dec 2025". Unambiguous across locales.         |
+| Thousands             | `#,##0,;(#,##0,);"–"`                  | Trailing comma divides by 1,000 in Excel. State the scale once, in the table's title — the band subtitle's unit for the primary table, the `Section` heading for any other ("Aging by customer ($ in thousands)") — never in a column header, as the deck does (`REPORT.md` § 4). |
+| Percent               | `0.0%;(0.0%);"–"`                      | One decimal.                                       |
+| Rate                  | `0.00%` (`FMT_RATE`)                   | An interest, discount or growth rate.              |
+| FX rate               | `0.0000` (`FMT_FX`)                    | Units of one currency per another.                 |
+| Ratio / days          | `0.0`                                  | DSO, DPO, turns.                                   |
+| Count                 | `#,##0_);(#,##0);"–"_)` (`FMT_COUNT`)  | Counts of things, written with `count()`. Its own string, never the whole-currency one, so a reader of the stored file (the deck scaling money columns) tells a count from money by the format. |
+| Date                  | `mmm d, yyyy` (`FMT_DATE`)             | "Sep 30, 2025". US order, month spelled, so never ambiguous. From `scripts/style.py`. |
 | Period header         | `mmm-yy` or text `FY2025`, `Q4 FY25`   | Right-aligned to sit over the numbers.             |
 | Id / code             | text (`@`)                             | Left-aligned. Never let Excel coerce ids to numbers. |
-| Currency symbol       | none in cells                          | Unit lives in the subtitle and column header.      |
+| Currency symbol       | none in cells                          | The currency lives in the subtitle; a tab holding more than one currency names each money column's in its header — `header(..., currency={"Balance": "eur"})` writes `Balance (€)`. |
 
 ---
 
@@ -139,13 +142,13 @@ then Notes (9 italic SLATE): source line, method line, any caveat
   if centring is required use "center across selection". Merged cells break sort,
   filter and copy.
 - **Column widths** (characters): margin 2 · id 12 · description 42 · amount 14 ·
-  period 12 · percent 9 · status 12 · note 48. Wrap text on description and note
+  count 10 · period 12 · percent 9 · status 12 · note 48. Wrap text on description and note
   columns; vertical-align top on wrapped columns, bottom elsewhere.
 - **Alignment**: text left; numbers right; headers align with their column's content;
-  period headers right; status words left. Centre nothing except a single-character flag.
-- **Tab colours**: `ACCENT` for deliverable/summary tabs; `SLATE` for ledgers (Sources,
-  Evidence, Population); `REVIEW` fill colour (`FFF3D1` is too pale for a tab — use the
-  text colour `9A5B00`) for open-items/review tabs; none for raw data.
+  period headers right; status words left. Center nothing except a single-character flag.
+- **Tab colors**: `ACCENT` for deliverable/summary tabs; `SLATE` for ledgers (Sources,
+  Evidence, Population); `REVIEW` fill color (`FFF3D1` is too pale for a tab — use the
+  text color `9A5B00`) for open-items/review tabs; none for raw data.
 - **Tab order**: Summary first, then the schedules the summary's figures are drawn from, then
   the basis and the remaining schedules in the order the report cites them, ledgers last.
 
@@ -160,30 +163,34 @@ then Notes (9 italic SLATE): source line, method line, any caveat
   - text = for review → `REVIEW` text + `REVIEW` fill
   - text = agreed     → `TIED` text, no fill
 - For a `break` row, the variance cell's font goes `BREAK` red as well. Nothing else on
-  the row changes colour. Never colour whole rows; never use traffic-light fills
+  the row changes color. Never color whole rows; never use traffic-light fills
   (pure red / yellow / green).
 - Severity in a findings list uses the same three states: critical/high → `BREAK`,
-  medium → `REVIEW`, low/informational → no colour. Severity is also written as a word,
+  medium → `REVIEW`, low/informational → no color. Severity is also written as a word,
   so a black-and-white print still reads.
 
 The three states carry whichever word the status cell holds:
 
-| the record says | style state | where the colour lands |
+| the record says | style state | where the color lands |
 |---|---|---|
 | `pass`, `supported`, `tied` | `TIED` | the status cell, text only |
 | `warn`, `candidate`, an open item | `REVIEW` | the status cell, text and fill |
 | `fail`, `unexplained`, a standing exception | `BREAK` | the status cell, text and fill; the variance cell of that row in `BREAK` text |
 | `withheld`, `not_run`, a dependency not met | none — `SLATE` text | the status cell; it is an absence, not a result |
 
+A recipe's own status word (`matched`, `in_transit`, `exception`) takes one of these
+states once, before the tab is written: `register_status("matched", "tied")` (kinds
+`tied`, `review`, `break`, `note`). An unregistered word reads as a note.
+
 Dispositions ride the same rule: `as_stated` — a figure transcribed from a client
 statement — is written in `BodyInput` blue like any hard input; `measured`, `derived`
 and `inferred` stay `INK` and say their word in the disposition column. Words carry the
-meaning; colour repeats it, so a black-and-white print still reads. Never red for a
+meaning; color repeats it, so a black-and-white print still reads. Never red for a
 negative.
 
 **Links.** Ids are wired by `link_workbook.py`, which keeps the cell's font and sets the
-style's `ACCENT` with a single underline; a linked amount takes the colour only, because
-under a figure an underline means "sum above". Hand-coloured links and Excel's default
+style's `ACCENT` with a single underline; a linked amount takes the color only, because
+under a figure an underline means "sum above". Hand-colored links and Excel's default
 blue do not appear.
 
 ---
@@ -192,7 +199,7 @@ blue do not appear.
 
 - Font Arial 9, `INK` for axis labels, `SLATE` for the axis lines; horizontal gridlines
   `HAIRLINE` only, no vertical gridlines.
-- Series colours in order: `ACCENT`, `SLATE`, `MARKER`, `9A5B00`. Prior period in
+- Series colors in order: `ACCENT`, `SLATE`, `MARKER`, `9A5B00`. Prior period in
   `HAIRLINE`.
 - Flat fills. No 3D, no gradients, no shadows, no data labels on every point (label
   the endpoint or the total only).
@@ -203,14 +210,14 @@ blue do not appear.
 ## 7. Print setup (every deliverable tab)
 
 - Orientation: landscape for schedules wider than 8 columns, otherwise portrait.
-- Fit to 1 page wide, as many tall as needed. Margins 0.5". Centre horizontally.
+- Fit to 1 page wide, as many tall as needed. Margins 0.5". Center horizontally.
 - Repeat rows 1:3 on every page (title, subtitle, summary). Never a table header row:
   the row-4 header belongs to the primary table alone, and repeated on a page that
   holds a later table it labels columns it does not describe. Each table's header
   prints once, where the table starts.
-- Print gridlines off. Print in black and white must still be readable — every colour
+- Print gridlines off. Print in black and white must still be readable — every color
   meaning is duplicated by text (parentheses, status word, "input" column note).
-- Footer: left `Confidential · Countz`, centre `&A` (sheet name), right `Page &P of &N`.
+- Footer: left `Confidential · Countz`, center `&A` (sheet name), right `Page &P of &N`.
   Header: empty.
 
 ---
@@ -223,7 +230,7 @@ blue do not appear.
 - Dark (`INK`) borders between cells, outline boxes heavier than the hairline, borders
   on prose cells — and the opposite fault, a table with no border at all.
 - More than one `BAND` per sheet; teal fills on subtotals.
-- Rainbow tab colours, a different colour per tab.
+- Rainbow tab colors, a different color per tab.
 - Merged cells anywhere.
 - Font size below 9, more than four sizes on a sheet, any font other than Arial.
 - Emoji or symbols as status markers (✓ ✗ 🔴). Words only.
@@ -248,15 +255,18 @@ workbook against the same values. The names, for reading a tab script:
 - rules: `hair` (thin `HAIRLINE`), `thin` (thin `INK`), `dbl` (double `INK`); `grid(ws,
   first_row, last_row, first_col, last_col)` puts the hairline on every side of every
   table cell and keeps a side a style already rules;
-- formats: `FMT_AMOUNT`, `FMT_CENTS`, `FMT_THOUS`, `FMT_PCT`, `FMT_DAYS`, `FMT_DATE`,
-  `FMT_PERIOD`, `FMT_TEXT` — § 6;
+- formats: `FMT_AMOUNT`, `FMT_CENTS`, `FMT_THOUS`, `FMT_PCT`, `FMT_RATE`, `FMT_FX`,
+  `FMT_DAYS`, `FMT_COUNT`, `FMT_DATE`, `FMT_PERIOD`, `FMT_TEXT` — § 3;
+- helpers beyond placement: `count(cell, n)` (a count in `FMT_COUNT`),
+  `header(..., currency=)` (a money column's currency in its header),
+  `register_status(word, kind)` (a recipe's status word and its state);
 - `styles()`: the named styles `Title`, `Subtitle`, `Section`, `Header` (the `BAND`),
   `HeaderPlain` (`MIST`), `Body`, `BodyInput`, `Subtotal`, `Total`, `Note`, `Link`,
   `KeyFigure`, `StatusBreak`, `StatusReview`, `StatusTied`, registered as `cz_*` on the
   workbook; `S = styles()` at import.
 
 Per sheet, `finish()` in the same module sets: gridlines off (on for a ledger), freeze
-panes `B4`, column A width 2, row 1 height 24 and row 4 height 20, the tab colour
+panes `B4`, column A width 2, row 1 height 24 and row 4 height 20, the tab color
 (`ACCENT`; `SLATE` for a ledger), print titles `1:3`, landscape fit to one page wide,
 0.5 margins, horizontal centring, and the § 7 footer.
 
@@ -310,6 +320,6 @@ Open the produced workbook (or dump its XML) and confirm, per deliverable tab:
 6. Total row has a double bottom border; subtotals have `MIST` fill; every table cell
    carries the `HAIRLINE` border on all four sides, and no prose cell does.
 7. No merged cells (`ws.merged_cells.ranges` is empty).
-8. Status colours appear only in the status column and, for breaks, the variance cell.
+8. Status colors appear only in the status column and, for breaks, the variance cell.
 9. Hyperlinks render `ACCENT` underlined, not Excel blue.
 10. Print titles `1:3` — no table header row repeated; fit-to-width 1, footer set.

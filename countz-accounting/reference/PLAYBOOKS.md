@@ -55,19 +55,20 @@ at least one slot.
   `scripts/check_playbook.py`. Adding a kind means adding a worker skill (its procedure
   and its item tables), a `KINDS` row and, where the kind requires params, a `PARAMS`
   row, in the same change. One kind computes no figure: `extract` parses the data-room
-  files the other steps read into `<run_dir>/cache/`, once, ahead of them
-  (`scripts/extract.py`; the file table in `RUN_CONTRACT.md`). Its `params.files` lists the
-  blocks — id, path under a slot, header row and data rows, types and control column,
-  per the script's docstring; a file stacking several tables is several entries — and
-  it names no `_from`. A step that reads the cache carries
+  files the other steps read into `<run_dir>/cache/`, once, ahead of them, through a
+  script its worker writes at run time (`workpapers/extract-<check>.py`) and
+  `scripts/cache.py` (the file table in `RUN_CONTRACT.md`). Its `params.files` lists one
+  entry per table — `{id, path, source?, file_role, sheet?, what?, control?}` — and it
+  names no `_from`. A saved extract step carries `params.prior_script`, last period's
+  script beside the playbook file (`<name>.extract/<check>.py`). A step that reads the cache carries
   `params.cache_from` (the extract step) and `params.reads` (the ids it reads);
-  `check_playbook.py` refuses a read of an id the extract step does not parse. A file
+  `check_playbook.py` refuses a read of an id the extract step does not parse. A table
   the extract step could not parse is read from the source by the steps that name it.
 - `steps[].goal`: carried verbatim into the check dispatch. A step with no goal runs the
   kind's default procedure.
 - `steps[].params`: options the check must honor: declared tolerances, a cutoff's
-  `period_end` and `window_days`, `items_from` naming the step whose record supplies the
-  item list. `PARAMS` in `scripts/check_playbook.py` states which keys a kind requires;
+  window and the period set (their keys and forms: `scripts/periods.py`), `items_from` naming the step whose record
+  supplies the item list. `PARAMS` in `scripts/check_playbook.py` states which keys a kind requires;
   each kind's SKILL.md states what the keys mean. Every key ending `_from` names a step
   in the step's `after`, or several.
   A plan-driven step also carries `family`, the recipe family it performs, and

@@ -87,7 +87,7 @@ check per pair, so they run in parallel.
    over the new checks, the user's ruling on its findings, then `check-report`.
 
 After every wave, preview and refresh the archive per `RUN_CONTRACT.md § Every wave`. Do
-not summarise a step's output or re-derive its conclusions: the preview puts the
+not summarize a step's output or re-derive its conclusions: the preview puts the
 record itself in front of the user, and questions are answered from the files.
 
 ## 5. When it ends

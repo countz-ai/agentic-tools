@@ -39,6 +39,9 @@ Take the difference before explaining anything.
 
 ## 3. Match at item level
 
+Match with polars joins, one per pass; check the assignment with
+`${CLAUDE_PLUGIN_ROOT}/scripts/matching.py`'s `check_assignment()` before writing it.
+
 Where both sides carry item grain, match — by reference, then amount-and-date, then
 looser keys, each pass recorded. One-to-many matches are allowed and recorded as such.
 Write the match table `checks/<check>-matches.csv` (side, match key, date, amount,
@@ -61,7 +64,7 @@ management to confirm) is presented as such and never netted into the bridge.
 
 ## 5. The reconciliation statement
 
-Side A, the classified reconciling items, the unexplained residual as its own labelled
+Side A, the classified reconciling items, the unexplained residual as its own labeled
 line, side B — footing exactly at computation precision (no plug, no `other`, no
 scaling). An unexplained residual is stated with its magnitude; where it is material
 to the goal, the check says so plainly and the residual carries a data request.

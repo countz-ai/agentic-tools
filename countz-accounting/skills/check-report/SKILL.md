@@ -24,7 +24,7 @@ statuses), the latest review record, every `checks/<check>.md`, and the ledgers.
 check wrote its own tab; **you copy tabs, cached values intact — never rewrite one.** A
 rostered check with no tab gets no empty tab; it is stated in coverage. An `extract`
 step is such a row: kind `extract`, its status, and under *what was examined* the count
-of files it parsed from `cache/manifest.json`.
+of tables it cached, from `cache/manifest.json`.
 
 ## 1. The workbook — `out/workbook.xlsx`
 
@@ -52,7 +52,7 @@ declared fields relied on and the collapsed depth, and per ledger file the entri
 contributed. An `unresolved` entry is a ledger reference nothing defines — a blocker
 against the check that cited it, never patched here. Exit 2 is a refused ledger — a
 top level that is not a list, an id outside the grammar (EVIDENCE.md § 0) — named on
-stderr with its file: the owning check's to rewrite. Do not normalise a copy and
+stderr with its file: the owning check's to rewrite. Do not normalize a copy and
 proceed; end the step `blocked` naming that check (§ 6).
 
 **Links.** After assembly:
@@ -82,9 +82,9 @@ planning. What this step writes:
   and showing the figures its prose names; then at most one page carrying the story to
   the first schedule. Then the recipe's `## Report` schedules, in the recipe's order,
   one `table:` block each with the schedule's own keys (`from`, `columns`, `where`,
-  `through`, `periods`, `scale`, `dense`) — `columns:` on the block names the tab's
+  `through`, `periods`, `scale`, `currency`, `dense`) — `columns:` on the block names the tab's
   actual headers that carry the recipe's words, with every period column for
-  `periods: all` and the last for `latest`. Never `max_rows` on one: a long schedule
+  `periods: all` and the latest by date for `latest`. Never `max_rows` on one: a long schedule
   continues over pages. The narrative pages after refer to those rows and copy no
   schedule again. A run with no recipe opens on the `Executive summary` page the same
   way and goes straight to its narrative.
@@ -106,8 +106,10 @@ numbers before writing pages; no other check reads either. Rules a finished deck
   *the floor*.
 - Cut a line whose point is its phrasing; state the finding instead.
 - Name the population a share is of.
-- Write figures as `$50.5m` and `57.8 days`, and declare `scale: thousands` on a schedule
-  of dollars.
+- Write figures in US form, as `scripts/style.py` does: `$50.5M`, `$81K`, `$1.2B`, `57.8 days`,
+  `September 30, 2025` — in the book's currency where it is not dollars (`€50.5M`), never a
+  scaled number without one — and declare `scale: thousands` on a schedule of money; the
+  builder states the scale once, in the table's title, so leave it out of the title you write.
 - Define an object where it first appears — the record it comes from, how many there are,
   what they are called, the amount behind it — and carry that name on every page after.
 - Build the page on what is open from the Open Items tab: each item with its size, the

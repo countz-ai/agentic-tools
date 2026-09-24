@@ -40,6 +40,7 @@ from dataclasses import dataclass, field, replace
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from link_workbook import LABEL_COLS, RUN_TABS, normalize  # noqa: E402
+import style  # noqa: E402
 
 try:
     import openpyxl
@@ -121,9 +122,8 @@ MESSAGE_MAX = 160                        # characters — the workbook's result-
 # segments inside this budget. An author's own `subtitle` is refused, never cut.
 COVER_SUB_MAX = 72                       # characters
 COVER_TITLE_MAX, COVER_TITLE_LINES = 60, 2
-# A period, wherever it is written: `FY2023`, `2023`, `2023-09-30`, `30 September 2023`.
-MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August",
-          "September", "October", "November", "December")
+# A period, wherever it is written: `FY2023`, `2023`, `2023-09-30`, `September 30, 2023`.
+MONTHS = style.MONTHS
 PERIOD_TOKEN = re.compile(
     rf"\b(?:FY|CY)\s?(?:19|20)?\d\d\b|\b(?:19|20)\d\d\b|\b\d{{4}}-\d{{2}}-\d{{2}}\b"
     rf"|\b(?:{'|'.join(m[:3] for m in MONTHS)})[a-z]*\.?\s+\d{{1,4}}\b", re.I)
@@ -198,10 +198,12 @@ def nice_axis(lo: float, hi: float, target: int = CHART_TICKS) -> tuple[float, f
 def axis_text(v: float, step: float) -> str:
     """A tick, in the deck's number conventions: thousands separated, negatives in
     parentheses, and only as many decimals as the step actually distinguishes."""
-    if step >= 1e5:                          # a money axis is read at its scale (§ 4)
-        a, unit = abs(v) / 1e6, "m"
+    if step >= 1e8:                          # a money axis is read at its scale (§ 4)
+        a, unit = abs(v) / 1e9, "B"
+    elif step >= 1e5:
+        a, unit = abs(v) / 1e6, "M"
     elif step >= 100:
-        a, unit = abs(v) / 1e3, "k"
+        a, unit = abs(v) / 1e3, "K"
     else:
         a, unit = abs(v), ""
     if unit:
@@ -286,16 +288,14 @@ def cover_subtitle(s: str, company: str = "") -> str:
 
 def not_cover_title(title: str, company: str) -> str | None:
     """Why `title` is not a cover title, or None. It names the work — `Quality of earnings
-    review`, `Revenue leak: billed to collected` — and carries neither the company (the
-    kicker and the prepared line do) nor the period (the subtitle does)."""
+    review`, `Revenue leak: billed to collected` — and carries no period (the subtitle
+    does). That it names no company either (the kicker and the prepared line carry it) is
+    a judgment of names in any language and legal form, so the critic holds it
+    (skills/check-review), not a pattern here."""
     if len(title) > COVER_TITLE_MAX:
         return f"{len(title)} characters; the title names the work, at most {COVER_TITLE_MAX}"
     if lines_for(title, BODY_W, PT["cover_title"], True) > COVER_TITLE_LINES:
         return f"runs past {COVER_TITLE_LINES} lines at {PT['cover_title']}pt — shorter"
-    name = company_phrase(company)
-    if name and name in company_phrase(title):
-        return (f"names the company (`{company}`) — the cover carries it as the kicker and in "
-                f"`Prepared for`, so the title names the work alone")
     m = PERIOD_TOKEN.search(title)
     if m:
         return f"carries the period (`{m.group(0)}`) — the period is the subtitle's, the date the prepared line's"
@@ -304,14 +304,12 @@ def not_cover_title(title: str, company: str) -> str | None:
 
 def not_cover_subtitle(sub: str, title: str, company: str) -> str | None:
     """Why `sub` is not a cover subtitle, or None: it carries the entity detail and the
-    period on one line, and repeats neither the company nor the title."""
+    period on one line, and does not repeat the title. Whether it repeats the company is
+    the critic's call (skills/check-review), as for the title."""
     if len(sub) > COVER_SUB_MAX:
         return f"{len(sub)} characters; the entity and the period, at most {COVER_SUB_MAX}"
     if lines_for(sub, BODY_W, PT["cover_sub"]) > 1:
         return f"runs past one line at {PT['cover_sub']}pt — the entity and the period, shorter"
-    name = company_phrase(company)
-    if name and name in company_phrase(sub):
-        return f"names the company (`{company}`) — the cover's kicker and prepared line carry it"
     words = [w for w in re.split(r"[^\w]+", title.lower()) if len(w) > 3]
     shared = [w for w in words if re.search(rf"\b{re.escape(w)}\b", sub.lower())]
     if len(shared) >= 2:
@@ -372,7 +370,7 @@ class Book:
         self.wb = openpyxl.load_workbook(path, data_only=True)
         self.tabs = self.wb.sheetnames
         sub = str(self.cell(EXEC, "B2").value or "") if EXEC in self.tabs else ""
-        self.money = "$" if re.search(r"\bUSD\b|\$|dollar", sub, re.I) else ""
+        self.currency = style.currency_in(sub) or "usd"
         self._grid: dict[str, tuple] = {}
 
     # tab resolution: the exact name, or the roster token that opens it (`q6`).
@@ -514,9 +512,13 @@ class Book:
                 label = str(lead.value) if lead else ""
                 kind = "body"
                 if lead and lead.bold:
-                    kind = "total" if re.match(r"^(=\s*)?total\b", label, re.I) or \
-                        (cells and any(getattr(c.border.bottom, "style", None) == "double"
-                                       for c in cells.values())) else "subtotal"
+                    # the rule decides, never the label's words (the client's, any
+                    # language): a total carries the kit's double bottom rule
+                    # (WORKBOOK_STYLE.md § 3, wbkit `Total`), a bold row without it is a
+                    # subtotal
+                    kind = "total" if cells and any(
+                        getattr(c.border.bottom, "style", None) == "double"
+                        for c in cells.values()) else "subtotal"
                 rows.append(line)
                 kinds.append(kind)
                 rr += 1
@@ -592,28 +594,22 @@ class Book:
 
 
 # --- formatting (REPORT.md § 4; the workbook's own conventions are DOCTRINE.md) ------
-def compact_money(v: float, money: str = "$") -> str:
-    """A dollar figure as the deck states it (REPORT.md § 4): scaled and rounded —
-    `$50.5m`, `$81k` — never to the dollar. The workbook keeps the exact figure."""
-    a = abs(v)
-    if a >= 999_500_000:
-        s = f"{money}{a / 1e9:,.1f}bn"
-    elif a >= 999_500:
-        s = f"{money}{a / 1e6:,.1f}m"
-    elif a >= 999.5:
-        s = f"{money}{a / 1e3:,.0f}k"
-    else:
-        s = f"{money}{a:,.0f}"
-    return f"({s})" if v < 0 else s
+def compact_money(v: float, unit: str = "usd") -> str:
+    """A money figure as the deck states it (REPORT.md § 4): scaled and rounded —
+    `$50.5M`, `$81K`, `€1.2B` — never to the unit. The workbook keeps the exact figure.
+    The form is scripts/style.py's, the one table the gates read back with."""
+    return style.money(v, unit, "deck")
 
 
 def fmt_value(v, fmt: str = "", prose: bool = False, money: str = "") -> str:
+    """One cell as the deck shows it. `money` is the currency unit (`usd`, `eur`) of a
+    figure a sentence or a tile states scaled (`$8.4M`), "" for any other number."""
     if v is None:
         return ""
     if isinstance(v, bool):
         return "yes" if v else "no"
     if isinstance(v, (dt.datetime, dt.date)):
-        return v.strftime("%-d %b %Y")
+        return style.date_short(v)
     if isinstance(v, str):
         return v.strip()
     if not isinstance(v, (int, float)):
@@ -633,10 +629,10 @@ def fmt_value(v, fmt: str = "", prose: bool = False, money: str = "") -> str:
         if d > 1 and abs(v) >= 1:            # one decimal on the deck (REPORT.md § 4)
             d = 1
         return f"{v:,.{d}f}"
-    if fmt in ("#,##0",):
+    if fmt in count_formats():
         return f"{v:,.0f}"
     if v == 0:                               # an en dash is the table's zero (§ 4 Style)
-        return (money + "0") if prose else "–"
+        return style.money(0, money, "deck") if prose and money else ("0" if prose else "–")
     if prose and money:                      # a sentence or a figure tile: scaled (§ 4)
         return compact_money(v, money)
     # any other figure keeps the decimals its cell shows, capped at the one the deck shows
@@ -673,8 +669,16 @@ class Resolver:
             ref = m.group(1).strip()
             money = ""
             parts = [x.strip() for x in ref.split("|")]
-            if parts and parts[-1] in ("$", "plain"):
-                money = self.book.money if parts[-1] == "$" else ""
+            last = parts[-1].replace(" ", "").lower() if parts else ""
+            if last in ("$", "plain") or last.startswith("$:"):
+                # `| $` states a money figure in the book's currency, `| $:eur` in a named
+                # one (scripts/style.py CURRENCIES), `| plain` an unscaled number
+                money = "" if last == "plain" else (last[2:] if last.startswith("$:")
+                                                    else self.book.currency)
+                if money and not style.is_money(money):
+                    self.errors.append(f"{where}: {{{ref}}} — `{parts[-1]}` names no currency in "
+                                       f"scripts/style.py; `| $` is the book's, `| $:eur` a named one")
+                    return m.group(0)
                 ref = " | ".join(parts[:-1])
             try:
                 cell, tab = self._cell(ref)
@@ -702,7 +706,8 @@ class Resolver:
             tab = self.book.tab(parts[0])
             return self.book.lookup(tab, parts[1], parts[2]), tab
         raise SpecError("a reference is `{tab | row label | column header}` or `{tab!B3}`, "
-                        "with an optional trailing `| $` for a dollar figure")
+                        "with an optional trailing `| $` for a money figure in the book's currency "
+                        "(`| $:eur` for a named one)")
 
 
 # --- page model ---------------------------------------------------------------------
@@ -799,34 +804,70 @@ def as_blocks(raw, res: Resolver, where: str, book: Book) -> list[dict]:
 
 
 TABLE_KEYS = {"from", "block", "rows", "columns", "max_rows", "title", "ids", "fit", "scale",
-              "where", "through", "dense"}
-# A schedule of dollars is shown at a declared scale, each dollar column headed with it:
-# `64,143` under `$'000` (REPORT.md § 4).
-SCALES = {"thousands": (1e3, "$'000"), "millions": (1e6, "$m")}
-# What a scaled dollar column is formatted as once it is stated at a scale: whole units,
+              "currency", "where", "through", "dense"}
+# A schedule of money is shown at a declared scale, stated ONCE, in the table's title:
+# `64,143` under `FY2024` in a table titled `EBITDA bridge ($ in thousands)` (REPORT.md
+# § 4) — a scale in every column header wraps a narrow column (`LTM JUL 2025 ($ IN
+# THOUSANDS)`). The title's words are scripts/style.py's `scale_header` in the table's
+# currency — the table's `currency:`, else the book's (Exec Summary B2), else a currency
+# the column's own header names. A table whose money columns are in more than one
+# currency states the scale alone in its title (`(in thousands)`) and each money column's
+# currency in its own header (`FY2025 (€)`).
+SCALES = style.SCALES
+# What a scaled money column is formatted as once it is stated at a scale: whole units,
 # negatives in parentheses, zero an en dash (REPORT.md § 4). Applied so the DISPLAYED
 # precision is the column's own, whatever precision the tab held - and so `shown_unit`,
 # which the footing check reads, is the unit the reader actually sees.
 SCALED_FMT = '#,##0;(#,##0);"-"'.replace("-", "\u2013")
-MONEY_FMT = re.compile(r"#,##0(?:\.00)?(?![.0-9])")
+MONEY_FMT = re.compile(r"#,##0(?:\.0+)?(?![.0-9])")
+# A bare `#,##0` — no parenthesized negative section — is a count's format, never money's
+# (WORKBOOK_STYLE.md § 6: money carries `;(#,##0)`); wbkit's FMT_COUNT, where the kit
+# defines one, is the declared form.
+BARE_COUNT_FMT = ("#,##0", "0")
+
+
+def count_formats() -> tuple[str, ...]:
+    try:
+        import wbkit  # noqa: PLC0415 — the kit is the one place the count format is written
+        fc = getattr(wbkit, "FMT_COUNT", None)
+    except Exception:  # pragma: no cover — the kit needs openpyxl, which this script has
+        fc = None
+    return BARE_COUNT_FMT + ((fc,) if fc else ())
 
 
 def is_money(fmt: str | None) -> bool:
-    """A dollar column, whole or to the cent. A percent, ratio or day count is not one."""
+    """A money column, whole or to the cent: the kit's amount formats, which state a
+    negative in parentheses. A percent, a ratio, a day count or a count is not one."""
     f = fmt or ""
-    return "%" not in f and bool(MONEY_FMT.search(f))
+    return "%" not in f and f not in count_formats() and bool(MONEY_FMT.search(f))
 
 
-# A count shares the whole-currency format on a tab (WORKBOOK_STYLE.md: `#,##0` serves
-# both), so the header decides: a column it names as a count of things, holding whole
-# numbers only, is never a dollar column and is never scaled.
-COUNT_HEADER = re.compile(r"^(number|count|no\.) of\b|\b(count|customers|logos|contracts|"
-                          r"invoices|lines|months|days)$", re.I)
+def is_count(cells) -> bool:
+    """A count column: its cells carry the count format (never read off the header's
+    words, which are the client's and any language)."""
+    fmts = count_formats()
+    return bool(cells) and all((c.fmt or "") in fmts for c in cells)
 
 
-def is_count(header: str, cells) -> bool:
-    return bool(COUNT_HEADER.search(header.strip())) and all(
-        float(c.value).is_integer() for c in cells)
+def scaled_title(title: str | None, headers: list[str], scaled: list[tuple[int, str]],
+                 scale: str) -> str:
+    """The table's title with its scale stated once (`EBITDA bridge ($ in thousands)`), or
+    the scale alone where the table has no title. Money columns in more than one currency
+    each carry their currency in the header (`FY2025 (€)`, set here) and the title states
+    the scale alone (`(in thousands)`)."""
+    currencies = {c for _, c in scaled}
+    if len(currencies) == 1:
+        note = style.scale_header(currencies.pop(), scale)
+    else:
+        note = scale if scale != "units" else ""
+        note = f"in {note}" if note else ""
+        for i, c in scaled:
+            if style.currency_in(headers[i]) != c:
+                headers[i] = f"{headers[i]} ({style.symbol(c).strip()})"
+    if not note:
+        return title
+    return f"{title} ({note})" if title else note[:1].upper() + note[1:]
+
 
 CHART_KEYS = {"type", "from", "rows", "columns", "block", "title"}
 STAT_KEYS = {"label", "value", "note"}
@@ -1030,18 +1071,21 @@ def table_block(v, at: str, res: Resolver, book: Book) -> dict:
     t.numeric = [t.numeric[i] for i in idx]
     t.rows = [[row[i] for i in idx] for row in t.rows]
     scale = v.get("scale")
+    cur = str(v.get("currency") or book.currency).lower()
+    if not style.is_money(cur):
+        raise SpecError(f"{at}: currency `{v.get('currency')}` is not one scripts/style.py defines")
     if scale is not None:
         if scale not in SCALES:
-            raise SpecError(f"{at}: scale is {' or '.join(SCALES)}, not `{scale}`")
-        factor, suffix = SCALES[scale]
-        scaled = 0
+            raise SpecError(f"{at}: scale is {', '.join(SCALES)}, not `{scale}`")
+        factor = SCALES[scale]
+        scaled = []
         for i, is_num in enumerate(t.numeric):
             cells = [row[i] for row in t.rows if isinstance(row[i].value, (int, float))
                      and not isinstance(row[i].value, bool)]
             if not is_num or not cells or not all(is_money(c.fmt) for c in cells) \
-                    or is_count(t.headers[i], cells):
+                    or is_count(cells):
                 continue
-            t.headers[i] = f"{t.headers[i]} ({suffix})"
+            scaled.append((i, style.currency_in(t.headers[i]) or cur))
             # Divide, never round: the stored value keeps full precision, and every check
             # downstream (not_footing below, and the deck gate's match against the workbook)
             # computes on these values. Rounding happens once, in fmt_value, on the way to
@@ -1049,9 +1093,9 @@ def table_block(v, at: str, res: Resolver, book: Book) -> dict:
             for row in t.rows:
                 if isinstance(row[i].value, (int, float)) and not isinstance(row[i].value, bool):
                     row[i] = replace(row[i], value=row[i].value / factor, fmt=SCALED_FMT)
-            scaled += 1
         if not scaled:
-            raise SpecError(f"{at}: `{tab}` has no dollar column to state in {scale}")
+            raise SpecError(f"{at}: `{tab}` has no money column to state in {scale}")
+        t.title = scaled_title(t.title, t.headers, scaled, scale)
     if rows_sel is not None or where is not None or through is not None:
         why = not_footing(t.rows, picked_idx, orig_rows, t.numeric, t.kinds)
         if why:
@@ -1731,7 +1775,7 @@ def build_pages(spec: dict, book: Book, run: dict, res: Resolver) -> tuple[list[
     meta = {
         "title": res.resolve(str(spec.get("title") or run.get("goal") or "Report"), "title").strip(),
         "company": str(spec.get("company") or (run.get("inputs") or {}).get("company") or "").strip(),
-        "date": str(spec.get("date") or dt.date.today().strftime("%-d %B %Y")).strip(),
+        "date": str(spec.get("date") or style.date_long(dt.date.today())).strip(),
         "sections": [],
     }
     if not meta["company"]:

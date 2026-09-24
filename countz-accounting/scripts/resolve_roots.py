@@ -59,7 +59,7 @@ def load_yaml(path: pathlib.Path):
               "  uv run --with pyyaml python3 scripts/resolve_roots.py <run_dir>",
               file=sys.stderr)
         raise SystemExit(2)
-    with path.open() as fh:
+    with path.open(encoding="utf-8") as fh:
         return yaml.safe_load(fh) or []
 
 

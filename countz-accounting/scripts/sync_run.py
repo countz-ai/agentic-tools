@@ -52,11 +52,14 @@ import sys
 import tarfile
 from datetime import datetime, timezone
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from setup_run import slug  # noqa: E402  sibling: the one slug rule
+
 ARCHIVE_NAME = "run_sync.tar.gz"
 EXCLUDE_DIRS = {"__pycache__"}
 # `<run_dir>/cache/` is the extract step's typed copy of the data room (the file table in
-# RUN_CONTRACT.md): rebuilt by re-running scripts/extract.py, cited by nothing, and the size
-# of the room. Skipped at the run root only.
+# RUN_CONTRACT.md): rebuilt by re-running the extract step's script, cited by nothing, and
+# the size of the room. Skipped at the run root only.
 EXCLUDE_ROOT_DIRS = {"cache"}
 EXCLUDE_FILES = ("*.pyc", "*.tmp", ".DS_Store")
 
@@ -66,8 +69,9 @@ def _excluded(name: str) -> bool:
 
 
 def _slug(text: str) -> str:
-    s = re.sub(r"[^a-z0-9]+", "-", str(text).lower()).strip("-")
-    return s or "run"
+    """setup_run.py's slug (accents folded, a non-Latin name to `co-<hash>`), so a synced
+    copy is named as its run directory is."""
+    return slug(text) or "run"
 
 
 def _short_name(run: dict) -> str | None:
@@ -81,7 +85,7 @@ def _plugin() -> dict:
     # version the run executed under - the one fact a synced run cannot recover later.
     pj = pathlib.Path(__file__).resolve().parent.parent / ".claude-plugin" / "plugin.json"
     try:
-        doc = json.loads(pj.read_text())
+        doc = json.loads(pj.read_text(encoding="utf-8"))
         return {"name": doc.get("name"), "version": doc.get("version")}
     except Exception:
         return {"name": None, "version": None}
@@ -122,6 +126,11 @@ def _collect_transcripts(run: dict, run_dir: pathlib.Path) -> int:
     dest.mkdir(exist_ok=True)
     n = 0
     home = pathlib.Path.home() / ".claude"
+    if not (home / "projects").is_dir() and not (home / "traces").is_dir():
+        print(f"sync_run: no transcript directory under {home} - this host keeps session "
+              f"transcripts elsewhere (or not at all); none copied, which is not the same "
+              f"as none existing", file=sys.stderr)
+        return 0
     for sid in ids:
         for src in list(home.glob(f"projects/*/{sid}.jsonl")) + list(
                 home.glob(f"traces/{sid}.jsonl")):
@@ -207,7 +216,7 @@ def main() -> int:
               file=sys.stderr)
         return 2
     try:
-        run = json.loads(run_json.read_text())
+        run = json.loads(run_json.read_text(encoding="utf-8"))
     except Exception as exc:
         print(f"sync_run: {run_json} did not parse ({exc}) - syncing with an empty "
               f"manifest", file=sys.stderr)

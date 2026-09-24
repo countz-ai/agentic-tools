@@ -19,7 +19,7 @@ playbook), `objective` (the run's goal, verbatim), `instructions` (the user's as
 their own words, verbatim — see below), and optionally `period_end` (the as-of date the
 user declared), `period` (the period under review in the user's words, where they gave
 one), `declared` (the options the recipe declares, as the user stated them) and, on a
-re-draft, `revise` (the user's instruction — produce a fresh draft that honours it, on
+re-draft, `revise` (the user's instruction — produce a fresh draft that honors it, on
 your new seq).
 
 The recipe is read as written: a served or generated recipe is the fixed document, and
@@ -224,15 +224,20 @@ not invented), the source ids, a one-sentence `goal` naming the entities it cove
 grain and the as-of date, `params` for anything the checks must agree on (`family` — the recipe
 family's slug (`q2`), on every step, so the worker reads its family section of the
 recipe rather than the goal sentence alone — `approve-plan` refuses a definition
-without it; a cutoff's `period_end` and `window_days`;
+without it; a cutoff's window — `period_ends`, `before`, `after`, `basis` (`calendar` or `business`), `weekend` and `holidays` — never typed as a date range;
 `items_from` and its `_from` siblings where the family reads another step's record,
 naming every step that covered the entities this one reads; `entities` — the ids of the
 entities the step covers, in the roster's order — and `split_reason` where the family runs
 as more than one step; declared tolerances — `tolerance` (absolute, in the tie's unit)
 and `pct_tolerance` (a fraction: `0.005` is 0.5%), both where the user gave both;
 `columns` — the period set as id slugs (`fy2025`, `2025-12`, `ltm_2025-12`, `2026q1`,
-EVIDENCE.md § 0) on every step that reports by period, and `fiscal_year_end` (`"MM-DD"`)
-wherever a column is a fiscal year or quarter, the same value on every step; each `declared` option written verbatim into
+EVIDENCE.md § 0; also `fy2025h1`, `fy2025p03`, `ytd_2025-12` (a `"MM-DD"` year end only), and an explicit window
+`w2025-08-16_2025-09-30` for a period no calendar names, such as a deal's stub) on every
+step that reports by period, and `fiscal_year_end` wherever a column is a fiscal year,
+half, period or quarter, the same calendar on every step, in a form
+`${CLAUDE_PLUGIN_ROOT}/scripts/periods.py` reads (its docstring). `timezone` (an IANA
+zone) wherever a source carries timestamps, and `column_labels` where the company's own heading for a period differs from
+the default; each `declared` option written verbatim into
 the steps the recipe directs to read it — required keys per kind are enforced by the
 validation below), `reads` and `cache_from` per the next subsection, and `after`
 derived from the step's `_from` params — exactly the steps they name.
@@ -247,20 +252,14 @@ You derive the order; the recipe states none. Three declarations per step:
   both steps' `reads`.
 - **the `extract` step** — one step of kind `extract` per registered folder source (id
   `extract_<slot>`), `after: []`, whose `params.files` is the union of every step's
-  `reads` under that source and nothing else: per file its `id` (the slug the readers
-  use), `path` relative to the source, `file_role` from the source class you assigned
-  in § 3, `header_row` where the peek showed a preamble above the header, `types` for
-  a column the peek showed as an amount or a date that would not parse as one, and
-  `control` — the column a check would agree a total to. A file whose profile anchors
-  several blocks — a second table below the first, a totals section — is several
-  entries, one id per block, each with its `header_row` and `rows` from the anchors §
-  2 recorded; `rows` takes several ranges (`"6:40,42:1204"`) to cut a subtotal row the
-  profile names inside a block. The script reads one block per entry and reports what
-  lies below it, the rows inside it that look like a header or a total, and whether
-  its control total agrees with your profile's whole-block span of the file — so
-  record one such span per file the extract step parses. The
-  full spec is the docstring of `${CLAUDE_PLUGIN_ROOT}/scripts/extract.py`. What no step
-  reads is not in the list.
+  `reads` under that source and nothing else, one entry per table a step reads: `id`
+  (the slug the readers use), `path` relative to the source, `file_role` from the
+  source class you assigned in § 3, `control` (the column a check would agree a total
+  to, or `"none"`), `sheet` where the file has several, and `what` — the table in your
+  profile's words and anchors (`"the By-stream table, header at row 40"`), required
+  when two entries share a path and sheet. How the table is written is the extract
+  worker's to read; each table needs one whole-table span in your profile for its
+  control check. What no step reads is not in the list.
 - **`params.cache_from`** on every step with a non-empty `reads`, naming that extract
   step; it is one of the step's `_from` params, so the extract step is in its `after`
   like any other read.
@@ -277,7 +276,7 @@ outside `after`, and a `reads` id the extract step does not parse.
   decision (what runs, at what grain, why — or why not, and what data would change
   that), how many steps each family runs as and which entities each covers — with, where
   a family runs as more than one, the measured fact that split it — the extraction
-  (how many files the extract step parses, and the waves the derived order gives), the
+  (how many tables the extract step parses, and the waves the derived order gives), the
   declared options as recorded, and every proposed parameter awaiting their
   confirmation, windows first. State each declared option with its source — the user's
   words, or the recipe's default — and without a rationale you supplied for them. Example

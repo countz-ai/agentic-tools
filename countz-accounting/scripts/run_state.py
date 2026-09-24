@@ -54,6 +54,12 @@ Subcommands:
         FAILED: line is for the relay to put to the user. A minted retry wave opens
         with its own SAY: line.
 
+    record-scrub <run_dir> --json '<one-line JSON>' | @<file>
+        Record the scrubbed pre-run ask (reference/SCRUB.md): {"send", "rounds"}.
+        Refuses no rounds, more than three, or a last round that is not `clean`.
+        Writes <run_dir>/scrub.json, deletes an @<file> draft inside <run_dir>, appends
+        `ask_scrubbed`, and prints `SEND:<TAB><text>`: the bytes the relay sends.
+
     debug <run_dir> [--off]
         Turn the run's debug mode on or off (OBSERVABILITY.md § 3). While it is on,
         `record` ends every wave with a GATHER: line the relay runs before the sync,
@@ -69,6 +75,7 @@ import datetime
 import json
 import pathlib
 import re
+import shlex
 import sys
 
 import check_playbook  # sibling: the one home of KINDS, SLUG and definition validation
@@ -139,7 +146,7 @@ def recipe_families(run: dict) -> dict[str, str]:
     if not path:
         return {}
     try:
-        text = pathlib.Path(path).read_text()
+        text = pathlib.Path(path).read_text(encoding="utf-8")
     except OSError:
         return {}
     return {fid.lower(): title for fid, title in FAMILY_HEADER.findall(text)}
@@ -191,7 +198,7 @@ def _now() -> str:
 
 def _append_event(run_dir: pathlib.Path, event: str, **fields) -> None:
     line = {"ts": _now(), "event": event, **fields}
-    with (run_dir / "events.jsonl").open("a") as f:
+    with (run_dir / "events.jsonl").open("a", encoding="utf-8") as f:
         f.write(json.dumps(line) + "\n")
 
 
@@ -208,7 +215,7 @@ def load_run(run_dir: pathlib.Path) -> dict:
     path = run_dir / "run.json"
     if not path.is_file():
         raise Refuse(f"{run_dir}: no run.json - register the run first (setup_run.py)")
-    run = json.loads(path.read_text())
+    run = json.loads(path.read_text(encoding="utf-8"))
     if run.get("schema") != RUN_SCHEMA:
         raise Refuse(f"run.json schema {run.get('schema')!r} is not {RUN_SCHEMA}")
     return run
@@ -218,7 +225,7 @@ def save_run(run_dir: pathlib.Path, run: dict) -> None:
     run["updated_at"] = _now()
     path = run_dir / "run.json"
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(run, indent=2) + "\n")
+    tmp.write_text(json.dumps(run, indent=2) + "\n", encoding="utf-8")
     tmp.replace(path)
 
 
@@ -240,7 +247,7 @@ def skill_agent(skill: str) -> pathlib.Path:
     instructions the Skill call would load. Falls back to the worker."""
     path = PLUGIN_ROOT / "skills" / skill / "SKILL.md"
     try:
-        text = path.read_text() if path.is_file() else ""
+        text = path.read_text(encoding="utf-8") if path.is_file() else ""
     except OSError:
         text = ""
     head = text[4:].split("\n---", 1)[0] if text.startswith("---\n") else ""
@@ -265,7 +272,7 @@ def write_row_brief(run_dir: pathlib.Path, row: dict) -> pathlib.Path:
     body = render_brief(run_dir, row["seq"], row["step"], row["skill"],
                         row.get("check_id"), row.get("args") or {})
     tmp = path.with_suffix(".md.tmp")
-    tmp.write_text(body)
+    tmp.write_text(body, encoding="utf-8")
     tmp.replace(path)
     return path
 
@@ -285,6 +292,12 @@ def write_brief(run_dir: pathlib.Path, seq: int, st: dict, bound: dict,
 
 def brief_rel(seq: int, step: str) -> str:
     return f"dispatch/{seq:04d}-{step}.md"
+
+
+def _q(p) -> str:
+    """A path as a printed command carries it: unchanged when it is shell-safe, quoted
+    when it holds a space or a shell character (`OneDrive - Firm/Clients`)."""
+    return shlex.quote(str(p))
 
 
 def _flat(v) -> str:
@@ -310,10 +323,10 @@ def _args_text(args: dict) -> str:
 
 def next_line(run_dir: pathlib.Path, row: dict, brief: pathlib.Path | None,
               label: str = "NEXT") -> str:
-    line = (f"{label}: Skill {row['skill']} run_dir={run_dir} seq={row['seq']}"
+    line = (f"{label}: Skill {row['skill']} run_dir={_q(run_dir)} seq={row['seq']}"
             + (f" check={row['check_id']}" if row.get("check_id") else "")
             + (f" {t}" if (t := _args_text(row.get("args") or {})) else ""))
-    return line + (f" brief={brief}" if brief else "")
+    return line + (f" brief={_q(brief)}" if brief else "")
 
 
 def gather_line(run_dir: pathlib.Path, run: dict) -> str | None:
@@ -325,8 +338,8 @@ def gather_line(run_dir: pathlib.Path, run: dict) -> str | None:
     """
     if not run.get("inputs", {}).get("debug"):
         return None
-    return (f"GATHER: python3 {pathlib.Path(__file__).resolve().parent}/gather_debug.py "
-            f"{run_dir}   # debug mode - run it BEFORE sync_run.py")
+    return (f"GATHER: python3 {_q(pathlib.Path(__file__).resolve().parent / 'gather_debug.py')} "
+            f"{_q(run_dir)}   # debug mode - run it BEFORE sync_run.py")
 
 
 def check_row(run: dict, check_id: str) -> dict | None:
@@ -394,7 +407,7 @@ def validate_definition(path: pathlib.Path) -> dict:
     if problems:
         raise Refuse(f"{path.name}: {len(problems)} problem(s) - a broken definition "
                      f"goes to the user, not around this gate:\n  " + "\n  ".join(problems))
-    return json.loads(path.read_text())
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 # ---------------------------------------------------------------- subcommands
@@ -594,7 +607,7 @@ def parse_brief(path: pathlib.Path) -> dict:
     m = re.fullmatch(r"(\d{4})-([a-z]+)\.md", path.name)
     if not m or not path.is_file():
         raise Refuse(f"{path}: not a dispatch brief (dispatch/<NNNN>-<step>.md)")
-    text = path.read_text()
+    text = path.read_text(encoding="utf-8")
     sk = re.search(r"skills/([a-z-]+)/SKILL\.md", text)
     kv = dict(re.findall(r"^    (\w+)=(.*)$", text, re.M))
     if not sk or "check" not in kv or int(kv.get("seq", -1)) != int(m.group(1)):
@@ -620,7 +633,7 @@ def classify_record(run_dir: pathlib.Path, row: dict) -> tuple[str, dict | None,
     unparseable - the fallback keys on that."""
     rel = row.get("record") or f"steps/{row['seq']:04d}-{row['step']}.json"
     try:
-        rec = json.loads((run_dir / rel).read_text())
+        rec = json.loads((run_dir / rel).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return "died", None, "step record absent or unparseable"
     if rec.get("seq") != row["seq"] or rec.get("step") != row["step"]:
@@ -713,7 +726,71 @@ def cmd_record(a) -> int:
     if (g := gather_line(run_dir, run)):
         print(g)
     if retries:
-        print(f"THEN: python3 {pathlib.Path(__file__).resolve()} record {run_dir}")
+        print(f"THEN: python3 {_q(pathlib.Path(__file__).resolve())} record {_q(run_dir)}")
+    return 0
+
+
+SCRUB_ROUNDS_MAX = 3
+
+
+def _json_arg(v: str):
+    """A --json value: the JSON itself, or `@<path>` to a file holding it."""
+    if v.startswith("@"):
+        return json.loads(pathlib.Path(v[1:]).read_text(encoding="utf-8"))
+    return json.loads(v)
+
+
+def cmd_record_scrub(a) -> int:
+    run_dir = a.run_dir.resolve()
+    load_run(run_dir)
+    rec = _json_arg(a.json)
+    if not isinstance(rec, dict):
+        raise Refuse("record-scrub --json must be an object: {send, rounds}")
+    send = rec.get("send")
+    if not isinstance(send, str) or not send.strip():
+        raise Refuse("record-scrub: `send` is the scrubbed description, a non-empty string")
+    rounds = rec.get("rounds")
+    if not isinstance(rounds, list) or not rounds:
+        raise Refuse("record-scrub: `rounds` lists every scrub + blind-check round, at least one")
+    if len(rounds) > SCRUB_ROUNDS_MAX:
+        raise Refuse(f"record-scrub: {len(rounds)} rounds - SCRUB.md stops the exception "
+                     f"after {SCRUB_ROUNDS_MAX}; send nothing and author the recipe locally")
+    cats: set[str] = set()
+    removed_n = flags_n = 0
+    for i, r in enumerate(rounds, 1):
+        if not isinstance(r, dict):
+            raise Refuse(f"record-scrub: round {i} is not an object")
+        verdict = r.get("verdict")
+        if verdict not in ("clean", "flagged"):
+            raise Refuse(f"record-scrub: round {i} verdict {verdict!r} - clean or flagged, "
+                         f"as the blind read returned it")
+        removed, flags = r.get("removed") or [], r.get("flags") or []
+        for what, items in (("removed", removed), ("flags", flags)):
+            if not isinstance(items, list):
+                raise Refuse(f"record-scrub: round {i} `{what}` is a list")
+        cats.update(str(it["category"]) for it in removed
+                    if isinstance(it, dict) and it.get("category"))
+        if verdict == "flagged" and not flags:
+            raise Refuse(f"record-scrub: round {i} is flagged with no flags")
+        if verdict == "clean" and flags:
+            raise Refuse(f"record-scrub: round {i} is clean yet carries flags")
+        removed_n += len(removed)
+        flags_n += len(flags)
+    if rounds[-1]["verdict"] != "clean":
+        raise Refuse("record-scrub: the last blind read is not `clean` - nothing crosses "
+                     "until one is")
+    out = run_dir / "scrub.json"
+    tmp = out.with_name(out.name + ".tmp")
+    tmp.write_text(json.dumps({"recorded_at": _now(), "send": send, "rounds": rounds},
+                              indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    tmp.replace(out)
+    if a.json.startswith("@"):  # the draft duplicates scrub.json; drop it from the run
+        draft = pathlib.Path(a.json[1:]).resolve()
+        if draft.parent == run_dir and draft != out:
+            draft.unlink(missing_ok=True)
+    _append_event(run_dir, "ask_scrubbed", rounds=len(rounds), removed_n=removed_n,
+                  categories=sorted(cats), flags_n=flags_n, sent_chars=len(send))
+    print(f"SEND:\t{send}")
     return 0
 
 
@@ -776,6 +853,11 @@ def main() -> int:
     p = sub.add_parser("record")
     p.add_argument("run_dir", type=pathlib.Path)
     p.set_defaults(fn=cmd_record)
+
+    p = sub.add_parser("record-scrub")
+    p.add_argument("run_dir", type=pathlib.Path)
+    p.add_argument("--json", required=True)
+    p.set_defaults(fn=cmd_record_scrub)
 
     p = sub.add_parser("debug")
     p.add_argument("run_dir", type=pathlib.Path)

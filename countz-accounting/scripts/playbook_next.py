@@ -46,6 +46,7 @@ import sys
 
 import check_playbook  # sibling: the one home of KINDS and of definition validation
 import run_state  # sibling: the brief template and the dispatch-row vocabulary
+from run_state import _q
 
 PLUGIN_ROOT = pathlib.Path(__file__).resolve().parent.parent
 RUN_SCHEMA = "countz-accounting/run@1"
@@ -156,7 +157,7 @@ def wave_number(run_dir: pathlib.Path) -> int:
     n = 0
     p = run_dir / "events.jsonl"
     if p.is_file():
-        for line in p.read_text().splitlines():
+        for line in p.read_text(encoding="utf-8").splitlines():
             try:
                 n += json.loads(line).get("event") == "decision"
             except ValueError:
@@ -178,7 +179,7 @@ def append_decision(run_dir: pathlib.Path, wave: int, steps: list[str], why: str
     ts = datetime.datetime.now(datetime.timezone.utc).isoformat(
         timespec="milliseconds").replace("+00:00", "Z")
     line = {"ts": ts, "event": "decision", "wave": wave, "steps": steps, "why": why}
-    with (run_dir / "events.jsonl").open("a") as f:
+    with (run_dir / "events.jsonl").open("a", encoding="utf-8") as f:
         f.write(json.dumps(line) + "\n")
 
 
@@ -199,18 +200,18 @@ def emit_wave(run_dir, pb_path, definition, decision, state, bound, run) -> None
         run_state.recipe_families(run))
     print(run_state.say_line(
         f"Wave {wave} — running {run_state.checks_phrase(k)}: {what}."))
-    print(f"RECORD: python3 {run_state_py} dispatch {run_dir} --briefs "
-          + " ".join(str(b) for b in briefs))
+    print(f"RECORD: python3 {_q(run_state_py)} dispatch {_q(run_dir)} --briefs "
+          + " ".join(_q(b) for b in briefs))
     print(run_state.LAUNCH)
     for i, st in enumerate(members):
-        print(f"NEXT: Skill {check_playbook.KINDS[st['check']]} run_dir={run_dir} "
+        print(f"NEXT: Skill {check_playbook.KINDS[st['check']]} run_dir={_q(run_dir)} "
               f"seq={seq0 + i} check={st['id']} "
               f"sources={','.join(bound[sl] for sl in st['sources'])} "
-              f"goal={st.get('goal') or '(none)'} mode=fresh brief={briefs[i]}")
+              f"goal={st.get('goal') or '(none)'} mode=fresh brief={_q(briefs[i])}")
     for sid, reason in skipped.items():
         print(f"SKIPPED: {sid} — {reason}")
-    print(f"THEN: python3 {run_state_py} record {run_dir}")
-    print(f"THEN: python3 {pathlib.Path(__file__).resolve()} {run_dir} {pb_path}")
+    print(f"THEN: python3 {_q(run_state_py)} record {_q(run_dir)}")
+    print(f"THEN: python3 {_q(pathlib.Path(__file__).resolve())} {_q(run_dir)} {_q(pb_path)}")
 
 
 def emit_done(definition, decision, state) -> None:
@@ -258,10 +259,10 @@ def main() -> int:
             print(f"  {p}", file=sys.stderr)
         return 2
 
-    run = json.loads((run_dir / "run.json").read_text())
+    run = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
     if run.get("schema") != RUN_SCHEMA:
         raise Escalate(f"run.json schema {run.get('schema')!r} is not {RUN_SCHEMA}")
-    definition = json.loads(pb_path.read_text())
+    definition = json.loads(pb_path.read_text(encoding="utf-8"))
     bound = bound_map(run, definition)
     sources = {s["id"]: s for s in run.get("sources", [])}
     state = fold(run, run_dir, definition)

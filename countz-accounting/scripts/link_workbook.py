@@ -37,11 +37,11 @@ What gets wired, in this order:
      pointer to that tab. Two tabs on one fold, no link.
   6. Every AMOUNT on the Exec Summary links to the cell it was copied from. The Exec
      Summary mints no figure, so each number there has an original on a check's tab; the
-     table's title names that tab, and the amount is found by the row's leading label and
-     the column's header, both copied verbatim. An amount that matches nothing is
-     reported and left — check_workbook.py refuses an unlinked number on the Exec
-     Summary, because the fix is copying the label, not linking. These cells take the
-     link color and no underline: under a figure, an underline is the accounting rule
+     table's title declares that tab (`from: <tab>`), and the amount is found by the row's
+     leading label and the column's header, both copied verbatim. An amount that matches
+     nothing is reported and left — check_workbook.py refuses an unlinked number on the
+     Exec Summary, because the fix is copying the label, not linking. These cells take
+     the link color and no underline: under a figure, an underline is the accounting rule
      that reads "sum above".
 
 Every link carries the cell's own text as its `display` attribute, so a consumer that
@@ -224,21 +224,26 @@ def resolve(exact_cells, line_homes, tokens, sheets):
     return targets, dead, internal, homes
 
 
-# A table on the Exec Summary declares the tab it was copied from by naming that tab in
-# its title. Sheet names are distinctive ("q6_ebitda_bridge"), so a substring match is
-# unambiguous; a title naming two tabs declares neither.
+# A table on the Exec Summary declares the tab it was copied from with an explicit marker
+# in its title: `from: <tab>` — the tab's full name or its token (`EBITDA bridge · from:
+# q6`), running to the end of the title or a closing bracket (REPORT.md § 2). The marker is
+# the plugin's own syntax, so the declaration never rests on an English word in a title.
+# A marker naming no tab, or two, declares nothing.
 LABEL_COLS = 4
+SOURCE_MARKER = re.compile(r"(?:^|[\s(\[·—–-])from:\s*(?P<tab>[^)\]]+?)\s*(?:[)\]]|$)")
+
+
+def _tab_named(name: str, sheets) -> list[str]:
+    name = name.strip().strip("`'\"")
+    return [t for t in sheets if t != EXEC and (t == name or normalize(t) == normalize(name)
+                                                 or normalize(t.split(" ")[0]) == normalize(name))]
 
 
 def declared_source(text: str, sheets) -> str | None:
-    # A tab is named `<token> <Title>` (reference/WORKBOOK.md § 2), so a title that names
-    # the token alone ("copied from the q6_ebitda_bridge tab") declares that tab too.
-    # A declaration says "tab" ("copied from the q6_ebitda_bridge tab"); a row whose
-    # leading label merely IS a tab's token declares nothing.
-    if re.search(r"\btab\b", text) is None:
+    m = SOURCE_MARKER.search(text or "")
+    if not m:
         return None
-    hits = [t for t in sheets if t != EXEC
-            and (t in text or re.search(rf"(?<![\w.]){re.escape(t.split(' ')[0])}(?![\w.])", text))]
+    hits = _tab_named(m.group("tab"), sheets)
     return hits[0] if len(hits) == 1 else None
 
 

@@ -52,11 +52,11 @@ On an expectation mismatch, try to resolve it first. Examples:
 1. **Did we misread a file?** E.g. wrong sheet, wrong block on a sheet that stacks several,
    a sign convention, gross on one side and net on the other, a subtotal row swept into a
    column sum. Where the read came through the run's cache, the cache may have misread
-   it the same way: re-perform the read against the source
-   (`scripts/evidence.py span <id> --reperform`, or `scripts/extract.py <run_dir>
-   --reperform <id>`) and read the block's `suspects` in `cache/manifest.json` before
-   anything else. A cache defect is recorded and corrected through the extract step
-   (`agents/worker.md` § Your procedure); a cached file is not edited.
+   it the same way: check it is intact (`scripts/evidence.py span <id> --reperform` or
+   `scripts/cache.py <run_dir> --verify <id>`), then re-perform the read from the source
+   file at the manifest's coordinates with its stated parse. A cache defect is recorded
+   and corrected through the extract step (`agents/worker.md` § Your procedure); a
+   cached file is not edited.
 2. **Is it a known reconciling item?** Quantify it against a recorded figure — read the
    allowance off the books, list the in-transit deposits. Never infer it from the gap.
 3. **Is there a recorded explanation?** The data room may hold the explanation even when
@@ -74,7 +74,11 @@ period set. Do analysis for the financial years. If there are more recent partia
 Label LTM and as-of column by end month (e.g. LTM July 2026, As of July 2026).
 
 The plan declares the period set once, as `params.columns` (the id slugs of
-EVIDENCE.md § 0), with the fiscal year end as `params.fiscal_year_end` (`"MM-DD"`).
+EVIDENCE.md § 0), with the company's fiscal calendar as `params.fiscal_year_end`
+(its forms: `scripts/periods.py`), taken from the company's own documents, never assumed.
+
+Timestamps are placed on the entity's local date (`params.timezone`).
+
 Every step takes its windows, its labels and its fiscal-year rule from
 `scripts/periods.py` (`Periods.load(run_dir, check)`), never from a table of its own: a
 label or window typed per check drifts between tabs.
@@ -115,7 +119,7 @@ label or window typed per check drifts between tabs.
   power is expanding, and the gap is concentrated in…"), no sentence written to land a
   beat, no intensifiers (*dramatically*, *robust*, *stellar*, *very strong*). The number
   carries the weight.
-- **Judgements stay.** A judgement's `nature` (`good`/`bad`/`neutral`) and `confidence`
+- **Judgements stay.** A judgment's `nature` (`good`/`bad`/`neutral`) and `confidence`
   are part of the contract. State the observed condition and its quantified consequence.
 - **Answer-first stays.** Lead with the finding, then the evidence. "We identified FY20XX
   Adjusted EBITDA of $X" is answer-first and flat.
@@ -129,10 +133,20 @@ label or window typed per check drifts between tabs.
 
 ## Number conventions
 
+US conventions. Every form below is written by code — `figures.fmt` / `Ledger.sub`, through
+`scripts/style.py` — never typed; the gates read prose back with the same grammar.
+
 | | write it as |
 |---|---|
-| money | whole dollars — `$9,438,108`. Cents on schedules, where footing needs them |
-| money, on the report deck | scaled and rounded — `$9.4m`, `$81k` (`REPORT.md` § 4) |
+| money | whole units of its currency — `$9,438,108`, `€5,000,000`, `CHF 1,204`. The minor unit on schedules, where footing needs it (`$9,438,108.22`, `¥120,000`, `KWD 1,234.567`) |
+| money, scaled | `$9.4M`, `$81K`, `$1.2B` — upper-case K, M, B, everywhere a figure is scaled: prose, slides and tables (`REPORT.md` § 4) |
+| a figure's currency | its unit (`usd`, `eur`, `jpy`, ...). Two currencies never tie and never sum; a translation is a figure with an `fx_rate` input |
+| negatives | in parentheses — `($1,204)`, `(3.1%)`. A sign is compared: `($1,204)` states a negative; a number that is only a size says so — "a difference of $1,204" |
 | percentages | one decimal — `17.4%`; exact integers exactly — `100%` |
-| counts | plain integers with separators — `4,171 rows` |
+| rates | full precision — `4.25%` (unit `rate`) |
+| FX rates | four decimals — `1.0679` (unit `fx_rate`) |
+| days | one decimal — `45.3 days` (unit `days`) |
+| counts | plain integers with separators — `4,171 rows`; a fractional quantity — `12.5 FTEs` (unit `quantity`) |
+| multiples | one decimal — `1.3x` (unit `ratio`) |
+| dates | `September 30, 2025` in prose; `Sep 30, 2025` in a cell |
 | periods | `March 2026` or `FY2026` — never a system date key |

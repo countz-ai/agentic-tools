@@ -15,8 +15,8 @@ A new run's directory is MINTED here, never named by the relay:
 `<output_root>/<skill>-<company>.<YYYYMMDD-HHMMSS>` — `--skill` is the launcher skill
 the user invoked (it must name one of this plugin's inline skills), `--company` is the
 company whose books the run is over in the user's words (stored verbatim; the folder
-carries its slug: lower-case, runs of anything but letters and digits become one
-hyphen), and the stamp is the machine's local clock at minting. "Output to results" for
+carries its slug: accents folded, lower-case, runs of anything but letters and digits
+become one hyphen, and a name in a script with no Latin letters becomes `co-<hash>`), and the stamp is the machine's local clock at minting. "Output to results" for
 a `qoe` run over Demo ZS lands at `results/qoe-demo-zs.20260904-104305`. The first
 stdout line is `RUN_DIR:\t<abs path>`; the relay takes every later `<run_dir>` from it.
 An existing run is addressed by that path, and a path that carries no `run.json` is
@@ -78,6 +78,7 @@ import os
 import pathlib
 import re
 import sys
+import unicodedata
 
 RUN_SCHEMA = "countz-accounting/run@1"
 SUBDIRS = ("steps", "dispatch", "checks", "workpapers", "sources", "recipes", "out")
@@ -102,13 +103,13 @@ def _now() -> str:
 
 def _write_json(path: pathlib.Path, obj) -> None:
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(obj, indent=2) + "\n")
+    tmp.write_text(json.dumps(obj, indent=2) + "\n", encoding="utf-8")
     tmp.replace(path)
 
 
 def _append_event(run_dir: pathlib.Path, event: str, **fields) -> None:
     line = {"ts": _now(), "event": event, **fields}
-    with (run_dir / "events.jsonl").open("a") as f:
+    with (run_dir / "events.jsonl").open("a", encoding="utf-8") as f:
         f.write(json.dumps(line) + "\n")
 
 
@@ -124,8 +125,61 @@ def fail(msg: str) -> int:
 
 
 def slug(text: str) -> str:
-    """Lower-case; every run of anything but a letter or digit is one hyphen."""
-    return re.sub(r"[^a-z0-9]+", "-", str(text).lower()).strip("-")
+    """The company as a directory-name segment. Accents are folded to their base letter
+    (NFKD: `Société Générale` -> `societe-generale`), lower-cased, and every run of
+    anything but a letter or digit is one hyphen. A name with no Latin letter or digit
+    left (`株式会社…`, `Газпром`) becomes `co-` and the first 8 hex of its SHA-256, so
+    minting never refuses a company for its script."""
+    folded = unicodedata.normalize("NFKD", str(text)).encode("ascii", "ignore").decode()
+    s = re.sub(r"[^a-z0-9]+", "-", folded.lower()).strip("-")
+    if s:
+        return s
+    return "co-" + hashlib.sha256(str(text).strip().encode("utf-8")).hexdigest()[:8]
+
+
+# A source that is a multi-member archive is refused: every citation into it would resolve
+# to the archive itself (step_record.py records one file and one mtime for all of them), and
+# peek/extract read no member of it. The user extracts it and registers the folder. One
+# compressed file (`.csv.gz`) is not an archive: polars reads it.
+ARCHIVE = re.compile(r"\.(zip|7z|rar|tar|tgz|tbz2?|txz|tzst|tar\.[a-z0-9]+)$", re.I)
+# macOS `st_flags` bit for a file whose content is not on disk (an iCloud / File Provider
+# placeholder: Dropbox, OneDrive, Google Drive "online-only").
+SF_DATALESS = 0x40000000
+
+
+def placeholder_reason(p: pathlib.Path) -> str | None:
+    """Why a file cannot be read now, or None. A cloud-drive placeholder exists and has a
+    size, but its bytes are elsewhere: a read either fails offline or blocks on a
+    download mid-step."""
+    name = p.name
+    if name.startswith(".") and name.endswith(".icloud"):
+        return "an iCloud placeholder (not downloaded)"
+    try:
+        st = p.stat()
+    except OSError as exc:
+        return f"cannot be read ({exc.strerror or exc})"
+    if getattr(st, "st_flags", 0) & SF_DATALESS:
+        return "a cloud-drive placeholder (online-only; its content is not on this machine)"
+    try:
+        with p.open("rb") as fh:
+            fh.read(1)
+    except OSError as exc:
+        return f"cannot be read ({exc.strerror or exc})"
+    return None
+
+
+def source_refusal(sid: str, p: pathlib.Path) -> str | None:
+    """The refusal for a file source that cannot be registered as it is, or None."""
+    if p.is_file():
+        if ARCHIVE.search(p.name):
+            return (f"source {sid}: {p.name} is an archive - extract it and register the "
+                    f"extracted folder; a citation into an archive would name the archive, "
+                    f"not the file it came from")
+        why = placeholder_reason(p)
+        if why:
+            return (f"source {sid}: {p} is {why} - make it available offline (download it "
+                    f"in the sync client) and register again")
+    return None
 
 
 def inline_skills() -> set[str] | None:
@@ -135,7 +189,7 @@ def inline_skills() -> set[str] | None:
         return None
     names: set[str] = set()
     for f in SKILLS_DIR.glob("*/SKILL.md"):
-        lines = f.read_text().splitlines()
+        lines = f.read_text(encoding="utf-8").splitlines()
         if not lines or lines[0].strip() != "---":
             continue
         fm: dict[str, str] = {}
@@ -175,6 +229,8 @@ def parse_sources(raw: str) -> list[dict] | str:
             return f"source {s['id']}: path is not absolute: {p}"
         if not p.exists():
             return f"source {s['id']}: no such file or folder: {p}"
+        if (why := source_refusal(s["id"], p)):
+            return why
     return incoming
 
 
@@ -321,7 +377,7 @@ def write_preview(run_dir: pathlib.Path, run: dict) -> None:
     lines += ["", f"Each directory row counts everything beneath it; the listing stops "
                   f"{WALK_DEPTH} levels below each source root."]
     tmp = run_dir / (PREVIEW_NAME + ".tmp")
-    tmp.write_text("\n".join(lines) + "\n")
+    tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
     tmp.replace(run_dir / PREVIEW_NAME)
 
 
@@ -359,7 +415,7 @@ def plugin_stamp() -> dict:
     manifest = root / ".claude-plugin" / "plugin.json"
     if manifest.is_file():
         try:
-            version = json.loads(manifest.read_text()).get("version")
+            version = json.loads(manifest.read_text(encoding="utf-8")).get("version")
         except ValueError:
             pass
     files = {}
@@ -420,7 +476,7 @@ def main() -> int:
             return fail(f"{run_dir} carries no run.json - an existing run is named by its "
                         f"path, and a new one is minted: leave the path off and pass "
                         f"--output-root, --skill and --company")
-        run = json.loads(run_path.read_text())
+        run = json.loads(run_path.read_text(encoding="utf-8"))
         if run.get("schema") != RUN_SCHEMA:
             return fail(f"run.json schema {run.get('schema')!r} is not {RUN_SCHEMA}")
         existing = {s["id"]: s for s in run.get("sources", [])}
@@ -490,9 +546,8 @@ def main() -> int:
                     f"not the goal")
     if known is None and not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", a.skill):
         return fail(f"--skill {a.skill!r} is not a skill name")
-    if not slug(a.company):
-        return fail(f"--company {a.company!r} has no letter or digit to name the "
-                    f"directory from")
+    if not str(a.company).strip():
+        return fail("--company is empty - pass the company's name in the user's words")
     if not incoming:
         return fail("a new run needs at least one source")
     run_dir = mint_run_dir(output_root.resolve(), a.skill, a.company)

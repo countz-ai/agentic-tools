@@ -1,9 +1,10 @@
 ---
 name: check-extract
 description: >-
-  Perform one extraction: parse the data-room files the plan's steps read into the run's
-  typed cache, once, with every file's header, columns, row count and control total
-  recorded in the cache manifest for the steps that read it to cite from.
+  Perform one extraction: write and run the script that parses every table the plan's
+  steps read out of the data room into the run's typed cache, once, with each table's
+  file coordinates, column parses, row count and control total recorded in the cache
+  manifest for the steps that read it to cite from.
 context: fork
 agent: countz-accounting:worker
 background: false
@@ -13,99 +14,70 @@ user-invocable: false
 # Perform one extraction
 
 Arguments: `run_dir`, `seq`, `check` (the step id), `sources` (comma-joined source ids —
-the sources the files sit under), `goal`, `params` (`files`, the list to parse — the
-spec is the docstring of `${CLAUDE_PLUGIN_ROOT}/scripts/extract.py`), `mode` (`fresh` |
-`fix`), and on `fix`, `findings_from`.
+the sources the files sit under), `goal`, `params`, `mode` (`fresh` | `fix`), and on
+`fix`, `fix_input`. On a saved playbook's run, `params.prior_script` names last period's
+script for this step, relative to the playbook file (`run.json.playbook.path`).
 
-This step computes no figure and writes no tab. It runs one script and records what
-the script wrote. Read `${CLAUDE_PLUGIN_ROOT}/reference/CONDUCT.md` (§ Files, § Events)
-and nothing else; open no client file yourself — the script reads them, bounded to the
-files the plan named.
+`params.files` lists the tables to parse, one entry per table a step reads: `{id, path,
+source?, file_role, sheet?, what?, control?}` — `path` relative to the source, `what` the
+table in the planner's words (`"the By-stream table, header at row 40"`), `control` the
+column a check agrees a total to, or `"none"`. How each table is written — header,
+rows, types, dates, signs — is yours to find and state.
 
-## 1. Extract
+This step computes no figure and writes no tab. Read
+`${CLAUDE_PLUGIN_ROOT}/reference/CONDUCT.md` (§ Files, § Events), the planner's profile
+of each file (`sources/<source>.md`), and the docstring of
+`${CLAUDE_PLUGIN_ROOT}/scripts/cache.py`.
 
-```
-uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/extract.py <run_dir> --step <check>
-```
+## 1. Look
 
-It reads `params.files` from the run's definition, writes `cache/<id>.parquet` per file
-and `cache/manifest.json`, and prints one line per file — id, rows, the control total
-and its column, the header row, every column with its dtype — then `FAILED: <id> —
-<reason>` for any file it could not parse. Exit 0 means every file landed.
+`uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/peek.py <path>`
+on each file, then bounded reads in code of only what you need to write the parse: where
+each table's header and last row sit, what lies between and below, how amounts, dates
+and signs are written.
 
-## 2. Read what it printed, once
+## 2. Write the script
 
-Against the plan's profile of each file (`sources/<id>.md`, where the planner wrote one):
-a header row other than the profile's anchor, a column typed `String` the profile calls
-an amount, a control total the profile did not expect. A wrong header or type is fixed
-in the definition's `params.files` (`header_row`, `types`, `control`) — never by editing
-a cached file — and the script re-run. A row count that differs from the plan's is a
-note: the plan counted lines, the script counts rows.
+`workpapers/extract-<check>.py`, with polars, openpyxl, fastexcel or pypdf as the file
+needs. Where `params.prior_script` is set, read it first and start from it, changing
+what this period's files show is different; never run it unread. Per `params.files`
+entry, parse that table and `cache.write` it — with the entry's `what` — and true file
+coordinates (`header_at`, `rows` as the rows sit in the file) and, per column, where it
+sits and how its text was read (`parse`, in words). A value you cannot read stays text,
+and its column's `parse` says so. Where the document states a total for the table, pass
+it as `stated`. Any other table you see on a file is a `cache.note`, not extracted.
 
-The manifest's `header_row` is the spec's, and the spec's is the profile's anchor, so a
-manifest that matches the profile proves nothing about the file. The script's own check
-of the header is the `HEADER:` line below; a note that the header rows match the
-profile is not written.
+The script is the run's record of how every file was read: a reviewer re-performing a
+citation reads the file as it says, and a fix pass edits it. Write it to be read.
 
-Five more lines the script prints, and what each is to you:
+## 3. Run and rule
 
-- `HEADER: <id> — read at line N as the spec gives it; <why>` — the row read as the
-  header may be a data row or a preamble line: the file's own layout puts the header
-  elsewhere, or header names are values. Open the file's first lines and rule. A wrong
-  anchor is fixed in `header_row` (or dropped, so the script detects it) and the script
-  re-run. An anchor that is right is noted, and the note quotes the header line and the
-  line its run starts on. A `HEADER:` line you cannot rule on is a blocker.
+`uv run --project ${CLAUDE_PLUGIN_ROOT} python3 workpapers/extract-<check>.py`, then
+`cache.py <run_dir> --show`. A `stated` total the rows do not agree to, or a row count or
+control total that disagrees with the profile's citation of the same table, is a
+blocker until you explain it — correct the script and re-run, or rule on why the
+difference is right and record the ruling. A table you could not parse is a blocker
+naming its id; never drop an entry to make the step pass.
 
-- `TRAILING: <id> — lines N..M below the block` — records the script did not read. A
-  second table the plan anchored is its own entry, with `header_row` and `rows`, added
-  to `params.files` and the script re-run; a total row or a footer the profile names as
-  such is noted in the record. Lines the profile does not account for are a blocker
-  naming the id and the line range.
-- `SUSPECT: <id> row N (line L) — <reason>` — a row inside the block that may not be
-  data: a repeated header, a total or subtotal row, text in an amount column. Rule on
-  each against the profile: a row that is not data is cut with `rows` as ranges
-  (`"6:40,42:1204"`) and the script re-run; a row that is data is noted with why. A
-  suspect you cannot rule on is a blocker.
-- `AGREES:` / `DISAGREES: <id> — <cache total> vs <the plan's citation> <its total>` —
-  the block's control column summed against the planner's own whole-block read of the
-  file. A disagreement exits 1 and is a blocker until the block is corrected (a wrong
-  header row, a total row inside it, a block cut short) or the profile citation is
-  shown wrong, which you record and the plan owns.
-- `OVERRIDDEN: <id> — {...}` — the entry was read with `cache/overrides.json` applied
-  over the definition's spec (`mode: fix` below).
+## 4. Files
 
-## 3. Files
-
-- `checks/<check>.md` — one table, one row per file in `params.files`: id, file (the
-  manifest's `file`), rows, control column and total, header row, `landed` or the
-  `FAILED` line. Then the notes of § 2. No figures ledger, no evidence ledger: the
-  manifest is the record every consumer cites from
-  (`${CLAUDE_PLUGIN_ROOT}/reference/EVIDENCE.md` § 1).
-
-A file that failed is a blocker naming its id and the reason, and the step ends
-`outcome: blocked` when any file failed — the steps that read that id fall back to the
-source file (`agents/worker.md` § Your procedure). Never drop a file from `params.files`
-to make the step pass.
+`checks/<check>.md` — one table, one row per id: file, rows, row count, control total,
+stated agreement. Then the manifest's `not_extracted` notes, then your rulings. No
+figures or evidence ledger: the manifest is what consumers cite
+(`${CLAUDE_PLUGIN_ROOT}/reference/EVIDENCE.md` § 1).
 
 ## `mode: fix`
 
-`fix_input` carries the `cache_defects` a reading step recorded (`RUN_CONTRACT.md` § The
-step record): per id, what was wrong and the spec keys that correct it. Apply each as
-an override and re-run:
-
-```
-uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/extract.py <run_dir> --step <check> --override '{"<id>": {"rows": "6:40,42:1204"}}'
-```
-
-The override lands in `cache/overrides.json` and applies on every later run; the
-definition is not edited. Read § 2 again on what the re-run prints. Rewrite only
-`checks/<check>.md`, adding a row per override: id, the defect, the keys applied, and
-the control total before and after. Record under `fix` per defect what moved.
+`fix_input` carries the `cache_defects` reading steps recorded: `{id, what, fix}`, `fix`
+in words. Edit the script to do what each `fix` says, re-run it, and § 3 again. Add a
+row per id to `checks/<check>.md`: the defect, what the script now does, the control
+total before and after. Record under `fix` per defect what moved.
 
 ## Record
 
 Write `steps/<NNNN>-extract.json` per `RUN_CONTRACT.md`: `check_id` set, `produced`
-naming `cache/manifest.json`, every `cache/<id>.parquet` and `checks/<check>.md`,
-`consumed` every file the manifest names with its mtime, `blockers` one per failed file.
-`conclusion` counts the files cached and names each that failed, in two sentences.
-Return at most ten lines.
+naming `cache/manifest.json`, every `cache/<id>.parquet`, `workpapers/extract-<check>.py`
+and `checks/<check>.md`; `consumed` every file the manifest names with its mtime;
+`blockers` one per unparsed table or unexplained disagreement. `conclusion` counts the
+tables cached and names each that did not land, in two sentences. Return at most ten
+lines.

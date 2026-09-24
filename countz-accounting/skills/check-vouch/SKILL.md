@@ -34,6 +34,10 @@ consume the whole list — every item on it ends with a classification, none dro
 
 ## 2. Trace each item
 
+Trace with polars joins, one per pass; check the assignment with
+`${CLAUDE_PLUGIN_ROOT}/scripts/matching.py`'s `check_assignment()`, and classify what no
+pass clears per § 3.
+
 Into the target source at item grain: the clearing or supporting line's citation, its
 date and amount. One-to-many is allowed and recorded (a deposit clearing as two credits).
 Write `checks/<check>-items.csv` — item, origin reference, amount, target citation,

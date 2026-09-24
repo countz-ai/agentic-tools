@@ -21,15 +21,18 @@ the deck is tested over a workbook the plugin itself would seal. Then:
      stop — is refused by the builder, named;
   6. a fragment where a sentence belongs — a text block with no full stop — is refused
      by the builder, named;
-  7. a cover title carrying the company or the period is refused by the builder, named,
-     and refused again by the gate on a deck built before the rule;
+  7. a cover title carrying the period is refused by the builder, named, and refused
+     again by the gate on a deck built before the rule; a subtitle repeating the title is
+     refused; a title naming the company builds — that judgment is the critic's
+     (skills/check-review), a name in any language being no pattern for code;
   8. a zero in a sentence reads `$0` — the en dash is the table's zero, and a sentence
      that trails off in one states nothing;
   9. a schedule condensed past its own arithmetic — a derived line shown over rows that
      do not make it — is refused by the builder, naming the rows it drops;
  10. the deck's own number conventions (REPORT.md § 4): a dollar figure in a sentence or
-     a stat tile is scaled and rounded, a schedule declared `scale: thousands` is headed
-     and divided, and the gate still finds the workbook cell behind each;
+     a stat tile is scaled and rounded (`$8.4M`), a schedule declared `scale: thousands`
+     is titled `(… $ in thousands)` and divided, and the gate still finds the workbook cell
+     behind each;
  11. a schedule declared `dense: true` is set at the dense size, and `where:` with
      `through:` keeps a walk's mechanics and its ruled rows and ends it at the closing
      line — the information line under it is not on the deck;
@@ -39,8 +42,13 @@ the deck is tested over a workbook the plugin itself would seal. Then:
  12. the recipe's schedule (RECIPE_FORMAT.md § Report) is held by the gate: a deck whose
      walk is trimmed to `max_rows`, or carries no table from the walk's tab, is refused
      naming the schedule and the rows it lacks.
+ 14. money is the book's currency (scripts/style.py): a EUR book reads `€8.4M` and
+     `(€ in thousands)` and passes; a typed `€1,234,567` is refused, not skipped;
+ 16. on a run that declares its periods (a September year end), a schedule's period
+     columns are the plan's and a missing one is named.
 
-Run by check-plugin.py (8q) as `uv run --project <plugin> python3 scripts/report-selftest.py`.
+Run by check-plugin.py (8q) as `uv run --project <plugin> python3 tests/countz-accounting/report-selftest.py`
+from the repository root; it lives outside the plugin so it never ships.
 Exit 0 when every case holds, 1 otherwise, naming the case.
 """
 from __future__ import annotations
@@ -58,10 +66,11 @@ import zipfile
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 
-HERE = pathlib.Path(__file__).resolve().parent
+# The plugin under test: <repo>/countz-accounting/scripts, from <repo>/tests/countz-accounting.
+SCRIPTS = pathlib.Path(__file__).resolve().parents[2] / "countz-accounting" / "scripts"
 
 # --- the kit: scripts/wbkit.py (WORKBOOK_STYLE.md § 9 + WORKBOOK.md § 7) ------------
-sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(SCRIPTS))
 from wbkit import (ACCENT, BAND, FMT_AMOUNT, FMT_TEXT, MIST, S, SLATE, TINT,  # noqa: E402,F401
                    WIDTH, amount, band, finish, fit_rows, grid, header, ident, section,
                    status, text)
@@ -85,16 +94,21 @@ POSITION = ("Diligence-adjusted EBITDA is 8,404,000 for LTM Jul 2025, 1,246,000 
             "management's adjusted figure.")
 
 
-def make_run(rd: pathlib.Path) -> None:
+def make_run(rd: pathlib.Path, cur: str = "USD", q6_params: dict | None = None) -> None:
+    """The fixture run. `cur` is the reporting currency its basis line states (the deck's
+    money symbol and scale headers follow it); `q6_params` extends the bridge check's
+    params — `columns` and `fiscal_year_end` declare the plan's periods."""
+    basis = "USD whole dollars" if cur == "USD" else f"{cur} whole units"
+    sub = SUB.replace("USD whole dollars", basis)
     figures: dict[str, tuple] = {}
     wb = Workbook()
     wb.remove(wb.active)
 
     ws = wb.create_sheet("Exec Summary")
-    band(ws, "Exec Summary · quality of earnings", "Acme Corp · FY2023–LTM Jul 2025 · accrual · USD whole dollars",
+    band(ws, "Exec Summary · quality of earnings", f"Acme Corp · FY2023–LTM Jul 2025 · accrual · {basis}",
          summary=POSITION)
     ws.freeze_panes = "B4"
-    text(ws.cell(row=4, column=2), "EBITDA bridge — copied from the q6 EBITDA bridge tab", "Section")
+    text(ws.cell(row=4, column=2), "EBITDA bridge · from: q6 EBITDA bridge", "Section")
     header(ws, 5, ["line"] + PERIODS, ["description", "period", "period", "period"], primary=False)
     r = 5
     for label, vals, st in BRIDGE:
@@ -108,7 +122,7 @@ def make_run(rd: pathlib.Path) -> None:
     ws.sheet_properties.tabColor = ACCENT
 
     ws = wb.create_sheet("q6 EBITDA bridge")
-    band(ws, "q6 · EBIT walks to diligence adjusted EBITDA", SUB,
+    band(ws, "q6 · EBIT walks to diligence adjusted EBITDA", sub,
          summary="Diligence adjusted EBITDA is 8,404,000 LTM Jul 2025; management's figure is 1,246,000 higher.")
     header(ws, 4, ["id", "line", *PERIODS, "verdict", "note"],
            ["id", "description", "period", "period", "period", "status", "note"])
@@ -148,7 +162,7 @@ def make_run(rd: pathlib.Path) -> None:
     finish(ws, last)
 
     ws = wb.create_sheet("Basis of Preparation")
-    band(ws, "Basis of Preparation", "Acme Corp · FY2023–LTM Jul 2025 · accrual · USD whole dollars")
+    band(ws, "Basis of Preparation", f"Acme Corp · FY2023–LTM Jul 2025 · accrual · {basis}")
     header(ws, 4, ["source", "what it is", "class", "periods"], ["description", "description", "status", "description"])
     for i, row in enumerate([("gl", "General ledger export, gl.csv", "system-of-record", "Jan 2023 – Jul 2025"),
                              ("pl", "Income statements as presented, pl.xlsx", "management-prepared", "FY2023, FY2024, monthly")], 5):
@@ -165,7 +179,7 @@ def make_run(rd: pathlib.Path) -> None:
     finish(ws, 6)
 
     ws = wb.create_sheet("q1 FY2023 statements")
-    band(ws, "q1 · The FY2023 income statement agrees with the trial balance", SUB,
+    band(ws, "q1 · The FY2023 income statement agrees with the trial balance", sub,
          summary="Net income and EBIT tie to the TB within tolerance; no exceptions.")
     header(ws, 4, ["id", "what is agreed", "side A", "source A", "amount A", "side B", "source B", "amount B", "difference", "status"],
            ["id", "description", "description", "description", "amount", "description", "description", "amount", "amount", "status"])
@@ -236,7 +250,7 @@ def make_run(rd: pathlib.Path) -> None:
         ident(ws.cell(row=r, column=2), fid)
         text(ws.cell(row=r, column=3), label)
         amount(ws.cell(row=r, column=4), value)
-        text(ws.cell(row=r, column=5), "USD")
+        text(ws.cell(row=r, column=5), cur)
         text(ws.cell(row=r, column=6), "measured")
         text(ws.cell(row=r, column=7), f"as read ({label})")
         ident(ws.cell(row=r, column=8), "E.q1.pl")
@@ -268,21 +282,21 @@ def make_run(rd: pathlib.Path) -> None:
     by_check: dict[str, list[str]] = {}
     for fid, (label, value, check) in figures.items():
         by_check.setdefault(check, []).append(
-            f"- id: {fid}\n  label: {label}\n  value: {value}\n  unit: USD\n  expression: as read\n"
+            f"- id: {fid}\n  label: {label}\n  value: {value}\n  unit: {cur.lower()}\n  expression: as read\n"
             f"  inputs:\n    - {{role: pl, source_type: room_file, citation_id: E.q1.pl}}\n")
     for check, lines in by_check.items():
-        (rd / "workpapers" / f"figures-{check}.yaml").write_text("".join(lines))
+        (rd / "workpapers" / f"figures-{check}.yaml").write_text("".join(lines), encoding="utf-8")
     (rd / "workpapers" / "evidence-plan.yaml").write_text(
-        "- id: E.q1.pl\n  kind: range\n  file: \"statements/pl.xlsx\"\n  control_total: 41250000\n  row_count: 36\n")
+        "- id: E.q1.pl\n  kind: range\n  file: \"statements/pl.xlsx\"\n  control_total: 41250000\n  row_count: 36\n", encoding="utf-8")
     recipe = rd / "QOE.md"
-    recipe.write_text(RECIPE)
+    recipe.write_text(RECIPE, encoding="utf-8")
     (rd / "run.json").write_text(json.dumps({
         "schema": "countz-accounting/run@1", "run_id": "qoe-acme-corp.20250903-101500",
         "goal": "quality-of-earnings", "degraded": False,
         "inputs": {"run_dir": str(rd), "skill": "qoe", "company": "Acme Corp", "params": {}},
         "checks": [{"id": "q1_fy2023", "kind": "tieout", "params": {"family": "q1"}},
-                   {"id": "q6_bridge", "kind": "analysis", "params": {"family": "q6"}}],
-        "plan": {"recipe": str(recipe)}}))
+                   {"id": "q6_bridge", "kind": "analysis", "params": {"family": "q6", **(q6_params or {})}}],
+        "plan": {"recipe": str(recipe)}}), encoding="utf-8")
 
 
 # The recipe the fixture run pins: its `## Report` declares the walk the deck must carry
@@ -359,7 +373,7 @@ SENTENCE_TITLE = ("Reported EBITDA walks to diligence adjusted EBITDA through su
 
 def stored_slides(deck: pathlib.Path) -> list[str]:
     """The slide XML parts of a deck, in presentation order (the gate's own reading)."""
-    sys.path.insert(0, str(HERE))
+    sys.path.insert(0, str(SCRIPTS))
     from check_report import slide_parts  # noqa: E402
     with zipfile.ZipFile(deck) as z:
         return [z.read(p).decode("utf-8", "replace") for p in slide_parts(z)]
@@ -400,6 +414,17 @@ def structure(deck: pathlib.Path) -> list[str]:
     return out
 
 
+def first_rows(slide_xml: str) -> list[str]:
+    """The header cells of every table on a slide, as text."""
+    out = []
+    for gf in re.findall(r"<p:graphicFrame\b.*?</p:graphicFrame>", slide_xml, re.S):
+        tr = re.search(r"<a:tr\b.*?</a:tr>", gf, re.S)
+        if tr:
+            out += [html.unescape("".join(re.findall(r"<a:t>(.*?)</a:t>", tc, re.S)))
+                    for tc in re.findall(r"<a:tc\b.*?</a:tc>", tr.group(0), re.S)]
+    return out
+
+
 def run(cmd: list[str]) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, capture_output=True, text=True)
 
@@ -411,20 +436,20 @@ def main() -> int:
         make_run(rd)
         py = sys.executable
         wb = rd / "out" / ".staging" / "workbook.xlsx"
-        r = run([py, str(HERE / "link_workbook.py"), str(wb)])
+        r = run([py, str(SCRIPTS / "link_workbook.py"), str(wb)])
         if r.returncode != 0:
             fails.append(f"fixture: link_workbook exited {r.returncode}: {(r.stdout + r.stderr)[-200:]}")
-        r = run([py, str(HERE / "check_workbook.py"), str(wb), "--run-dir", str(rd)])
+        r = run([py, str(SCRIPTS / "check_workbook.py"), str(wb), "--run-dir", str(rd)])
         if r.returncode != 0:
             fails.append(f"fixture: the workbook must pass check_workbook.py (exit {r.returncode}): "
                          f"{(r.stdout + r.stderr).strip()[-400:]}")
         spec = rd / "out" / ".staging" / "report.yaml"
         deck = rd / "out" / ".staging" / "report.pptx"
-        build = [py, str(HERE / "build_report.py"), str(rd)]
-        gate = [py, str(HERE / "check_report.py"), str(deck), "--run-dir", str(rd)]
+        build = [py, str(SCRIPTS / "build_report.py"), str(rd)]
+        gate = [py, str(SCRIPTS / "check_report.py"), str(deck), "--run-dir", str(rd)]
 
         # 1. good spec: builds and passes
-        spec.write_text(GOOD_SPEC)
+        spec.write_text(GOOD_SPEC, encoding="utf-8")
         r = run(build)
         if r.returncode != 0 or not deck.is_file():
             fails.append(f"1: a good spec must build (exit {r.returncode}): {(r.stdout + r.stderr).strip()[-400:]}")
@@ -449,7 +474,7 @@ def main() -> int:
                         if edited != data:
                             data, hits = edited, hits + 1
                     zout.writestr(item, data)
-            g = run([py, str(HERE / "check_report.py"), str(tampered), "--workbook", str(wb), "--run-dir", str(rd)])
+            g = run([py, str(SCRIPTS / "check_report.py"), str(tampered), "--workbook", str(wb), "--run-dir", str(rd)])
             if not hits or g.returncode != 1 or "8,404,100" not in g.stdout:
                 fails.append(f"4: an edited figure must be refused, named (exit {g.returncode}, edited {hits}): "
                              f"{(g.stdout + g.stderr).strip()[:300]}")
@@ -474,7 +499,7 @@ def main() -> int:
                         if edited != data:
                             data, hits = edited, hits + 1
                     zout.writestr(item, data)
-            g = run([py, str(HERE / "check_report.py"), str(drawn), "--workbook", str(wb), "--run-dir", str(rd)])
+            g = run([py, str(SCRIPTS / "check_report.py"), str(drawn), "--workbook", str(wb), "--run-dir", str(rd)])
             if not hits:
                 fails.append("4a: no chartval shape on the deck — a drawn chart carries its values "
                              "on its shape names, and the gate audits them from there")
@@ -485,7 +510,7 @@ def main() -> int:
         # 2. a typed figure in a sentence: builds, gate refuses it by token
         spec.write_text(GOOD_SPEC.replace(
             '"The FY2023 income statement ties to the trial balance with no exception (q1)."',
-            '"The FY2023 income statement ties to the trial balance within $1,234,567 (q1)."'))
+            '"The FY2023 income statement ties to the trial balance within $1,234,567 (q1)."'), encoding="utf-8")
         r = run(build)
         g = run(gate)
         if r.returncode != 0 or g.returncode != 1 or "$1,234,567" not in g.stdout:
@@ -493,46 +518,47 @@ def main() -> int:
                          f"gate {g.returncode}): {(g.stdout + g.stderr).strip()[:300]}")
 
         # 3. a reference nothing resolves
-        spec.write_text(GOOD_SPEC.replace("{q6 | = Reported EBITDA | LTM Jul 2025 | $}", "{q6 | = Reported EBITDA | LTM Aug 2025}", 1))
+        spec.write_text(GOOD_SPEC.replace("{q6 | = Reported EBITDA | LTM Jul 2025 | $}", "{q6 | = Reported EBITDA | LTM Aug 2025}", 1), encoding="utf-8")
         r = run(build)
         if r.returncode != 1 or "LTM Aug 2025" not in r.stdout:
             fails.append(f"3: an unresolved reference must be refused, named (exit {r.returncode}): "
                          f"{(r.stdout + r.stderr).strip()[:300]}")
 
         # 5. a sentence where a headline belongs: over the cap, and ending in a full stop
-        spec.write_text(GOOD_SPEC.replace("title: Adjusted EBITDA", f'title: "{SENTENCE_TITLE}"'))
+        spec.write_text(GOOD_SPEC.replace("title: Adjusted EBITDA", f'title: "{SENTENCE_TITLE}"'), encoding="utf-8")
         r = run(build)
         if r.returncode != 1 or "pages[1].title" not in r.stdout or "headline" not in r.stdout:
             fails.append(f"5a: a sentence title must be refused as not a headline, named (exit {r.returncode}): "
                          f"{(r.stdout + r.stderr).strip()[:300]}")
-        spec.write_text(GOOD_SPEC.replace("title: Adjusted EBITDA", "title: The bridge foots."))
+        spec.write_text(GOOD_SPEC.replace("title: Adjusted EBITDA", "title: The bridge foots."), encoding="utf-8")
         r = run(build)
         if r.returncode != 1 or "pages[1].title" not in r.stdout or "full stop" not in r.stdout:
             fails.append(f"5b: a title ending in a full stop must be refused, named (exit {r.returncode}): "
                          f"{(r.stdout + r.stderr).strip()[:300]}")
 
-        # 7. the cover: the title names the work, not the client and not the period
+        # 7. the cover: the title names the work, not the period (whether it names the
+        #    company is the critic's judgment, skills/check-review — no pattern here)
         spec.write_text(GOOD_SPEC.replace("title: Quality of earnings review",
-                                          "title: Quality of earnings review, Acme Corp FY2023"))
+                                          "title: Quality of earnings review, Acme Corp"), encoding="utf-8")
         r = run(build)
-        if r.returncode != 1 or "title:" not in r.stdout or "company" not in r.stdout:
-            fails.append(f"7a: a cover title naming the company must be refused, named (exit {r.returncode}): "
-                         f"{(r.stdout + r.stderr).strip()[:300]}")
+        if r.returncode != 0:
+            fails.append(f"7a: a cover title naming the company is the critic's call, not the builder's "
+                         f"(exit {r.returncode}): {(r.stdout + r.stderr).strip()[:300]}")
         spec.write_text(GOOD_SPEC.replace("title: Quality of earnings review",
-                                          "title: Quality of earnings review for FY2023"))
+                                          "title: Quality of earnings review for FY2023"), encoding="utf-8")
         r = run(build)
         if r.returncode != 1 or "period" not in r.stdout:
             fails.append(f"7b: a cover title carrying the period must be refused, named (exit {r.returncode}): "
                          f"{(r.stdout + r.stderr).strip()[:300]}")
         spec.write_text(GOOD_SPEC.replace(
             "title: Quality of earnings review",
-            "title: Quality of earnings review\nsubtitle: Acme Corp · FY2023, as of 31 July 2025"))
+            "title: Quality of earnings review\nsubtitle: Quality of earnings review · FY2023"), encoding="utf-8")
         r = run(build)
-        if r.returncode != 1 or "subtitle:" not in r.stdout:
-            fails.append(f"7c: a cover subtitle repeating the company must be refused, named "
+        if r.returncode != 1 or "subtitle:" not in r.stdout or "repeats the title" not in r.stdout:
+            fails.append(f"7c: a cover subtitle repeating the title must be refused, named "
                          f"(exit {r.returncode}): {(r.stdout + r.stderr).strip()[:300]}")
         # the gate refuses it on a deck the builder never saw: the cover title, edited after the build
-        spec.write_text(GOOD_SPEC)
+        spec.write_text(GOOD_SPEC, encoding="utf-8")
         r = run(build)
         edited = deck.with_name("cover.pptx")
         hits = 0
@@ -541,17 +567,17 @@ def main() -> int:
                 data = zin.read(item.filename)
                 if item.filename.startswith("ppt/slides/slide") and b'name="cover-title"' in data and not hits:
                     e = data.replace(b"<a:t>Quality of earnings review</a:t>",
-                                     b"<a:t>Quality of earnings review, Acme Corp FY2023</a:t>", 1)
+                                     b"<a:t>Quality of earnings review FY2023</a:t>", 1)
                     if e != data:
                         data, hits = e, hits + 1
                 zout.writestr(item, data)
-        g = run([py, str(HERE / "check_report.py"), str(edited), "--workbook", str(wb), "--run-dir", str(rd)])
+        g = run([py, str(SCRIPTS / "check_report.py"), str(edited), "--workbook", str(wb), "--run-dir", str(rd)])
         if not hits or g.returncode != 1 or "cover title" not in g.stdout:
-            fails.append(f"7d: the gate must refuse a cover title naming the company or the period "
+            fails.append(f"7d: the gate must refuse a cover title carrying the period "
                          f"(exit {g.returncode}, edited {hits}): {(g.stdout + g.stderr).strip()[:300]}")
 
         # 8. a zero in a sentence, and 9. a schedule condensed past its own arithmetic
-        spec.write_text(GOOD_SPEC)
+        spec.write_text(GOOD_SPEC, encoding="utf-8")
         r = run(build)
         if r.returncode == 0 and deck.is_file():
             text_ = "\n".join(stored_slides(deck))
@@ -559,7 +585,7 @@ def main() -> int:
                 fails.append("8: a zero in a sentence must read `$0` — the en dash is the table's zero")
         spec.write_text(GOOD_SPEC.replace(
             'rows: ["= Reported EBITDA", "= Diligence adjusted EBITDA"], columns: [line, FY2023, FY2024, LTM Jul 2025]',
-            'rows: ["EBIT", "= Diligence adjusted EBITDA"], columns: [line, FY2023, FY2024, LTM Jul 2025]'))
+            'rows: ["EBIT", "= Diligence adjusted EBITDA"], columns: [line, FY2023, FY2024, LTM Jul 2025]'), encoding="utf-8")
         r = run(build)
         if r.returncode != 1 or "do not foot" not in r.stdout or "Non-recurring" not in r.stdout:
             fails.append(f"9: a schedule condensed past its own arithmetic must be refused, the dropped "
@@ -568,23 +594,31 @@ def main() -> int:
         # 10. the deck's number conventions
         spec.write_text(GOOD_SPEC.replace(
             "columns: [line, FY2023, FY2024, LTM Jul 2025], title:",
-            "columns: [line, FY2023, FY2024, LTM Jul 2025], scale: thousands, title:"))
+            "columns: [line, FY2023, FY2024, LTM Jul 2025], scale: thousands, title:"), encoding="utf-8")
         r = run(build)
         if r.returncode != 0 or not deck.is_file():
             fails.append(f"10: a scaled schedule must build (exit {r.returncode}): "
                          f"{(r.stdout + r.stderr).strip()[-300:]}")
         else:
             body = html.unescape("\n".join(stored_slides(deck))).replace("</a:t><a:t>", "")
-            for want in ("$8.4m", "($'000)", "8,404"):
-                if want not in body:
+            for want in ("$8.4M", "($ in thousands)", "8,404"):
+                if want.lower() not in body.lower():   # a table title is set in capitals
                     fails.append(f"10: the deck must carry `{want}` — REPORT.md § 4")
+            # the scale is stated once, in the table's title — never in a column header,
+            # where `LTM JUL 2025 ($ IN THOUSANDS)` wraps a narrow column
+            heads = [h for x in stored_slides(deck) for h in first_rows(x)]
+            if not any("in thousands" in t.lower() for x in stored_slides(deck)
+                       for t in re.findall(r'name="table-title".*?</p:sp>', x, re.S)):
+                fails.append("10: a scaled table's title must state `($ in thousands)`")
+            if any("thousands" in h.lower() for h in heads):
+                fails.append(f"10: no column header states the scale: {[h for h in heads if 'thousands' in h.lower()]}")
             g = run(gate)
             if g.returncode != 0:
                 fails.append(f"10: a scaled deck must pass the gate (exit {g.returncode}): "
                              f"{(g.stdout + g.stderr).strip()[-300:]}")
 
         # 11. a dense schedule, filtered and ended
-        spec.write_text(GOOD_SPEC)
+        spec.write_text(GOOD_SPEC, encoding="utf-8")
         r = run(build)
         if r.returncode != 0 or not deck.is_file():
             fails.append(f"11: the good spec must build (exit {r.returncode})")
@@ -602,7 +636,7 @@ def main() -> int:
         # 12. the recipe's schedule is held by the gate
         spec.write_text(GOOD_SPEC.replace(
             'where: {verdict: supported}, through: "= Diligence adjusted EBITDA", columns: [line, FY2023, FY2024, LTM Jul 2025, verdict], dense: true',
-            'max_rows: 3, columns: [line, FY2023, FY2024, LTM Jul 2025, verdict]'))
+            'max_rows: 3, columns: [line, FY2023, FY2024, LTM Jul 2025, verdict]'), encoding="utf-8")
         r = run(build)
         if r.returncode != 0:
             fails.append(f"12: a trimmed walk must build (exit {r.returncode}): {(r.stdout + r.stderr).strip()[-300:]}")
@@ -615,7 +649,7 @@ def main() -> int:
                         .replace("          - table: {from: q6, max_rows: 5}\n", "")
                         .replace("          - table: {from: q6, block: Exceptions}\n", "          - text: \"No exception stands.\"\n")
                         .replace("          - table: {from: q6, rows: [\"= Reported EBITDA\", \"= Diligence adjusted EBITDA\"], "
-                                 "columns: [line, FY2023, FY2024, LTM Jul 2025], title: \"EBITDA bridge, USD\"}\n", ""))
+                                 "columns: [line, FY2023, FY2024, LTM Jul 2025], title: \"EBITDA bridge, USD\"}\n", ""), encoding="utf-8")
         r = run(build)
         if r.returncode != 0:
             fails.append(f"12: a deck without the walk must build (exit {r.returncode}): {(r.stdout + r.stderr).strip()[-300:]}")
@@ -646,7 +680,7 @@ def main() -> int:
         }
         for case, (text_, want) in opening.items():
             assert text_ != GOOD_SPEC, f"13{case}: the case did not change the spec"
-            spec.write_text(text_)
+            spec.write_text(text_, encoding="utf-8")
             r = run(build)
             if r.returncode != 0:
                 fails.append(f"13{case}: the spec must build (exit {r.returncode}): {(r.stdout + r.stderr).strip()[-300:]}")
@@ -656,10 +690,70 @@ def main() -> int:
                 fails.append(f"13{case}: the gate must refuse the opening naming `{want}` (exit {g.returncode}): "
                              f"{(g.stdout + g.stderr).strip()[:400]}")
 
+        # 14. money is the book's currency, written and read back by scripts/style.py: a
+        #     EUR book states `€8.4M` in a tile and `(€ in thousands)` over a scaled
+        #     schedule, and passes; a typed `€1,234,567` is refused, not skipped.
+        rd_eur = pathlib.Path(td) / "run_eur"
+        make_run(rd_eur, cur="EUR")
+        wb_eur = rd_eur / "out" / ".staging" / "workbook.xlsx"
+        run([py, str(SCRIPTS / "link_workbook.py"), str(wb_eur)])
+        spec_eur = rd_eur / "out" / ".staging" / "report.yaml"
+        deck_eur = rd_eur / "out" / ".staging" / "report.pptx"
+        build_eur = [py, str(SCRIPTS / "build_report.py"), str(rd_eur)]
+        gate_eur = [py, str(SCRIPTS / "check_report.py"), str(deck_eur), "--run-dir", str(rd_eur)]
+        spec_eur.write_text(GOOD_SPEC.replace(
+            "columns: [line, FY2023, FY2024, LTM Jul 2025], title:",
+            "columns: [line, FY2023, FY2024, LTM Jul 2025], scale: thousands, title:"), encoding="utf-8")
+        r = run(build_eur)
+        if r.returncode != 0 or not deck_eur.is_file():
+            fails.append(f"14: a EUR book must build (exit {r.returncode}): {(r.stdout + r.stderr).strip()[-300:]}")
+        else:
+            body = html.unescape("\n".join(stored_slides(deck_eur))).replace("</a:t><a:t>", "")
+            for want in ("€8.4M", "(€ in thousands)"):
+                if want.lower() not in body.lower():
+                    fails.append(f"14: a EUR deck must carry `{want}`")
+            if "$8.4M" in body:
+                fails.append("14: a EUR deck must not state a figure in dollars")
+            g = run(gate_eur)
+            if g.returncode != 0:
+                fails.append(f"14: a EUR deck must pass the gate (exit {g.returncode}): {(g.stdout + g.stderr).strip()[-300:]}")
+        spec_eur.write_text(GOOD_SPEC.replace("with no exception (q1)", "within €1,234,567 (q1)"),
+                            encoding="utf-8")
+        r = run(build_eur)
+        g = run(gate_eur)
+        if r.returncode != 0 or g.returncode != 1 or "€1,234,567" not in g.stdout:
+            fails.append(f"14: `€1,234,567` typed into a EUR deck must be refused, named (build {r.returncode}, "
+                         f"gate {g.returncode}): {(g.stdout + g.stderr).strip()[:300]}")
+
+        # 16. the plan's periods, on a September year end: the schedule's period columns
+        #     are the plan's (`periods: all` wants FY2023, FY2024 and LTM Jul 2025 by the
+        #     plan, not a header regex).
+        rd_p = pathlib.Path(td) / "run_periods"
+        make_run(rd_p, q6_params={"columns": ["fy2023", "fy2024", "ltm_2025-07"],
+                                  "fiscal_year_end": "09-30"})
+        run([py, str(SCRIPTS / "link_workbook.py"), str(rd_p / "out" / ".staging" / "workbook.xlsx")])
+        spec_p = rd_p / "out" / ".staging" / "report.yaml"
+        build_p = [py, str(SCRIPTS / "build_report.py"), str(rd_p)]
+        gate_p = [py, str(SCRIPTS / "check_report.py"), str(rd_p / "out" / ".staging" / "report.pptx"),
+                  "--run-dir", str(rd_p)]
+        spec_p.write_text(GOOD_SPEC, encoding="utf-8")
+        r, g = run(build_p), run(gate_p)
+        if r.returncode != 0 or g.returncode != 0:
+            fails.append(f"16: the good spec on a run declaring its periods must build and pass (build "
+                         f"{r.returncode}, gate {g.returncode}): {(r.stdout + g.stdout).strip()[-300:]}")
+        spec_p.write_text(GOOD_SPEC.replace(
+            "through: \"= Diligence adjusted EBITDA\", columns: [line, FY2023, FY2024, LTM Jul 2025, verdict]",
+            "through: \"= Diligence adjusted EBITDA\", columns: [line, FY2023, LTM Jul 2025, verdict]")
+            .replace("{from: q6, max_rows: 5}", "{from: q6, max_rows: 5, columns: [line, FY2023, LTM Jul 2025, verdict]}"),
+            encoding="utf-8")
+        r, g = run(build_p), run(gate_p)
+        if r.returncode != 0 or g.returncode != 1 or "`FY2024`" not in g.stdout:
+            fails.append(f"16: a walk without the plan's FY2024 column must be refused, named (build "
+                         f"{r.returncode}, gate {g.returncode}): {(g.stdout + g.stderr).strip()[:300]}")
         # 6. a fragment where a sentence belongs: a text block with no full stop
         spec.write_text(GOOD_SPEC.replace(
             '- text: "Every rostered check is listed with what it examined and what it did not."',
-            '- text: "Every rostered check, what it examined and what it did not"'))
+            '- text: "Every rostered check, what it examined and what it did not"'), encoding="utf-8")
         r = run(build)
         if r.returncode != 1 or "blocks[0]" not in r.stdout or "full stop" not in r.stdout:
             fails.append(f"6: a fragment text block must be refused, named (exit {r.returncode}): "
@@ -673,9 +767,11 @@ def main() -> int:
     print("report-selftest: ok — a spec-conformant workbook builds a deck that passes, headlines and "
           "messages as separate shapes and tables first-column-left, rest-right; a typed figure, an "
           "unresolved reference, an edited figure, a sentence title, a fragment, a cover title "
-          "carrying the company or the period and a schedule condensed past its own arithmetic "
-          "are refused; a zero in a sentence reads $0, a dollar figure reads $8.4m and a "
-          "declared schedule reads in thousands; a dense, filtered walk builds, and the recipe's "
+          "carrying the period and a schedule condensed past its own arithmetic are refused; a "
+          "zero in a sentence reads $0, a money figure reads $8.4M (€8.4M in a EUR book) and a "
+          "declared schedule reads ($ in thousands); a typed non-dollar figure is refused; "
+          "periods are the plan's; a dense, "
+          "filtered walk builds, and the recipe's "
           "schedule trimmed or absent is refused; the opening — the executive summary with its message "
           "and a figure block, the key-metrics page headed as the recipe declares, the first schedule "
           "at most one page after it — is held.")

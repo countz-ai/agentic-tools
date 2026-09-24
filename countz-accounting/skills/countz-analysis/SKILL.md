@@ -3,7 +3,7 @@ name: countz-analysis
 description: >-
   Run an accounting analysis you describe in your own words backed by the Countz Accounting platform.
   You confirm the plan before anything runs. Invoke when the user says "use
-  countz to do analysis: ..." followed by what they want analysed, or asks for an
+  countz to do analysis: ..." followed by what they want analyzed, or asks for an
   analysis no named skill covers.
 context: inline
 ---
@@ -38,21 +38,38 @@ which for this skill runs as:
    continue as a named shim does: write `recipe_markdown` to a file and register with
    `--recipe <that file> --recipe-version <recipe_version>`
    (`PLAYBOOK_RECIPES.md § Fetch the recipe and register`).
-4. **On a miss**, scrub the ask before anything crosses. Rewrite it so it names the
-   analysis and nothing of the company's — no company name, no file name, no figure, no
-   account number, no person; periods may stay (`FY2025`, `Q3`, `March 2026`). Register
-   the run first (the registration in `PLAYBOOK_RECIPES.md § Fetch the recipe and register`, without `--recipe`), then run the gate:
+4. **On a miss**, scrub the ask before anything crosses, under
+   `${CLAUDE_PLUGIN_ROOT}/reference/SCRUB.md` (read it whole). Register the run first
+   (the registration in `PLAYBOOK_RECIPES.md § Fetch the recipe and register`, without
+   `--recipe`). Then two separate invocations of the `countz-accounting:scrubber` agent
+   (the Agent tool, `subagent_type: countz-accounting:scrubber`, a fresh agent each time,
+   the brief stating the mode) — no script decides what identifies the company:
 
-   ```
-   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/scrub_ask.py <run_dir> --ask "<the scrubbed ask>"
-   ```
+   1. **Scrub.** Dispatch the scrubber with `mode: scrub`, the ask verbatim (from
+      `instructions`), and the registration from `run.json`: `inputs.company`, every
+      source's `name`, and any entity or alias the user named. It returns `SEND:` (the
+      description) and `REMOVED:` (one line per removal, class and replacement).
+   2. **Blind check.** Dispatch the scrubber again, as a new invocation, with
+      `mode: blind` and **only the `SEND` text** — never the ask, the registration or the
+      removal list. It returns `VERDICT: clean` or `VERDICT: flagged` with its flags.
+   3. On `flagged`, repeat 1 passing the flags, then 2 on the new text. After three
+      rounds without `clean`, send nothing: say so in one line and go to `create-recipe`
+      (below) with the full ask, which never leaves the machine.
+   4. Record it — the removal lists, the verdicts and the text sent:
 
-   A `REFUSED:` line names what is still in it; rewrite and run the gate again. The
-   `SEND:` line is the exact text that will cross: put it to the user in one line —
-   *"Nothing in the catalog covers this. I'll send Countz this description and nothing
-   else, so it can serve or plan a recipe for it: `<SEND text>`"* — then call
-   `get_recipe_for_countz_analysis(ask=<SEND text>)`, naming no recipe. The server
-   matches once more against its aliases.
+      ```
+      python3 ${CLAUDE_PLUGIN_ROOT}/scripts/run_state.py record-scrub <run_dir> --json @<run_dir>/scrub-draft.json
+      ```
+
+      where the file (written with the Write tool, so no quoting touches the text) holds `{"send": "<SEND text>", "rounds": [{"removed": [{"category": "...", "replacement": "..."}], "verdict": "clean|flagged", "flags": [{"category": "...", "where": "..."}]}, ...]}`.
+      It refuses unless the last round is `clean`, writes `scrub.json`, deletes the draft,
+      and prints `SEND:` — the exact text.
+
+   **Tell, then send.** Put the `SEND` text to the user in one line — *"Nothing in the
+   catalog covers this. I'm sending Countz this description and nothing else, so it can
+   serve or plan a recipe for it: `<SEND text>`"* — then call
+   `get_recipe_for_countz_analysis(ask=<SEND text>)`, naming no recipe, with the bytes
+   `record-scrub` printed. The server matches once more against its aliases.
    - `match` is `alias`: continue as step 3, with the body it returned.
    - `match` is `not_found`: dispatch `create-recipe` (below). The full ask stays in
      `run.json.inputs.params.instructions`; only the `SEND` text crossed.

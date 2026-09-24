@@ -97,7 +97,7 @@ def _mtime(p: pathlib.Path) -> str:
 
 
 def _append(run_dir: pathlib.Path, line: dict) -> None:
-    with (run_dir / "events.jsonl").open("a") as f:
+    with (run_dir / "events.jsonl").open("a", encoding="utf-8") as f:
         f.write(json.dumps(line) + "\n")
 
 
@@ -113,7 +113,7 @@ def brief(run_dir, seq: int) -> dict:
     path = hits[0]
     step = path.stem.split("-", 1)[1]
     args: dict = {}
-    for k, v in KV.findall(path.read_text()):
+    for k, v in KV.findall(path.read_text(encoding="utf-8")):
         v = v.strip()
         if v == "(none)":
             args[k] = None
@@ -131,7 +131,7 @@ def _started(run_dir: pathlib.Path, seq: int, step: str) -> str | None:
     ev = run_dir / "events.jsonl"
     if not ev.is_file():
         return None
-    for line in ev.read_text().splitlines():
+    for line in ev.read_text(encoding="utf-8").splitlines():
         try:
             e = json.loads(line)
         except ValueError:
@@ -186,7 +186,7 @@ def place_tab(run_dir, seq_or_check) -> pathlib.Path:
 # --- consumed and produced ---------------------------------------------------------------
 def _run_json(run_dir: pathlib.Path) -> dict:
     p = run_dir / "run.json"
-    return json.loads(p.read_text()) if p.is_file() else {}
+    return json.loads(p.read_text(encoding="utf-8")) if p.is_file() else {}
 
 
 def _ledger_entries(path: pathlib.Path) -> list[dict]:
@@ -195,7 +195,7 @@ def _ledger_entries(path: pathlib.Path) -> list[dict]:
     read as text, a wrapped plain or quoted value joined back onto its key."""
     if not path.is_file():
         return []
-    text = path.read_text(errors="replace")
+    text = path.read_text(encoding="utf-8", errors="replace")
     try:
         import yaml
         doc = yaml.load(text, Loader=getattr(yaml, "CSafeLoader", yaml.SafeLoader)) or []
@@ -338,9 +338,10 @@ def finish(run_dir, seq: int, *, conclusion: str, outcome: str = "complete",
     if not isinstance(conclusion, str) or not conclusion.strip():
         raise ValueError("`conclusion`: what the step established, in at most two sentences")
     for x in cache_defects:
-        if not x.get("id") or not x.get("what") or not isinstance(x.get("fix"), dict):
-            raise ValueError(f"cache defect {x}: {{id, what, fix: {{rows|types|header_row|"
-                             f"control}}}}")
+        if not x.get("id") or not x.get("what") or not isinstance(x.get("fix"), str) \
+                or not x["fix"].strip():
+            raise ValueError(f"cache defect {x}: {{id, what, fix}} - `fix` says in words what "
+                             f"the extract step's script must do differently")
     staged = run_dir / "out" / ".staging" / f"{check}.xlsx"
     if check and outcome == "complete" and error is None and staged.exists():
         raise ValueError(f"{staged} is still staged - place_tab() gates it and renames it "
@@ -361,7 +362,7 @@ def finish(run_dir, seq: int, *, conclusion: str, outcome: str = "complete",
     rec["completed_at"] = _iso(end)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(rec, indent=1, ensure_ascii=False))
+    tmp.write_text(json.dumps(rec, indent=1, ensure_ascii=False), encoding="utf-8")
     tmp.replace(path)
     line = {"ts": rec["completed_at"], "event": "step_end", "seq": int(seq), "step": step,
             "outcome": outcome,
@@ -398,7 +399,7 @@ def main(argv: list[str]) -> int:
         elif a.cmd == "place-tab":
             print(place_tab(a.run_dir, a.seq))
         else:
-            fields = json.loads(a.json.read_text())
+            fields = json.loads(a.json.read_text(encoding="utf-8"))
             rec = finish(a.run_dir, a.seq, rewrite=a.rewrite, **fields)
             print(f"steps/{rec['seq']:04d}-{rec['step']}.json: {rec['outcome']}, "
                   f"{len(rec['produced'])} produced, {len(rec['consumed'])} consumed")
@@ -422,20 +423,20 @@ def _selfcheck() -> int:
         for sub in ("dispatch", "steps", "checks", "workpapers", "out/.staging", "plan"):
             (run / sub).mkdir(parents=True)
         room.mkdir()
-        (room / "gl.csv").write_text("a,b\n1,2\n")
-        (run / "plan" / "p.json").write_text("{}")
+        (room / "gl.csv").write_text("a,b\n1,2\n", encoding="utf-8")
+        (run / "plan" / "p.json").write_text("{}", encoding="utf-8")
         (run / "run.json").write_text(json.dumps({
             "sources": [{"id": "gl", "path": str(room)}],
-            "playbook": {"path": "/elsewhere/plan/p.json"}}))
+            "playbook": {"path": "/elsewhere/plan/p.json"}}), encoding="utf-8")
         (run / "dispatch" / "0007-tie.md").write_text(
             "Your arguments:\n\n    run_dir=/x\n    seq=7\n    check=k1\n    sources=gl\n"
-            "    goal=(none)\n    params={\"tolerance\": 1}\n    mode=fresh\n")
+            "    goal=(none)\n    params={\"tolerance\": 1}\n    mode=fresh\n", encoding="utf-8")
         (run / "workpapers" / "evidence-k1.yaml").write_text(
             "- id: E.k1.gl\n  kind: span\n  file: gl.csv\n  source: gl\n"
             "  file_role: system_export\n- id: E.k1.a0\n  kind: span\n"
-            "  file: checks/k0.md\n  source: null\n  file_role: run_artifact\n")
-        (run / "checks" / "k0.md").write_text("k0")
-        (run / "checks" / "k1-old.csv").write_text("x")
+            "  file: checks/k0.md\n  source: null\n  file_role: run_artifact\n", encoding="utf-8")
+        (run / "checks" / "k0.md").write_text("k0", encoding="utf-8")
+        (run / "checks" / "k1-old.csv").write_text("x", encoding="utf-8")
         old = time.time() - 3600
         for f in ("checks/k1-old.csv", "workpapers/evidence-k1.yaml"):
             os.utime(run / f, (old, old))
@@ -450,9 +451,9 @@ def _selfcheck() -> int:
         except ValueError:
             pass
         start(run, 7)
-        (run / "checks" / "k1.md").write_text("record")
-        (run / "checks" / "k1-ties.csv").write_text("t")
-        (run / "out" / ".staging" / "k1.xlsx").write_text("not a workbook")
+        (run / "checks" / "k1.md").write_text("record", encoding="utf-8")
+        (run / "checks" / "k1-ties.csv").write_text("t", encoding="utf-8")
+        (run / "out" / ".staging" / "k1.xlsx").write_text("not a workbook", encoding="utf-8")
         try:
             finish(run, 7, conclusion="x")
             bad.append("finished with the tab still staged")
@@ -482,7 +483,7 @@ def _selfcheck() -> int:
                 "gl.csv": "cited as E.k1.gl", "k0.md": "cited as E.k1.a0; roster_from"}
         if got != want:
             bad.append(f"consumed: {got}")
-        ev = [json.loads(x) for x in (run / "events.jsonl").read_text().splitlines()]
+        ev = [json.loads(x) for x in (run / "events.jsonl").read_text(encoding="utf-8").splitlines()]
         if [e["event"] for e in ev] != ["step_start", "step_end"] or \
                 ev[1]["duration_s"] < 0 or ev[0]["check"] != "k1":
             bad.append(f"events: {ev}")

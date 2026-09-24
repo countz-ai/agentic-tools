@@ -29,14 +29,28 @@ acceptance, service or fulfillment record a recipe family names otherwise.
 
 ## 1. Define the window
 
-The period end (`params.period_end`) and the window (`params.window_days`, days each
-side) come from `params` — declared by the user, or proposed by the plan the user
-approved; `check_playbook.py` refuses a cutoff step that omits them. **Never assume a
-window**; a dispatch without one is recorded as a blocker. State the populations: every
-book posting and every bank line dated inside the window, each side with its count and
-control total, cited as spans.
+The period ends and window come from `params` (keys: `scripts/periods.py` `cutoff_spec`).
+**Never assume a window**, and never type one: compute it with `scripts/periods.py` —
+
+```python
+from periods import cutoff_spec
+spec = cutoff_spec(params)          # the same function the gate refuses with
+for pe, (start, end) in zip(spec["period_ends"], spec["windows"]):
+    ...
+```
+
+— so the dates on the tab are the dates the gate validated. A dispatch without a window
+is recorded as a blocker. Place each posting and each bank line on its **local** date:
+filter with `Period.mask` / `local_date`, which convert a timezone-aware timestamp to
+`params.timezone` before taking the date (a UTC export otherwise moves a 23:30 posting on
+the period end into the next period), and refuse a timezone-aware column when no zone is
+declared. State the populations: every book posting and every bank line dated inside the
+window, each side with its count and control total, cited as spans.
 
 ## 2. Trace both directions
+
+Pair with polars joins, one per pass; check the assignment with
+`${CLAUDE_PLUGIN_ROOT}/scripts/matching.py`'s `check_assignment()` before writing it.
 
 - **book → bank**: every book posting in the window resolves to a bank line with its
   date, or to an in-transit item on the period-end reconciliation (`params.items_from`).

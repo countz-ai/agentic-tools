@@ -133,8 +133,9 @@ headed otherwise. `schedules` is a non-empty list, one mapping per schedule:
 | `block` | optional; a titled block on the tab; the primary table otherwise |
 | `where` | optional; `{"verdict": "supported"}` or a list of values — a row carrying a value in that column stays when it matches; a row with the column empty stays regardless |
 | `through` | optional; the label of the row the schedule ends at, inclusive |
-| `periods` | optional; `all` — every period column of the tab; `latest` — the last; `none` |
-| `scale` | optional; `thousands` or `millions` |
+| `periods` | optional; `all` — every period column of the tab; `latest` — the latest by date; `none`. A period column is one naming a period the plan declares (`params.columns`) |
+| `scale` | optional; `units`, `thousands`, `millions` or `billions` — stated once in the table's title in the money columns' currency (`EBITDA bridge ($ in thousands)`), never in each column header |
+| `currency` | optional; a lower-case ISO 4217 code `scripts/style.py` defines (`eur`); the book's currency otherwise |
 | `dense` | optional; `true` sets the table at the dense size (REPORT.md § 2) |
 | `ids` | optional; `true` keeps the id column |
 

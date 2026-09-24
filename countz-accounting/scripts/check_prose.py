@@ -14,6 +14,11 @@ markdown lines) and requires each to agree with an admitted value within the rou
 tolerance of the precision displayed (DOCTRINE.md § Number conventions: "$6.3M" tolerates 0.05M,
 "44.6 days" tolerates 0.05).
 
+Money is read with scripts/style.py's grammar, the one figures.fmt writes with: any
+currency in its table by symbol or ISO code (`$9.4M`, `€5,000,000`, `A$1.2B`, `CHF 1,204`,
+`5,000 EUR`), a scale suffix in any case or spelled (`$9.4m`, `$81K`, `$1.2 billion`).
+A number is backed by its magnitude: a written sign is not checked.
+
 Scanned: string cells of .xlsx targets; lines of any other (text) target. Digits only —
 a magnitude spelled out in words is the review's to catch by reading, not this gate's.
 Admitted: numbers on value-bearing keys (value, control_total, total_n, lo, hi, ...) in
@@ -24,6 +29,7 @@ Skipped: day-count ranges ("31-60 days", "90+ days") — bucket labels, not stat
 Usage:
     check_prose.py <tab.xlsx|file.md> [more targets...] [--run-dir DIR] [--allow FILE]...
 --run-dir defaults to the nearest ancestor of the first target containing workpapers/.
+    check_prose.py --self-check
 Exit 0 clean, 1 if any number is unbacked, 2 on a usage error.
 """
 from __future__ import annotations
@@ -35,16 +41,19 @@ import re
 import sys
 import zipfile
 
-NUM = r"\d[\d,]*(?:\.\d+)?"
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import style  # noqa: E402  sibling: the grammar figures.fmt writes with
+
+NUM = style.NUM
 ANY_NUM = re.compile(f"-?{NUM}")
-# One alternative per display convention. Bare-number forms guard their left edge so a
-# token cannot start mid-number, and the days form also refuses a range/plus prefix.
+# One alternative per display convention, money first. Bare-number forms guard their left
+# edge so a token cannot start mid-number, and the days form also refuses a range/plus
+# prefix.
 TOKEN = re.compile(
-    rf"\$\s?(?P<money>{NUM})\s*(?P<suffix>[KMB]\b|thousand\b|million\b|billion\b)?"
+    rf"(?P<m>{style.MONEY_TOKEN})"
     rf"|(?<![\d.,\-–+$])(?P<days>{NUM})[\s-]days?\b"
     rf"|(?<![\d.,])(?P<pct>{NUM})\s?%"
     rf"|(?<![\d.,])(?P<mult>{NUM})x\b")
-SCALE = {"K": 1e3, "thousand": 1e3, "M": 1e6, "million": 1e6, "B": 1e9, "billion": 1e9}
 # A ledger line admits the first number after each of these keys; anything else on the
 # line (row anchors, dates, cell refs) stays out of the admitted set.
 VALUE_KEY = re.compile(
@@ -80,7 +89,8 @@ def sheet_names(z: zipfile.ZipFile) -> dict[str, str]:
 def texts(target: pathlib.Path):
     """Yield (location, text) for every prose surface in the target, as stored."""
     if target.suffix.lower() != ".xlsx":
-        for i, line in enumerate(target.read_text(errors="replace").splitlines(), 1):
+        for i, line in enumerate(target.read_text(encoding="utf-8",
+                                                  errors="replace").splitlines(), 1):
             yield f"{target.name}:{i}", line
         return
     with zipfile.ZipFile(target) as z:
@@ -118,22 +128,27 @@ def texts(target: pathlib.Path):
 def admitted_values(run_dir: pathlib.Path, allow: list[pathlib.Path]) -> list[tuple[float, str]]:
     out: list[tuple[float, str]] = []
     for y in sorted((run_dir / "workpapers").glob("*.yaml")):
-        for line in y.read_text(errors="replace").splitlines():
+        for line in y.read_text(encoding="utf-8", errors="replace").splitlines():
             for k in VALUE_KEY.finditer(line):
                 n = ANY_NUM.search(line[k.end():])
                 if n:
                     out.append((float(n.group(0).replace(",", "")), y.name))
     for f in allow:
-        for n in ANY_NUM.finditer(f.read_text(errors="replace")):
+        for n in ANY_NUM.finditer(f.read_text(encoding="utf-8", errors="replace")):
             out.append((float(n.group(0).replace(",", "")), f.name))
     return out
 
 
 def tokenize(text: str):
-    """Yield (token_text, value, tolerance, variants) per metric number in the text."""
+    """Yield (token_text, value, tolerance, variants) per metric number in the text;
+    `value` is the magnitude."""
     for m in TOKEN.finditer(text):
-        raw = m.group("money") or m.group("days") or m.group("pct") or m.group("mult")
-        scale = SCALE.get((m.group("suffix") or "").strip(), 1.0) if m.group("money") else 1.0
+        if m.group("m"):
+            raw = m.group("money") or m.group("money2")
+            scale = style.scale_of(m.group("suffix") or m.group("suffix2"))
+        else:
+            raw = m.group("days") or m.group("pct") or m.group("mult")
+            scale = 1.0
         decimals = len(raw.split(".")[1]) if "." in raw else 0
         value = float(raw.replace(",", "")) * scale
         tol = 0.5 * scale * 10 ** -decimals
@@ -141,9 +156,61 @@ def tokenize(text: str):
         yield m.group(0).strip(), value, tol, variants
 
 
+def scan(targets, admitted):
+    """(metric numbers seen, unbacked) over every target's prose."""
+    total, unbacked = 0, []
+    for target in targets:
+        for loc, text in texts(target):
+            for token, value, tol, variants in tokenize(text):
+                total += 1
+                if any(abs(abs(av) * f - value) <= tol for av, _ in admitted for f in variants):
+                    continue
+                gap, near, src = min((abs(abs(av) * f - value), av, s)
+                                     for av, s in admitted for f in variants)
+                unbacked.append({"target": target.name, "location": loc, "token": token,
+                                 "nearest": near, "nearest_in": src, "off_by": gap})
+    return total, unbacked
+
+
+def _selfcheck() -> int:
+    import tempfile
+    bad = []
+    with tempfile.TemporaryDirectory() as td:
+        rd = pathlib.Path(td)
+        (rd / "workpapers").mkdir()
+        (rd / "workpapers" / "figures-t.yaml").write_text(
+            "- id: F.a\n  value: 44.6\n- id: F.b\n  value: 6312400.55\n"
+            "- id: F.c\n  value: -1204.4\n- id: F.d\n  value: 5000000\n"
+            "- id: F.e\n  value: 0.174\n- id: F.f\n  value: -2100000\n", encoding="utf-8")
+        admitted = admitted_values(rd, [])
+        cases = [
+            ("The metric is 44.6 days; $6.3M is unapplied.", 0),
+            ("The metric is 44.6 days; $7.1M is unapplied.", 1),
+            ("A legacy $6.3m and $6,312,401 are the same figure.", 0),
+            ("The euro balance is €5,000,000, or EUR 5.0M, or 5,000,000 EUR.", 0),
+            ("Credits were ($1,204), or $1,204.", 0),       # the magnitude: sign unchecked
+            ("Revenue fell ($2.1M), a variance of $2.1M.", 0),
+            ("Share is 17.4%; -17.4% is too.", 0),
+            ("Share is 18.4%.", 1),
+            ("Aging buckets 31-60 days and 90+ days.", 0),
+        ]
+        for text, want in cases:
+            f = rd / "t.md"
+            f.write_text(text + "\n", encoding="utf-8")
+            _, ub = scan([f], admitted)
+            if len(ub) != want:
+                bad.append(f"{text!r}: {len(ub)} unbacked, want {want} ({ub})")
+    for b in bad:
+        print(f"check_prose: {b}")
+    print("check_prose: ok" if not bad else "check_prose: self-check FAILED")
+    return 0 if not bad else 1
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
+    if sys.argv[1:] == ["--self-check"]:
+        return _selfcheck()
     ap.add_argument("targets", nargs="+", type=pathlib.Path)
     ap.add_argument("--run-dir", type=pathlib.Path)
     ap.add_argument("--allow", action="append", type=pathlib.Path, default=[])
@@ -166,17 +233,7 @@ def main() -> int:
               file=sys.stderr)
         return 2
 
-    total, unbacked = 0, []
-    for target in a.targets:
-        for loc, text in texts(target):
-            for token, value, tol, variants in tokenize(text):
-                total += 1
-                if any(abs(abs(av) * f - value) <= tol for av, _ in admitted for f in variants):
-                    continue
-                gap, near, src = min((abs(abs(av) * f - value), av, s)
-                                     for av, s in admitted for f in variants)
-                unbacked.append({"target": target.name, "location": loc, "token": token,
-                                 "nearest": near, "nearest_in": src, "off_by": gap})
+    total, unbacked = scan(a.targets, admitted)
     if a.json:
         import json
         print(json.dumps({"metric_numbers": total, "unbacked": unbacked}, indent=2))

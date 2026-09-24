@@ -45,7 +45,7 @@ Before routing a finding `data_request` or `management_question`, look for the a
 the data room itself — it often already holds management's commentary, board materials, or a
 neighboring schedule. Start from `file_index.json`'s context entries
 (`relevant: "context"`), and go past it to any file under the run's
-source paths (`run.json.sources`) per your judgement, set-aside and unindexed files
+source paths (`run.json.sources`) per your judgment, set-aside and unindexed files
 included. Where a file plausibly answers the question, route `rerun_check` instead, with
 `fix_input` naming the file and what to look for.
 

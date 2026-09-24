@@ -26,10 +26,23 @@ Every step that mints a figure imports this rather than writing its own `fig()`:
     L.sub("Net revenue retention was {F.a5.nrr.fy2025} in FY2025.")   # "... was 104.2% ..."
 
 **One rule per field, the same in every check.** `fig()` refuses what the gates refuse
-later: an id outside the grammar or minted twice in one pass, a unit outside
-`usd | pct | count | ratio`, an empty `inputs` or a role-less input, a zero, null or NaN
-value with no `zero_basis`, a `measured_zero` with no population. Money is stored to the
-cent, a count as an integer, a percentage as a fraction (0.174 is 17.4%).
+later: an id outside the grammar or minted twice in one pass, a unit outside `UNITS`, an
+empty `inputs` or a role-less input, a zero, null or NaN value with no `zero_basis`, a
+`measured_zero` with no population. Money is stored to its currency's minor unit, a count
+as an integer, a percentage or rate as a fraction (0.174 is 17.4%).
+
+**Units.** A money unit is a currency code from `scripts/style.py` (`usd`, `eur`, `gbp`,
+`jpy`, `kwd`, ...): the unit names the currency, stored at its minor units (JPY 0, USD 2,
+KWD 3). The others: `pct` (a share, one decimal shown), `rate` (an interest or growth
+rate, full precision shown: `4.25%`), `fx_rate` (units of one currency per another,
+`1.0679`), `days` (`45.3 days`), `count` (whole), `quantity` (fractional, `12.5`) and
+`ratio` (a multiple, `1.3x`). A tie refuses two currencies outright; translating is the
+caller's arithmetic, with the rate among the figure's inputs.
+
+**Stated scale.** A passthrough (`disposition="as_stated"`) of a source that presents in
+thousands takes `stated_scale="thousands"`: the value passed is the number AS STATED, the
+value stored is in units, and the conversion is appended to the `expression` so the
+reader re-performs it. A sign flip is written in the expression (`x * -1`).
 
 **Every reference resolves when the ledger is written, not at the report.** `write()`
 reads every id the run's `workpapers/*.yaml` declare (as `check_workbook.py --run-dir`
@@ -52,16 +65,20 @@ classifies: `tolerance` is an absolute bound in the
 tie's unit, `pct_tolerance` a fraction of side `b` (the reference side: `0.005` is 0.5%).
 Given both, the tie passes only when **both** hold and fails when either does not; given
 one, that one decides; given neither, the difference must be below half the display unit
-(`$0.50`, one count, `0.05%`). A tolerance the user did not declare is never passed. The
+(`DISPLAY_HALF`: half a whole currency unit, half a count, `0.05%`, `0.05` of a day, a
+quantity or a multiple, `0.00005` of a rate or an FX rate). A tolerance the user did not declare is never passed. The
 result is `pass` or `fail` with each test's limit and measure; `warn` (an explained
 difference) is the worker's call after resolution. `tie_table(L.ties)` is the Markdown
 schedule for `checks/<check>.md`.
 
-**Prose.** `fmt(value, unit)` writes DOCTRINE.md § Number conventions: `$9,438,108`,
-`($1,204)` for a negative, `17.4%`, `100%`, `4,171`, `1.3x`; `style="deck"` scales money
-(`$9.4m`, `$81k`, REPORT.md § 4); `None` reads *unable to establish*. `L.sub(template)`
+**Prose.** `fmt(value, unit)` writes DOCTRINE.md § Number conventions through
+`scripts/style.py`: `$9,438,108`, `($1,204)` for a negative, `€5,000,000`, `17.4%`,
+`100%`, `4.25%` (a rate), `1.0679` (an FX rate), `45.3 days`, `4,171`, `12.5`, `1.3x`;
+`style="deck"` scales money (`$9.4M`, `$81K`, `$1.2B`, REPORT.md § 4), `style="cell"`
+shows its minor units; `None` reads *unable to establish*. `L.sub(template)`
 (or `load(RUN).sub(...)`) replaces each `{F.id}` or `{F.id:deck}` with the formatted
-figure, so a sentence never types a number.
+figure, so a sentence never types a number. `md_table(headers, rows, units)` writes a
+Markdown table whose numeric cells go through `fmt`.
 
 Run with no arguments to self-check. Requires pyyaml — run as
 `uv run --project ${CLAUDE_PLUGIN_ROOT} python3`.
@@ -77,19 +94,33 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import check_workbook  # noqa: E402  sibling: the id grammar and the run's declared ids
+import style  # noqa: E402  sibling: currencies and how a number is written
 from evidence import write_ledger  # noqa: E402
 
 __all__ = ["Ledger", "FigureSet", "load", "fmt", "tie_table", "room", "check_output",
-           "figure", "declared", "UNITS", "DISPOSITIONS", "ZERO_BASES"]
+           "figure", "declared", "UNITS", "MONEY_UNITS", "is_money", "DISPOSITIONS",
+           "ZERO_BASES", "md_table"]
 
-UNITS = ("usd", "pct", "count", "ratio")
+# A money unit is a currency code (scripts/style.py); the rest are what a figure measures.
+MONEY_UNITS = tuple(style.CURRENCIES)
+OTHER_UNITS = ("pct", "count", "ratio", "days", "rate", "fx_rate", "quantity")
+UNITS = MONEY_UNITS + OTHER_UNITS
 DISPOSITIONS = ("measured", "inferred", "as_stated")
 ZERO_BASES = ("measured_zero", "not_measured", "not_applicable")
 SOURCE_KEY = {"room_file": "citation_id", "check_output": "citation_id",
               "figure": "figure_id", "declared": "field"}
-# Half the display unit (DOCTRINE.md § Number conventions): whole dollars, integer
-# counts, one decimal of a percentage, one decimal of a multiple.
-DISPLAY_HALF = {"usd": 0.5, "count": 0.5, "pct": 0.0005, "ratio": 0.05}
+# Half the display unit (DOCTRINE.md § Number conventions): a whole currency unit, an
+# integer count, one decimal of a percentage, one decimal of a day, a quantity's or a
+# multiple's shown precision, four places of a rate or an FX rate.
+DISPLAY_HALF = {"count": 0.5, "pct": 0.0005, "ratio": 0.05, "days": 0.05,
+                "quantity": 0.05, "rate": 0.00005, "fx_rate": 0.00005,
+                **{c: 0.5 for c in MONEY_UNITS}}
+
+
+def is_money(unit) -> bool:
+    return style.is_money(unit)
+
+
 UNABLE = "unable to establish"
 
 LEDGER_ID = check_workbook.LEDGER_ID
@@ -137,46 +168,84 @@ def _num(v):
         raise ValueError(f"a figure value is a number, not {type(v).__name__} {v!r}")
 
 
-def _compact(a: float) -> str:
-    if a >= 999_500_000:
-        return f"${a / 1e9:,.1f}bn"
-    if a >= 999_500:
-        return f"${a / 1e6:,.1f}m"
-    if a >= 999.5:
-        return f"${a / 1e3:,.0f}k"
-    return f"${a:,.0f}"
+def _trim(s: str) -> str:
+    """`4.2500` -> `4.25`, `12.50` -> `12.5`, `3.00` -> `3`."""
+    return s.rstrip("0").rstrip(".") if "." in s else s
 
 
-def fmt(value, unit: str, style: str = "prose") -> str:
-    """One figure as a sentence states it (DOCTRINE.md § Number conventions). `prose`:
-    whole dollars; `deck`: scaled money (REPORT.md § 4); `cell`: cents. Negatives in
-    parentheses; `None` reads *unable to establish*."""
+def fmt(value, unit: str, style: str = "prose", precision: int | None = None) -> str:
+    """One figure as a sentence states it (DOCTRINE.md § Number conventions). Money goes
+    through `scripts/style.py`: `prose` whole units, `deck` scaled (`$9.4M`), `cell` the
+    currency's minor units. `precision` overrides the decimals of a `ratio` (1), an
+    `fx_rate` (4), `days` (1) or a `quantity` (up to 2). Negatives in parentheses; a value
+    that rounds to zero as shown is never parenthesized; `None` reads *unable to
+    establish*."""
     if unit not in UNITS:
-        raise ValueError(f"unit {unit!r}: one of {', '.join(UNITS)}")
+        raise ValueError(f"unit {unit!r}: a currency code (scripts/style.py) or one of "
+                         f"{', '.join(OTHER_UNITS)}")
     v = _num(value)
     if v is None or (isinstance(v, float) and math.isnan(v)):
         return UNABLE
+    if style not in ("prose", "deck", "cell"):
+        raise ValueError(f"style {style!r}: prose, deck or cell")
+    if unit in MONEY_UNITS:
+        return style_money(v, unit, style)
     neg = v < 0
     a = abs(v)
-    if unit == "usd":
-        if style == "deck":
-            s = _compact(a)
-        elif style == "cell":
-            s = f"${a:,.2f}"
-        else:
-            s = f"${a:,.0f}"
-        neg = neg and s.strip("$0.,") != ""
-    elif unit == "pct":
+    if unit == "pct":
         p = round(a * 100, 1)
         s = f"{p:.0f}%" if p.is_integer() else f"{p:.1f}%"
+        neg = neg and p != 0
+    elif unit == "rate":
+        p = round(a * 100, 6 if precision is None else precision)
+        s = _trim(f"{p:.6f}") + "%"
         neg = neg and p != 0
     elif unit == "count":
         s = f"{a:,.0f}"
         neg = neg and round(a) != 0
+    elif unit == "fx_rate":
+        d = 4 if precision is None else precision
+        s = f"{a:,.{d}f}"
+        neg = neg and round(a, d) != 0
+    elif unit == "days":
+        d = 1 if precision is None else precision
+        s = f"{a:,.{d}f} days"
+        neg = neg and round(a, d) != 0
+    elif unit == "quantity":
+        d = 2 if precision is None else precision
+        s = _trim(f"{a:,.{d}f}")
+        neg = neg and round(a, d) != 0
     else:
-        s = f"{a:,.1f}x"
-        neg = neg and round(a, 1) != 0
+        d = 1 if precision is None else precision
+        s = f"{a:,.{d}f}x"
+        neg = neg and round(a, d) != 0
     return f"({s})" if neg else s
+
+
+style_money = style.money
+
+
+def md_table(headers, rows, units, style_: str = "prose") -> str:
+    """A Markdown table whose numeric cells are written by `fmt` in `style_`
+    (`prose`, `deck` or `cell`): `units` names each column's unit, `None` for text.
+    Numeric columns are right-aligned. A `None` value reads empty."""
+    headers, units = list(headers), list(units)
+    if len(units) != len(headers):
+        raise ValueError(f"{len(units)} units for {len(headers)} columns")
+    for u in units:
+        if u is not None and str(u).lower() not in UNITS:
+            raise ValueError(f"unit {u!r} is not a figures unit")
+    esc = lambda s: str(s).replace("|", "\\|").replace("\n", " ")  # noqa: E731
+    out = ["| " + " | ".join(esc(h) for h in headers) + " |",
+           "|" + "|".join("---:" if u else "---" for u in units) + "|"]
+    for i, r in enumerate(rows, 1):
+        r = list(r)
+        if len(r) != len(headers):
+            raise ValueError(f"row {i}: {len(r)} values for {len(headers)} columns")
+        cells = ["" if v is None else fmt(v, str(u).lower(), style_) if u else esc(v)
+                 for v, u in zip(r, units)]
+        out.append("| " + " | ".join(cells) + " |")
+    return "\n".join(out) + "\n"
 
 
 def _sub(template: str, lookup) -> str:
@@ -320,23 +389,43 @@ class Ledger:
 
     def fig(self, fid: str, label: str, value, unit: str, expression: str, inputs,
             *, population=None, disposition: str = "measured", zero_basis: str | None = None,
-            caveats=(), **extra) -> str:
-        """One `F.` entry, checked field by field; returns the id."""
+            caveats=(), stated_scale: str | None = None, **extra) -> str:
+        """One `F.` entry, checked field by field; returns the id.
+
+        `stated_scale` (an `as_stated` figure only): `value` is the number as the source
+        states it; the stored value is multiplied out of the scale, with the conversion
+        appended to `expression`."""
         self._mint(fid, "F.")
         if unit not in UNITS:
-            raise ValueError(f"{fid}: unit {unit!r} - one of {', '.join(UNITS)}")
+            raise ValueError(f"{fid}: unit {unit!r} - a currency code (scripts/style.py) "
+                             f"or one of {', '.join(OTHER_UNITS)}")
         if disposition not in DISPOSITIONS:
             raise ValueError(f"{fid}: disposition {disposition!r} - one of "
                              f"{', '.join(DISPOSITIONS)}")
         v = _num(value)
+        conversion = []
+        if stated_scale is not None:
+            if disposition != "as_stated":
+                raise ValueError(f"{fid}: stated_scale describes a passthrough - "
+                                 f"disposition `as_stated`")
+            if stated_scale not in style.SCALES:
+                raise ValueError(f"{fid}: stated_scale {stated_scale!r} - one of "
+                                 f"{', '.join(style.SCALES)}")
+            if stated_scale != "units":
+                if unit not in MONEY_UNITS and unit not in ("count", "quantity"):
+                    raise ValueError(f"{fid}: a {unit} is not stated at a scale")
+                n = int(style.SCALES[stated_scale])
+                conversion.append(f"x {n:,} (stated in {stated_scale})")
+                if v is not None:
+                    v = float(v) * n
         if isinstance(v, float) and math.isinf(v):
             raise ValueError(f"{fid}: value is infinite - a division by zero is "
                              f"`not_applicable`, value None")
         if isinstance(v, float) and math.isnan(v):
             v = None
         if v is not None:
-            if unit == "usd":
-                v = round(float(v), 2)
+            if unit in MONEY_UNITS:
+                v = round(float(v), style.minor_units(unit))
             elif unit == "count":
                 if float(v) != round(float(v)):
                     raise ValueError(f"{fid}: a count of {v} is not a whole number")
@@ -351,6 +440,8 @@ class Ledger:
             raise ValueError(f"{fid}: expression cites `{m.group(0)}...` - a range or "
                              f"wildcard is a dead end; cite each id whole, or the family "
                              f"with placeholders (`F.x.<period>`)")
+        if conversion:
+            expression = f"{expression.strip()} {' '.join(conversion)}"
         ins = [self._input(fid, i) for i in (inputs or [])]
         if not ins:
             raise ValueError(f"{fid}: `inputs` is never empty (EVIDENCE.md § 3)")
@@ -378,6 +469,10 @@ class Ledger:
         e = {"id": fid, "label": _label(fid, label), "value": v, "unit": unit,
              "expression": expression.strip(), "inputs": ins, "population": pop,
              "zero_basis": zero_basis, "caveats": list(caveats), "disposition": disposition}
+        if stated_scale is not None:
+            e["stated_scale"] = stated_scale
+        if conversion:
+            e["stated_value"] = _num(value)
         e.update(copy.deepcopy(extra))
         self.entries[fid] = e
         return fid
@@ -431,12 +526,16 @@ class Ledger:
                                  f"- the tie is not_run; record it so, with the reason")
         unit = fa.get("unit")
         if fb.get("unit") != unit:
+            if unit in MONEY_UNITS and fb.get("unit") in MONEY_UNITS:
+                raise ValueError(f"{tid}: {a} is {unit}, {b} is {fb.get('unit')} - two "
+                                 f"currencies never tie; translate one side through an "
+                                 f"`fx_rate` figure and tie the translation")
             raise ValueError(f"{tid}: {a} is {unit}, {b} is {fb.get('unit')} - a tie "
                              f"agrees the same quantity")
         va, vb = float(fa["value"]), float(fb["value"])
         diff = va - vb
-        if unit == "usd":
-            diff = round(diff, 2)
+        if unit in MONEY_UNITS:
+            diff = round(diff, style.minor_units(unit))
         elif unit == "count":
             diff = int(round(diff))
         else:
@@ -508,7 +607,8 @@ class Ledger:
         for f in sorted(wp.glob("*.yaml")) if wp.is_dir() else ():
             if f.name in own:
                 continue
-            for m in check_workbook.ID_LINE.finditer(f.read_text(errors="replace")):
+            for m in check_workbook.ID_LINE.finditer(f.read_text(encoding="utf-8",
+                                                                     errors="replace")):
                 known.add(check_workbook._id_value(m.group(1)))
         out: list[str] = []
 
@@ -639,12 +739,30 @@ def _selfcheck() -> int:
         except (ValueError, KeyError):
             pass
 
+    t = md_table(["item", "amount", "share", "n"],
+                 [["Deposits | net", 1204.4, 0.174, 12], ["Loss", -9_438_108, None, 3]],
+                 [None, "usd", "pct", "count"])
+    want_t = ("| item | amount | share | n |\n|---|---:|---:|---:|\n"
+              "| Deposits \\| net | $1,204 | 17.4% | 12 |\n| Loss | ($9,438,108) |  | 3 |\n")
+    if t != want_t:
+        bad.append(f"md_table:\n{t}")
+    if md_table(["x"], [[9_438_108]], ["usd"], "deck").splitlines()[-1] != "| $9.4M |":
+        bad.append("md_table deck style")
+    expect_error("an md_table unit outside figures", lambda: md_table(["a"], [[1]], ["dollars"]))
     for got, want in ((fmt(9438108.22, "usd"), "$9,438,108"), (fmt(-1204.4, "usd"), "($1,204)"),
                       (fmt(-0.2, "usd"), "$0"), (fmt(0.174, "pct"), "17.4%"),
                       (fmt(1.0, "pct"), "100%"), (fmt(4171, "count"), "4,171"),
                       (fmt(1.26, "ratio"), "1.3x"), (fmt(None, "usd"), UNABLE),
-                      (fmt(9_438_108, "usd", "deck"), "$9.4m"),
-                      (fmt(81_234, "usd", "deck"), "$81k")):
+                      (fmt(9_438_108, "usd", "deck"), "$9.4M"),
+                      (fmt(81_234, "usd", "deck"), "$81K"),
+                      (fmt(1_204_000_000, "usd", "deck"), "$1.2B"),
+                      (fmt(-5_000_000, "eur"), "(€5,000,000)"),
+                      (fmt(120_000.4, "jpy", "cell"), "¥120,000"),
+                      (fmt(1234.5678, "kwd", "cell"), "KWD 1,234.568"),
+                      (fmt(45.26, "days"), "45.3 days"), (fmt(0.0425, "rate"), "4.25%"),
+                      (fmt(1.06789, "fx_rate"), "1.0679"), (fmt(12.5, "quantity"), "12.5"),
+                      (fmt(0.97, "ratio", precision=2), "0.97x"),
+                      (fmt(-0.00001, "fx_rate"), "0.0000")):
         if got != want:
             bad.append(f"fmt: got {got!r}, want {want!r}")
 
@@ -686,7 +804,7 @@ def _selfcheck() -> int:
         if L.entries["F.k1.exact.difference"]["zero_basis"] != "measured_zero":
             bad.append("a zero difference carries no measured_zero")
         if L.sub("Billed {F.k1.revenue} against {F.k0.tb.revenue:deck}.") != \
-                "Billed $1,000 against $1k.":
+                "Billed $1,000 against $1K.":
             bad.append(f"sub: {L.sub('Billed {F.k1.revenue} against {F.k0.tb.revenue:deck}.')}")
         if "T.k1.pct_fails" not in tie_table(L.ties):
             bad.append("tie_table lost a tie")
@@ -695,7 +813,7 @@ def _selfcheck() -> int:
         if back.value("F.k1.revenue") != 1000.0 or back["F.k1.revenue"]["population"] != \
                 {"ref": "P.k1.lines"}:
             bad.append(f"round trip: {back['F.k1.revenue']}")
-        if "&id" in (run / "workpapers/figures-k1.yaml").read_text():
+        if "&id" in (run / "workpapers/figures-k1.yaml").read_text(encoding="utf-8"):
             bad.append("the ledger carries YAML anchors")
 
         expect_error("a label in the id", lambda: L.fig("F.k1.x.LTM Dec 2025", "x", 1, "usd",
@@ -742,6 +860,47 @@ def _selfcheck() -> int:
                 bad.append(f"dead end not named: {exc}")
         if (run / "workpapers/figures-k2.yaml").exists():
             bad.append("a refused write left a file")
+
+        # Currencies: stored at their minor units, never tied across.
+        C = Ledger(run, "k5")
+        C.cite({"id": "E.k5.bank", "kind": "span", "file": "bank.csv"})
+        C.fig("F.k5.jpy", "Yen balance", 120_000.4, "jpy", "E.k5.bank", [("b", "E.k5.bank")])
+        C.fig("F.k5.kwd", "Dinar balance", 1234.5678, "kwd", "E.k5.bank", [("b", "E.k5.bank")])
+        C.fig("F.k5.eur", "Euro balance", 1000.0, "eur", "E.k5.bank", [("b", "E.k5.bank")])
+        C.fig("F.k5.eur_gl", "Euro GL", 1000.0, "eur", "E.k5.bank", [("b", "E.k5.bank")])
+        C.fig("F.k5.rate", "EUR/USD closing rate", 1.0679, "fx_rate", "E.k5.bank",
+              [("b", "E.k5.bank")])
+        C.fig("F.k5.usd", "Euro balance in USD", 1067.90, "usd", "F.k5.eur * F.k5.rate",
+              [("amount", "F.k5.eur"), ("rate", "F.k5.rate")])
+        C.fig("F.k5.usd_sum", "Sum of translated", 1067.90, "usd", "F.k5.usd",
+              [("a", "F.k5.usd")])
+        C.fig("F.k5.usd_gl", "USD GL", 1067.9, "usd", "E.k5.bank", [("b", "E.k5.bank")])
+        C.fig("F.k5.rate_b", "EUR/USD per bank", 1.0400, "fx_rate", "E.k5.bank",
+              [("b", "E.k5.bank")])
+        if C.entries["F.k5.jpy"]["value"] != 120_000.0 or \
+                C.entries["F.k5.kwd"]["value"] != 1234.568:
+            bad.append(f"minor units: {C.entries['F.k5.jpy']['value']}, "
+                       f"{C.entries['F.k5.kwd']['value']}")
+        expect_error("a tie across currencies",
+                     lambda: C.tie("T.k5.cross", "x", "F.k5.eur", "F.k5.usd_gl"))
+        if C.tie("T.k5.translated", "x", "F.k5.usd", "F.k5.usd_gl")["status"] != "pass":
+            bad.append("a translated figure did not tie")
+        if C.tie("T.k5.eur", "x", "F.k5.eur", "F.k5.eur_gl")["status"] != "pass":
+            bad.append("two equal euro figures did not tie")
+        if C.tie("T.k5.rates", "x", "F.k5.rate", "F.k5.rate_b")["status"] != "fail":
+            bad.append("FX rates 1.0679 and 1.0400 tied under display rounding")
+        C.fig("F.k5.stated", "Revenue as stated in $000s", 9438.1, "usd",
+              "as stated at E.k5.bank (passthrough)", [("b", "E.k5.bank")],
+              disposition="as_stated", stated_scale="thousands")
+        st = C.entries["F.k5.stated"]
+        if st["value"] != 9_438_100.0 or "x 1,000" not in st["expression"] or \
+                st["stated_value"] != 9438.1:
+            bad.append(f"stated scale: {st}")
+        expect_error("stated_scale on a measured figure",
+                     lambda: C.fig("F.k5.s2", "x", 1.0, "usd", "E.k5.bank",
+                                   [("b", "E.k5.bank")], stated_scale="thousands"))
+        expect_error("an unknown currency", lambda: C.fig("F.k5.xyz", "x", 1.0, "xyz",
+                                                          "E.k5.bank", [("b", "E.k5.bank")]))
 
         R = Ledger(run, "k1")                 # resume: a second script adds to the ledger
         if "F.k1.revenue" not in R.entries:

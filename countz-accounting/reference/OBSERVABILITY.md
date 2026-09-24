@@ -33,6 +33,7 @@ before writing a new event.
 | `debug_enabled` | `scripts/setup_run.py` (`--debug`), `scripts/run_state.py` (`debug`) | `by`: debug mode is on for this run (§ 3) |
 | `debug_disabled` | `scripts/run_state.py` (`debug --off`) | `by` |
 | `debug_gathered` | `scripts/gather_debug.py` | `sessions`, `missing`, `tool_calls`, `errors`, `timeline`, `offloads`: counts only; the content lands under `debug/` |
+| `ask_scrubbed` | `scripts/run_state.py` (record-scrub) | `rounds`, `removed_n`, `categories[]` (the [SCRUB.md](SCRUB.md) classes removed), `flags_n` (blind flags across all rounds), `sent_chars`: the scrubbed ask passed both reads; the removed text itself stays in `<run_dir>/scrub.json` |
 | `note` | anyone | `text`: something a reader would want that no other event carries |
 
 **`step_start` and `step_end`.** Write `step_start` before any work and `step_end` as the
@@ -154,16 +155,11 @@ not `debug/`, transcripts, workpapers, checks, the workbook, the source files, a
 figure or a file name. A skill, agent or script that would upload any of them is
 refused; what goes to the user is the local path that holds it.
 
-The exception is the **scrubbed pre-run description**: when `countz-analysis` finds no
-catalog entry for what the user asked, it sends the ask — rewritten by the local model
-and passed through `scripts/scrub_ask.py`'s gate (no digits outside a period vocabulary,
-no currency symbols, no `@`, no path separators, no token matching a registered source
-name or the company) — as the `ask` argument of `get_recipe_for_countz_analysis`, and
-prints the exact bytes first. Countz retains it (the connector's design, in the
-monorepo's `docs/arch/`, states the basis): the
-unmatched asks are how Countz decides which recipes to write next. The full, unscrubbed
-ask stays local in `run.json.inputs.params.instructions`. A named shim and a matched
-generic run send nothing. The user is told this once, at collection, before the ask is
-sent.
+The exception is the **scrubbed pre-run description** on a `countz-analysis` catalog miss:
+what it may carry is [SCRUB.md](SCRUB.md); how it is produced and shown before it is sent
+is `skills/countz-analysis/SKILL.md` step 4. Countz retains it (the connector's design, in
+the monorepo's `docs/arch/`, states the basis). The full ask stays local in
+`run.json.inputs.params.instructions`. A named shim and a matched generic run send
+nothing. The user is told this once, at collection.
 
 The § 1 exclusions hold for `events.jsonl` whether or not it was gathered.

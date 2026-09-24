@@ -351,7 +351,8 @@ def check(root: pathlib.Path) -> list[str]:
             return "section.py" in txt or any(h in txt for h in homes)
 
         for af in sorted((root / "agents").glob("*.md")):
-            if not reaches(af.read_text()):
+            txt = af.read_text()
+            if "\u00a7" in txt and not reaches(txt):
                 bad.append(f"{rel(af)}: names neither scripts/section.py nor a document "
                            f"stating the rule ({', '.join(homes) or 'none ships'}) - a "
                            f"reader entering here has no rule for section citations")
@@ -1185,8 +1186,12 @@ def check(root: pathlib.Path) -> list[str]:
             unread.write_text(json.dumps(wf("unread", [
                 {"id": "s1", "check": "tieout", "sources": ["a"], "after": []},
                 {"id": "s2", "check": "tieout", "sources": ["b"], "after": ["s1"]}])))
-            files = [{"id": "gl_fy2026", "path": "gl.csv", "source": "a",
-                      "file_role": "system_export", "control": "amount"}]
+            files = [{"id": "gl_fy2026", "path": "gl.xlsx", "source": "a",
+                      "file_role": "system_export", "sheet": "GL", "control": "amount",
+                      "what": "the GL detail, header at row 5"},
+                     {"id": "gl_summary", "path": "gl.xlsx", "source": "a",
+                      "file_role": "system_export", "sheet": "GL",
+                      "what": "the account summary, header at row 40"}]
             cached = tdp / "cached.json"
             cached.write_text(json.dumps(wf("cached", [
                 {"id": "x0", "check": "extract", "sources": ["a"], "after": [],
@@ -1199,13 +1204,43 @@ def check(root: pathlib.Path) -> list[str]:
                  "params": {"files": files}},
                 {"id": "s1", "check": "tieout", "sources": ["a", "b"], "after": ["x0"],
                  "params": {"cache_from": "x0", "reads": ["tb_fy2026"]}}])))
+            # Two tables on one sheet are two entries, each saying which table it is; a
+            # read-spec key is the extract step's to measure, never the plan's.
+            unnamed = tdp / "unnamed.json"
+            unnamed.write_text(json.dumps(wf("unnamed", [
+                {"id": "x0", "check": "extract", "sources": ["a"], "after": [],
+                 "params": {"files": [dict(files[0]), {k: v for k, v in files[1].items()
+                                                       if k != "what"}]}}])))
+            respec = tdp / "respec.json"
+            respec.write_text(json.dumps(wf("respec", [
+                {"id": "x0", "check": "extract", "sources": ["a"], "after": [],
+                 "params": {"files": [{**files[0], "header_row": 5}]}}])))
+            # A saved extract step's prior script sits beside the playbook file.
+            prior = tdp / "prior.json"
+            prior.write_text(json.dumps(wf("prior", [
+                {"id": "x0", "check": "extract", "sources": ["a", "b"], "after": [],
+                 "params": {"files": files, "prior_script": "prior.extract/x0.py"}}])))
+            (tdp / "prior.extract").mkdir()
+            (tdp / "prior.extract" / "x0.py").write_text("# last period's script\n")
+            noprior = tdp / "noprior.json"
+            noprior.write_text(json.dumps(wf("noprior", [
+                {"id": "x0", "check": "extract", "sources": ["a", "b"], "after": [],
+                 "params": {"files": files, "prior_script": "noprior.extract/x0.py"}}])))
             for f, want, label in ((good, 0, "a well-formed playbook"),
+                                   (prior, 0, "an extract step whose prior script is "
+                                              "beside the playbook"),
+                                   (noprior, 1, "a prior script that is not beside the "
+                                                "playbook"),
                                    (unknown, 1, "an unknown check kind"),
                                    (cyclic, 1, "a dependency cycle"),
                                    (unread, 1, "an `after` no `_from` read justifies"),
                                    (cached, 0, "an extract step with a resolved cache read"),
                                    (unparsed, 1, "a cache read of an id the extract step "
-                                                 "does not parse")):
+                                                 "does not parse"),
+                                   (unnamed, 1, "two tables on one sheet, one without "
+                                                "`what`"),
+                                   (respec, 1, "an extract file entry carrying a read "
+                                               "spec (`header_row`)")):
                 r = run_cw(f)
                 if r.returncode != want:
                     bad.append(f"{rel(cw)}: {label} fixture exited {r.returncode}, want "
@@ -1685,12 +1720,13 @@ def check(root: pathlib.Path) -> list[str]:
     #     on it. (a) validate_recipe.py: a missing required section, a malformed family
     #     header, a headline naming no family and a `## Report` block that is not
     #     `{"schedules": [...]}` each fail, with the rule named.
-    #     (b) scrub_ask.py: a digit outside the period vocabulary, a currency symbol, an
-    #     `@`, a path separator, and the company or a source name each refuse; a clean
-    #     ask with period tokens passes and is printed as the exact bytes to send.
+    #     (b) run_state.py record-scrub, the record of the agent scrub (SCRUB.md): a
+    #     flagged round with no flags, a last blind read that is not clean, and more rounds than the cap each refuse; a clean record prints SEND:
+    #     with the exact bytes and appends `ask_scrubbed`. The scrub itself is an agent's
+    #     judgment and is not checked here.
     vr = root / "scripts" / "validate_recipe.py"
-    sa = root / "scripts" / "scrub_ask.py"
-    if vr.is_file() and sa.is_file() and recipes:
+    rs = root / "scripts" / "run_state.py"
+    if vr.is_file() and recipes:
         import subprocess
         import tempfile
 
@@ -1716,33 +1752,36 @@ def check(root: pathlib.Path) -> list[str]:
                 if rc == 0 or rule not in out:
                     bad.append(f"{rel(vr)}: a recipe breaking `{rule}` must exit non-zero naming "
                                f"the rule (exit {rc}): {out.strip()[:160]}")
-            rd = pathlib.Path(td) / "run"
-            rd.mkdir()
-            src = pathlib.Path(td) / "GL Detail FY2026.xlsx"
-            src.write_bytes(b"")
-            (rd / "run.json").write_text(json.dumps({
-                "schema": "countz-accounting/run@1", "inputs": {"company": "Acme Widgets"},
-                "sources": [{"id": "gl", "name": "general ledger", "path": str(src)}]}))
-            dirty = {
-                "digit": "check invoice 10233 against the ledger",
-                "currency": "amounts over $ threshold",
-                "at_sign": "email bob@example for the file",
-                "path_separator": "the file under tmp/x",
-                "named": "the Acme detail ledger",
-            }
-            for rule, ask in dirty.items():
-                rc, out = run(str(sa), str(rd), "--ask", ask)
-                if rc != 1 or f"REFUSED:\t{rule}" not in out:
-                    bad.append(f"{rel(sa)}: {ask!r} must be refused under `{rule}` (exit {rc}): "
-                               f"{out.strip()[:160]}")
-            clean = "test fixed asset additions against the depreciation schedule for FY2025 and Q3 2025, March 2026 close"
-            rc, out = run(str(sa), str(rd), "--ask", clean)
-            if rc != 0 or f"SEND:\t{clean}" not in out:
-                bad.append(f"{rel(sa)}: a clean ask with period tokens must pass and print "
-                           f"SEND: with the exact bytes (exit {rc}): {out.strip()[:160]}")
-            rc, out = run(str(sa), str(rd), "--ask", "x" * 8193)
-            if rc != 1 or "REFUSED:\tsize" not in out:
-                bad.append(f"{rel(sa)}: an ask over 8 KB must be refused under `size` (exit {rc})")
+            if rs.is_file():
+                rd = pathlib.Path(td) / "run"
+                rd.mkdir()
+                (rd / "run.json").write_text(json.dumps({
+                    "schema": "countz-accounting/run@1", "inputs": {"company": "Acme Widgets"},
+                    "sources": []}))
+                send = "test fixed asset additions against the depreciation schedule for FY2025"
+                ok_round = {"verdict": "clean", "removed": [{"category": "company_name",
+                                                             "replacement": "the company"}]}
+                flag = {"category": "figure", "where": "a threshold"}
+                bad_recs = {
+                    "flagged with no flags": {"send": send, "rounds": [
+                        {"verdict": "flagged"}, ok_round]},
+                    "last not clean": {"send": send, "rounds": [
+                        ok_round, {"verdict": "flagged", "flags": [flag]}]},
+                    "rounds": {"send": send, "rounds": [
+                        {"verdict": "flagged", "flags": [flag]}] * 3 + [ok_round]},
+                }
+                for rule, rec in bad_recs.items():
+                    rc, out = run(str(rs), "record-scrub", str(rd), "--json", json.dumps(rec))
+                    if rc == 0:
+                        bad.append(f"{rel(rs)}: record-scrub must refuse a record breaking "
+                                   f"`{rule}` (exit 0): {out.strip()[:160]}")
+                rc, out = run(str(rs), "record-scrub", str(rd), "--json",
+                              json.dumps({"send": send, "rounds": [ok_round]}))
+                ev = rd / "events.jsonl"
+                if (rc != 0 or f"SEND:\t{send}" not in out or not ev.is_file()
+                        or "ask_scrubbed" not in ev.read_text()):
+                    bad.append(f"{rel(rs)}: a clean scrub record must print SEND: with the exact "
+                               f"bytes and append ask_scrubbed (exit {rc}): {out.strip()[:160]}")
 
     # 8n. run_state.py and the ledger tools, on the four defects one live run produced
     #     (2026-09-03). (a) Every dispatch writes its brief: a --step and a fix wave of
@@ -2209,12 +2248,13 @@ def check(root: pathlib.Path) -> list[str]:
 
     # 8q. The report deck mints nothing: build_report.py renders it from report.yaml and
     #     the sealed workbook, check_report.py refuses a deck that says what the workbook
-    #     does not. scripts/report-selftest.py holds the cases - a spec-conformant
+    #     does not. tests/<plugin>/report-selftest.py (outside the plugin, so it never
+    #     ships) holds the cases - a spec-conformant
     #     workbook builds a deck that passes; a figure typed into a sentence, an
     #     unresolved reference and a figure edited after the build are refused, each
     #     named. The gate holds mechanics only - what the deck says is the author's. Run through the plugin's own environment: the builder needs
     #     python-pptx and openpyxl, pinned in pyproject.toml / uv.lock (TOOLING.md).
-    st = root / "scripts" / "report-selftest.py"
+    st = root.parent / "tests" / root.name / "report-selftest.py"
     if st.is_file():
         import subprocess
         r = subprocess.run(["uv", "run", "--project", str(root), "python3", str(st)],
@@ -2258,14 +2298,34 @@ def check(root: pathlib.Path) -> list[str]:
                 bad.append(f"{rel(df)}: does not name scripts/wbkit.py - a tab script "
                            f"reading it would type the kit again")
 
-    # 8x. scripts/extract.py reads a BLOCK, never a file: a text file that stacks a
-    #     second table under the first must land the first block alone, report the
-    #     lines below it, and land the second block when its anchors are named.
-    #     Measured 2026-09-22 on a fixture: before the block rule, a two-row rollforward
-    #     with a schedule under it cached as seven rows with an amount column degraded
-    #     to text and no warning.
-    ex = root / "scripts" / "extract.py"
-    if ex.is_file():
+    # 8z. The shared modules a step imports carry their own self-checks, and each must
+    #     pass in the plugin's own environment: style.py (currencies, US number and date
+    #     forms, the token grammar the gates read with), figures.py (units per currency,
+    #     cross-currency ties refused), periods.py (fiscal calendars, windows, time zones),
+    #     step_record.py, check_prose.py's gate cases, cache.py (the cache's bookkeeping:
+    #     refusals, stated totals, the exact re-check), and the shared helpers a worker
+    #     computes with instead of retyping them (agents/worker.md § Shared modules).
+    for name, extra in (("style.py", ()), ("figures.py", ()), ("periods.py", ()),
+                        ("step_record.py", ()), ("check_prose.py", ("--self-check",)),
+                        ("rework.py", ()), ("items.py", ()),
+                        ("matching.py", ()), ("cache.py", ())):
+        mod = root / "scripts" / name
+        if mod.is_file():
+            import subprocess
+            r = subprocess.run(["uv", "run", "--project", str(root), "python3", str(mod), *extra],
+                               capture_output=True, text=True)
+            if r.returncode != 0:
+                tail = " | ".join((r.stdout + r.stderr).strip().splitlines()[-3:])
+                bad.append(f"{rel(mod)}: self-check failed (exit {r.returncode}): {tail}")
+
+    # 8x. The read and the citation are one query: a table the extract step's own
+    #     script landed through scripts/cache.py, read back by evidence.py select,
+    #     returns the rows and a span whose file, anchors, letters and parses come from
+    #     the manifest, whose filter is the WHERE clause, and whose row count and control
+    #     total are measured over those rows; a JOIN is refused; and a source changed
+    #     under the cache fails `cache.py --verify` (exit 3).
+    ev, cp = root / "scripts" / "evidence.py", root / "scripts" / "cache.py"
+    if ev.is_file() and cp.is_file():
         import subprocess
         import tempfile
         with tempfile.TemporaryDirectory() as td:
@@ -2273,126 +2333,72 @@ def check(root: pathlib.Path) -> list[str]:
             room, rd = tdp / "room", tdp / "run"
             room.mkdir()
             rd.mkdir()
-            (room / "stacked.csv").write_text(
-                "Demo Corp\nRollforward\n\nperiod,opening,billings,closing\n"
-                "2024-10,100.00,50.00,150.00\n2024-11,150.00,60.00,210.00\n\n"
-                "By stream\nstream,balance\nsubscription,90.00\nservices,35.00\n")
+            (room / "ar.csv").write_text(
+                "Demo Corp\nAR by customer\n\ncustomer,region,amount\n"
+                "Acme,East,100.00\nBeta,West,200.00\nGamma,East,300.00\n"
+                "Total,,600.00\nDelta,West,50.00\n")
             (rd / "run.json").write_text(json.dumps({
-                "schema": "countz-accounting/run@1", "run_id": "fx.20260922-000000",
+                "schema": "countz-accounting/run@1", "run_id": "fx.20260923-000000",
                 "sources": [{"id": "dataroom", "name": "room", "path": str(room),
                              "kind": "folder"}], "checks": [], "dispatches": [],
                 "next_seq": 2}))
-            spec = json.dumps([
-                {"id": "roll", "path": "stacked.csv", "source": "dataroom",
-                 "file_role": "management_prepared", "control": "billings"},
-                {"id": "by_stream", "path": "stacked.csv", "source": "dataroom",
-                 "file_role": "management_prepared", "header_row": 9, "rows": "10:11"}])
-            r = subprocess.run(["uv", "run", "--project", str(root), "python3", str(ex),
-                                str(rd), "--files", spec], capture_output=True, text=True)
-            out = r.stdout + r.stderr
-            man = rd / "cache" / "manifest.json"
-            if r.returncode != 0 or not man.is_file():
-                bad.append(f"{rel(ex)}: the stacked fixture did not land (exit "
-                           f"{r.returncode}): {out.strip()[:160]}")
+            land = (
+                "import sys, polars as pl\n"
+                f"sys.path.insert(0, {str(root / 'scripts')!r})\n"
+                "import cache\n"
+                "df = pl.DataFrame({'customer': ['Acme', 'Beta', 'Gamma', 'Delta'],\n"
+                "                   'region': ['East', 'West', 'East', 'West'],\n"
+                "                   'amount': [100.0, 200.0, 300.0, 50.0]})\n"
+                f"cache.write({str(rd)!r}, 'ar', df, file='ar.csv', source='dataroom',\n"
+                "            file_role='management_prepared', header_at='A4', rows='5:7,9:9',\n"
+                "            columns={'customer': {'at': 'A', 'parse': 'as written'},\n"
+                "                     'region': {'at': 'B', 'parse': 'as written'},\n"
+                "                     'amount': {'at': 'C', 'parse': 'as written'}},\n"
+                "            control='amount', stated={'value': 600.0, 'where': 'C8 (Total)'})\n")
+            r = subprocess.run(["uv", "run", "--project", str(root), "python3", "-c", land],
+                               capture_output=True, text=True)
+            if r.returncode != 0:
+                bad.append(f"{rel(cp)}: cache.write did not land a parsed table (exit "
+                           f"{r.returncode}): {(r.stdout + r.stderr).strip()[:200]}")
             else:
-                files = {e["id"]: e for e in json.loads(man.read_text())["files"]}
-                roll, by = files.get("roll") or {}, files.get("by_stream") or {}
-                if roll.get("row_count") != 2 or (roll.get("control_total") or {}).get("value") != 110.0:
-                    bad.append(f"{rel(ex)}: the first block must stop at the blank line - "
-                               f"2 rows, billings 110.0; got {roll.get('row_count')} rows, "
-                               f"{roll.get('control_total')}")
-                if not roll.get("trailing") or "TRAILING: roll" not in out:
-                    bad.append(f"{rel(ex)}: lines below a block must be recorded as "
-                               f"`trailing` in the manifest and printed as TRAILING:")
-                if by.get("row_count") != 2 or (by.get("control_total") or {}).get("value") != 125.0 \
-                        or [c["name"] for c in by.get("columns", [])] != ["stream", "balance"]:
-                    bad.append(f"{rel(ex)}: a second block named by header_row and rows must "
-                               f"land as its own entry; got {by.get('columns')} "
-                               f"{by.get('row_count')} rows")
-            # The cache is checked, never trusted: a block holding a quoted newline, a
-            # repeated header, a total row and a second table's header must land with
-            # each named as a suspect, disagree with the planner's whole-block profile
-            # span and exit 1; an override cutting the rows that are not data must
-            # agree, retype the amount column and exit 0; and a source that changed
-            # under the cache must fail --reperform.
-            (room / "ar.csv").write_text(
-                'Demo Corp\nAR by customer\n\ncustomer,region,amount\n'
-                'Acme,"East\nCoast",100.00\nBeta,West,200.00\nGamma,East,300.00\n'
-                'customer,region,amount\nDelta,West,50.00\nTotal,,650.00\n'
-                'stream,note,balance\nsubscription,x,90.00\nservices,y,35.00\n')
-            (rd / "workpapers").mkdir(exist_ok=True)
-            (rd / "workpapers" / "evidence-profile-dataroom.yaml").write_text(
-                "- id: E.ar.whole\n  kind: span\n  file: ar.csv\n  source: dataroom\n"
-                "  file_role: management_prepared\n  header_at: A4\n  rows: '5:9'\n"
-                "  columns: [{name: amount, at: C, holds: values}]\n"
-                "  filter: none - full sheet consumed\n  row_count: 4\n"
-                "  control_total: {column: amount, value: 650.00}\n")
-            spec2 = json.dumps([{"id": "ar", "path": "ar.csv", "source": "dataroom",
-                                 "file_role": "management_prepared", "control": "amount"}])
-            r = subprocess.run(["uv", "run", "--project", str(root), "python3", str(ex),
-                                str(rd), "--files", spec2], capture_output=True, text=True)
-            out = r.stdout + r.stderr
-            ar = {e["id"]: e for e in json.loads(man.read_text())["files"]}.get("ar") or {}
-            reasons = " | ".join(su["reason"] for su in ar.get("suspects") or [])
-            if r.returncode != 1 or "DISAGREES: ar" not in out:
-                bad.append(f"{rel(ex)}: a block whose control total differs from the plan's "
-                           f"profile span must print DISAGREES and exit 1 (exit "
-                           f"{r.returncode}): {out.strip()[:160]}")
-            if ar.get("row_count") != 9:
-                bad.append(f"{rel(ex)}: a quoted newline inside a field must count as one "
-                           f"record - want 9 rows, got {ar.get('row_count')}")
-            for want in ("repeated header", "total row", "text in the numeric column"):
-                if want not in reasons:
-                    bad.append(f"{rel(ex)}: the manifest's suspects must name a `{want}`; "
-                               f"got: {reasons[:160]}")
-            r = subprocess.run(["uv", "run", "--project", str(root), "python3", str(ex),
-                                str(rd), "--files", spec2, "--override",
-                                '{"ar": {"rows": "5:7,9:9"}}'], capture_output=True, text=True)
-            out = r.stdout + r.stderr
-            ar = {e["id"]: e for e in json.loads(man.read_text())["files"]}.get("ar") or {}
-            dtype = {c["name"]: c["dtype"] for c in ar.get("columns", [])}.get("amount")
-            if r.returncode != 0 or "AGREES: ar" not in out or ar.get("row_count") != 4 \
-                    or dtype != "Float64" or not ar.get("overrides"):
-                bad.append(f"{rel(ex)}: an override cutting the rows that are not data must "
-                           f"agree with the profile, retype the amount column and record the "
-                           f"override (exit {r.returncode}, {ar.get('row_count')} rows, "
-                           f"amount {dtype}): {out.strip()[:160]}")
-            # The read and the citation are one query: evidence.py select over the
-            # cached block returns the rows and a span whose filter is the WHERE clause,
-            # whose row count and control total are measured over those rows, and whose
-            # file and anchors come from the manifest; a JOIN is refused.
-            ev = root / "scripts" / "evidence.py"
-            if ev.is_file():
                 r = subprocess.run(["uv", "run", "--project", str(root), "python3", str(ev),
                                     "select", "SELECT customer FROM ar WHERE region = 'West'",
                                     "--run-dir", str(rd), "--id", "E.ar.west"],
                                    capture_output=True, text=True)
                 want = ("file: ar.csv", "header_at: A4", "rows: 5:7,9:9",
                         "filter: region = 'West'", "row_count: 2", "value: 250.0",
-                        "at: A")
+                        "at: A", "parse: as written")
                 if r.returncode != 0 or not all(w in r.stdout for w in want):
                     bad.append(f"{rel(ev)}: `select` must return the span of the rows the "
-                               f"statement selects - file, anchors and letters from the "
-                               f"manifest, the WHERE as filter, count and control measured "
-                               f"(exit {r.returncode}): {(r.stdout + r.stderr).strip()[:200]}")
+                               f"statement selects - file, anchors, letters and parses from "
+                               f"the manifest, the WHERE as filter, count and control "
+                               f"measured (exit {r.returncode}): "
+                               f"{(r.stdout + r.stderr).strip()[:200]}")
                 r = subprocess.run(["uv", "run", "--project", str(root), "python3", str(ev),
                                     "select", "SELECT a.customer FROM ar a JOIN ar b ON a.customer = b.customer",
                                     "--run-dir", str(rd)], capture_output=True, text=True)
                 if r.returncode == 0 or "one table" not in (r.stdout + r.stderr):
                     bad.append(f"{rel(ev)}: a JOIN in a span select must be refused naming "
                                f"the one-table rule (exit {r.returncode})")
-            r = subprocess.run(["uv", "run", "--project", str(root), "python3", str(ex),
-                                str(rd), "--reperform", "ar"], capture_output=True, text=True)
-            if r.returncode != 0:
-                bad.append(f"{rel(ex)}: --reperform on an unchanged source must agree "
-                           f"(exit {r.returncode}): {(r.stdout + r.stderr).strip()[:160]}")
-            with (room / "ar.csv").open("a") as fh:
-                fh.write("Zeta,East,1.00\n")
-            r = subprocess.run(["uv", "run", "--project", str(root), "python3", str(ex),
-                                str(rd), "--reperform", "ar"], capture_output=True, text=True)
-            if r.returncode != 1 or "changed" not in (r.stdout + r.stderr):
-                bad.append(f"{rel(ex)}: --reperform must fail when the source changed under "
-                           f"the cache (exit {r.returncode}): {(r.stdout + r.stderr).strip()[:160]}")
+                r = subprocess.run(["uv", "run", "--project", str(root), "python3", str(cp),
+                                    str(rd), "--verify", "ar"], capture_output=True, text=True)
+                if r.returncode != 0:
+                    bad.append(f"{rel(cp)}: --verify on an unchanged source must agree "
+                               f"(exit {r.returncode}): {(r.stdout + r.stderr).strip()[:160]}")
+                with (room / "ar.csv").open("a") as fh:
+                    fh.write("Zeta,East,1.00\n")
+                r = subprocess.run(["uv", "run", "--project", str(root), "python3", str(cp),
+                                    str(rd), "--verify", "ar"], capture_output=True, text=True)
+                if r.returncode != 3 or "changed" not in (r.stdout + r.stderr):
+                    bad.append(f"{rel(cp)}: --verify must fail when the source changed under "
+                               f"the cache (exit {r.returncode}): "
+                               f"{(r.stdout + r.stderr).strip()[:160]}")
+                r = subprocess.run(["uv", "run", "--project", str(root), "python3", str(ev),
+                                    "select", "SELECT customer FROM ar", "--run-dir", str(rd),
+                                    "--reperform"], capture_output=True, text=True)
+                if r.returncode != 3:
+                    bad.append(f"{rel(ev)}: `select --reperform` over a changed source must "
+                               f"exit 3, a cache defect (exit {r.returncode})")
 
     # 8p. One document names the preferred libraries and pyproject.toml pins them; the
     #     worker charter, the one place every computing step reads, must point at it.

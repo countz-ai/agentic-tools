@@ -286,11 +286,6 @@ def sheet_cells(xml: str, shared: list[str]):
     return texts, stored
 
 
-NUM_IN_TEXT = re.compile(r"(?<![\d.,])(\d[\d,]*(?:\.\d+)?)\s*([KMB]|bn|thousand|million|billion)?\b", re.I)
-TEXT_SCALE = {"k": 1e3, "thousand": 1e3, "m": 1e6, "million": 1e6, "b": 1e9, "bn": 1e9,
-              "billion": 1e9}
-
-
 def sheet_numbers(xml: str) -> dict[str, float]:
     """{ref: value} for every numeric cell of one worksheet, from the stored XML."""
     out: dict[str, float] = {}
@@ -307,21 +302,6 @@ def sheet_numbers(xml: str) -> dict[str, float]:
         except ValueError:
             pass
     return out
-
-
-def sentence_states(text: str, value: float) -> bool:
-    """Whether `text` quotes `value`, at the precision the text shows it."""
-    for m in NUM_IN_TEXT.finditer(text):
-        raw, suffix = m.group(1), (m.group(2) or "").lower()
-        scale = TEXT_SCALE.get(suffix, 1.0)
-        decimals = len(raw.split(".")[1]) if "." in raw else 0
-        try:
-            stated = float(raw.replace(",", "")) * scale
-        except ValueError:
-            continue
-        if abs(abs(value) - stated) <= 0.5 * scale * 10 ** -decimals:
-            return True
-    return False
 
 
 def sheet_links(z: zipfile.ZipFile, part: str, xml: str):

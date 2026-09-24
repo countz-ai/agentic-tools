@@ -35,19 +35,24 @@ From `run.json`, never from anything the user said that did not become a record:
   (their records and citations state the grain) — and `hint` from the filename it was
   bound to this time.
 - **provenance** — `saved_at` now, `created_from` the run id.
+- **extract scripts** — for each kept `extract` step, copy the run's
+  `workpapers/extract-<check>.py` to `<dest>/<name>.extract/<check>.py` and set the step's
+  `params.prior_script` to `<name>.extract/<check>.py`: next period's extract worker
+  starts from it.
 - **nothing invented** — no step that did not run, no slot nothing references, no
   sequencing the run did not have.
 
 ## Write and validate
 
 Write `<dest>/<name>.json` (create the directory; refuse to overwrite an existing file
-unless the arguments say `overwrite=true` — say which file is in the way). Then:
+unless the arguments say `overwrite=true`, which replaces `<name>.extract/` too — say
+which file is in the way). Then:
 
 ```
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/check_playbook.py <the file>
 ```
 
-A non-zero exit means you return the error and delete the file — a broken playbook in the
+A non-zero exit means you return the error and delete the file and `<name>.extract/` — a broken playbook in the
 library fails at its next run, in front of the user. Append the `playbook_saved`
 event (`OBSERVABILITY.md`).
 

@@ -87,15 +87,17 @@ sections:
 the work and nothing else (`Quality of earnings review`, `Revenue leak: billed to
 collected`): no company, no period or as-of date, at most 60 characters. `subtitle`
 carries the entity detail and the period on one line, at most 72 characters (`Seventeen
-operating legal entities · FY2023, as of 30 September 2023`), repeating neither the
-company nor the title's words. The builder refuses both, and the gate refuses them again
-on the sealed deck (§ 5).
+operating legal entities · FY2023, as of September 30, 2023`), repeating neither the
+company nor the title's words. The builder refuses a title carrying the period and a
+subtitle repeating the title, and the gate refuses the period again on the sealed deck
+(§ 5). That neither names the company is the critic's to hold (`check-review`): a
+company's name, in any language and legal form, is a judgment, not a pattern.
 
 **Headline and message.** A page's title is the headline, never the sentence. It names
 the page's subject: `EBITDA`, `Working capital`, `Coverage`, `The money market holding`,
 `Management's proposed adjustments`. A page carrying a table names what the table
 covers. A ruling, a verdict or a reading of the rows is stated in `message`, in the first
-person, beside the rows it rests on: `Acquired-intangible amortisation rejected`, `Two
+person, beside the rows it rests on: `Acquired-intangible amortization rejected`, `Two
 adjustments carried at supported standing`, `None of the twelve is supported` and `Every
 account fails` are messages, and none of them is a title. A title carries no verb in the
 passive and no participle standing for one (`ruled`, `carried`, `rejected`). Do not open a title on `no`, `none`, `not`, `never`, `every`, `all`,
@@ -125,7 +127,7 @@ sentence (`…`); it never trims one.
 | `bullets: [...]` | a list |
 | `stats: [{label, value, note?}]` | up to four figure tiles across the page |
 | `kv: [{label, value}]` | label and value pairs |
-| `table: {from, block?, rows?, columns?, where?, through?, max_rows?, title?, ids?, scale?, dense?}` | a table copied from a tab: its primary table, or the block under a heading (`Exceptions`, `Analysis`, a titled table on the Exec Summary). `rows` selects by leading label and `columns` by header. `where: {verdict: supported}` keeps the rows carrying a matching value in that column and every row with the column empty — a walk's mechanics, its subtotals — so a walk shows at item grain; `through: "= pro-forma EBITDA"` ends the table at that row, dropping the information lines under it. `max_rows` caps and states the rows left on the tab; a recipe schedule is never capped. `scale: thousands|millions` states the dollar columns at that scale and heads them with it (§ 4). `dense: true` sets the table at the dense size, for a schedule shown at full population. Ids are dropped unless `ids: true`. |
+| `table: {from, block?, rows?, columns?, where?, through?, max_rows?, title?, ids?, scale?, currency?, dense?}` | a table copied from a tab: its primary table, or the block under a heading (`Exceptions`, `Analysis`, a titled table on the Exec Summary). `rows` selects by leading label and `columns` by header. `where: {verdict: supported}` keeps the rows carrying a matching value in that column and every row with the column empty — a walk's mechanics, its subtotals — so a walk shows at item grain; `through: "= pro-forma EBITDA"` ends the table at that row, dropping the information lines under it. `max_rows` caps and states the rows left on the tab; a recipe schedule is never capped. `scale: units|thousands|millions|billions` states the money columns at that scale, written once in the table's title in their currency (§ 4); `currency: eur` names that currency where it is not the book's. `dense: true` sets the table at the dense size, for a schedule shown at full population. Ids are dropped unless `ids: true`. |
 | `lines: {from, block, title?}` | a tab's statement block (Notes, To reperform, a How-to-read list) as bullets |
 | `chart: {type, from, rows, columns?, block?, title?}` | `column`, `bar` or `line`, drawn on rows copied from a tab, at most four series |
 | `columns: {widths, items}` | two or three lists of blocks side by side; `widths` sum to 1 |
@@ -154,9 +156,15 @@ what the answer decides. Example, one item stated well and badly:
 **References.** A number in prose is `{tab | row label | column header}`: the cell where
 the row whose leading text is the label meets the column with that header, both copied
 verbatim from the tab, the same match `link_workbook.py` makes for the Exec Summary's
-copied amounts. Or `{tab!B3}`, one cell by coordinate. `tab` is the full tab name or the
-token that opens it (`q6`, `r4 concentration`). A trailing `| $` marks a dollar figure
-(`{q6 | = Reported EBITDA | LTM Jul 2025 | $}` renders `$8,070,000`); without it a
+copied amounts. A table on the Exec Summary declares the tab it was copied from with the
+marker `from: <tab>` in its title — the full tab name or its token (`EBITDA bridge · from:
+q6`, `Walk (from: q6 EBITDA bridge)`) — and `link_workbook.py` links each amount in it to
+its original there. The marker is the plugin's own syntax; a title is never read for a
+word. Or `{tab!B3}`, one cell by coordinate. `tab` is the full tab name or the
+token that opens it (`q6`, `r4 concentration`). A trailing `| $` marks a money figure in
+the book's currency — the one the Exec Summary's basis line (B2) names, US dollars when it
+names none (`{q6 | = Reported EBITDA | LTM Jul 2025 | $}` renders `$8.1M`; `€8.1M` in a
+EUR book); `| $:eur` names another currency (`scripts/style.py` lists them). Without it a
 number renders bare, so a count never carries a currency symbol. Prose figures follow
 `DOCTRINE.md` § Number conventions. A reference to a text cell inserts the text. A
 reference nothing resolves is a refusal naming it, never a blank.
@@ -206,7 +214,7 @@ without reading another page and without knowing how the run works. A sentence r
 one of the run's own nouns says what that noun is: *the window*, *the direction*, *the
 book side*, *the population*, *the walk*. A page's `message` renders above the blocks
 under it and defines what it uses. Example: write *"we could not test the five business
-days after 30 September 2025, because the data room holds no general ledger past that
+days after September 30, 2025, because the data room holds no general ledger past that
 date"*, not *"the half of each window after the period end has no book side to test
 against"*.
 
@@ -216,11 +224,11 @@ therefore in one period."* An exception carries what the reader needs to find th
 the records and reperform the test: the parties, the record's own identifier, the date and
 amount on each side, and the effect at each period end the deck reports. Example: write
 *"The US parent and its Australian subsidiary recorded the same intragroup settlement,
-IC-SETTLE-APAC-2025-02, in different months. The parent recorded the receipt of $458k on
-7 February 2025 and the subsidiary recorded the payment on 7 March 2025, leaving the
-intercompany accounts out of balance at 28 February 2025 by 1.2% of consolidated cash at
-that month end. Both entries fall inside FY2025, so cash at 30 September 2025 is
-unaffected."*, not *"One intragroup settlement posts its two legs a month apart, at $458k
+IC-SETTLE-APAC-2025-02, in different months. The parent recorded the receipt of $458K on
+February 7, 2025 and the subsidiary recorded the payment on March 7, 2025, leaving the
+intercompany accounts out of balance at February 28, 2025 by 1.2% of consolidated cash at
+that month end. Both entries fall inside FY2025, so cash at September 30, 2025 is
+unaffected."*, not *"One intragroup settlement posts its two legs a month apart, at $458K
 a leg."*
 
 **Run vocabulary.** State the basis only where the user chose it: *prepared on a buy-side
@@ -254,7 +262,7 @@ carries two populations, name both. Example: *a third of the past-due balance* b
 another. A page showing a selection from a longer list names the list the same way: how
 many items it holds, and what share of its amount the items shown carry.
 
-Characterise evidence in the profession's terms. A bank statement is third-party
+Characterize evidence in the profession's terms. A bank statement is third-party
 evidence, so an unreconciled account is *unreconciled*, never *taken on the bank's word*.
 
 Example, the same page message stated well and badly:
@@ -283,18 +291,22 @@ status words only, as text. Negatives in parentheses; zero as an en dash in a ta
 the left in white, the confidential line with the page number and the source tabs on the
 right. All of it is the builder's; the author never styles.
 
-**Numbers.** The builder applies these to every figure it resolves; a figure typed into a
-sentence follows them too.
+**Numbers.** US conventions, from one table — `scripts/style.py` — that the builder writes
+with and the gate reads back with. The builder applies these to every figure it
+resolves; a figure typed into a sentence follows them too.
 
 | | on the deck |
 |---|---|
-| a dollar figure in a sentence or a stat tile | scaled and rounded: `$50.5m`, `$1.5m`, `$81k`, `$950`, not `$50,456,833` |
+| a money figure in a sentence or a stat tile | scaled and rounded, with its currency: `$50.5M`, `$1.5M`, `$81K`, `$1.2B`, `$950` — `€8.4M`, `A$1.2M`, `CHF 81K` in another currency — not `$50,456,833` |
 | days, ratios, multiples | one decimal: `57.8 days`, not `57.78` |
 | percentages | one decimal: `33.9%`; exact integers exactly: `100%` |
-| a schedule of dollars copied from a tab | at the scale you declare, `scale: thousands` or `millions`: each dollar column is headed `($'000)` and reads `64,143`, and the schedule foots at that scale |
+| a date | `Sep 30, 2025` in a table cell, `September 30, 2025` in a sentence and on the cover |
+| a schedule of money copied from a tab | at the declared `scale:`, stated once in the table's title in its currency — `EBITDA bridge ($ in thousands)`; with money columns in more than one currency, `(in thousands)` and each column's currency in its header (`FY2025 (€)`) |
+| a count | never scaled: a column is a count by its format (the kit's `FMT_COUNT`, or a bare `#,##0`), never by its header's words |
+| a total | a row the tab rules with the kit's double bottom rule (`Total`); a bold row without it is a subtotal, whatever its label says |
 
 Text copied from the workbook (a cell referenced whole) keeps the
-workbook's figures, stated to the dollar. Where that clashes with the scale on the page,
+workbook's figures, stated to the unit. Where that clashes with the scale on the page,
 write the message yourself and reference the figures.
 
 ## 5. The gate
@@ -303,18 +315,23 @@ write the message yourself and reference the figures.
 
 - **The figures.** Every number on a slide is backed by a workbook numeric cell within
   the rounding tolerance of the precision shown, a number stated in a workbook text cell,
-  or a `workpapers/*.yaml` value (the admission `check_prose.py` makes).
+  or a `workpapers/*.yaml` value (the admission `check_prose.py` makes), on its magnitude:
+  a written sign is not checked. Money is read in every currency `scripts/style.py`
+  defines. A table's scale is read from its title (`($ in thousands)`). A bare year is a
+  period, not a figure.
 - **The sources.** A page carrying a table, a chart or a stat names its tabs in the
   footer; every table on it comes from a tab named there.
-- **The cover.** The title names the work, carrying neither the company nor the period,
-  and the subtitle carries the entity and the period without repeating the company (§ 2).
+- **The cover.** The title names the work and carries no period, within its length; the
+  subtitle within its own (§ 2). Whether either names the company is the critic's.
 - **The message.** Every title is a headline (at most 80 characters, no full stop), every
   `message` and `text` a complete sentence, and the deck has at least one page beyond the
   cover.
 - **The schedules.** On a run whose recipe declares `## Report`, each schedule is on the
   deck as a table from its family's tab, carrying every declared column and period, at the
   full population its `where` and `through` leave: every row's identity is on the deck,
-  and none is trimmed to `max_rows`.
+  and none is trimmed to `max_rows`. A period column is one naming a period the plan
+  declares (`params.columns`, `scripts/periods.py`); `latest` is the latest by the plan's
+  dates, else the last period column.
 - **The opening.** The first page after the cover is headed `Executive summary`, carries a
   `message` and at least one stat tile, table or chart. On a recipe run the second page is
   headed as the recipe's `metrics.title` and carries a figure block, and the first

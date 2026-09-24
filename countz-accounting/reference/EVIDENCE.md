@@ -39,8 +39,7 @@ minted with the same id in both; a disagreement between them is a finding.
 
 **The grammar.** An id is the prefix, a dot, then one or more segments joined by dots; a
 segment is `[A-Za-z0-9_-]+`. No space, slash or parenthesis. Slug at mint time, and slug
-a period the same way in every ledger: a fiscal year `fy2025`; a month `2026-03`; an LTM
-column by its end month `ltm_2026-07` (`F.q6.ebit.ltm_2026-07`); a quarter `2026q1`. The
+a period as `scripts/periods.py` keys it (e.g. `fy2025`, `2026-03`, `ltm_2026-07`). The
 column label (`LTM July 2026`) is display, carried by `label`, never by the id.
 `check_workbook.py --run-dir` refuses an id outside the grammar at the check's own gate;
 `resolve_roots.py` refuses it at the seal.
@@ -72,8 +71,8 @@ single stated figure to a span.
   header_at: "A4"                     # the cell holding the header row
   rows: "5:31882"                     # the data rows consumed
   columns:
-    - {name: "Amount",  at: "F", holds: values}
-    - {name: "Account", at: "B", holds: values}
+    - {name: "Amount",  at: "F", holds: values, parse: "number; parentheses negative"}
+    - {name: "Account", at: "B", holds: values, parse: "text"}
   filter: "none - full sheet consumed"
   row_count: 31878
   control_total: {column: "Amount", value: 12094418.55}
@@ -86,25 +85,34 @@ single stated figure to a span.
 `control_total`, `header_at`, `rows`, `holds` and `filter` are required. A read of the
 whole sheet states `filter: "none - full sheet consumed"`.
 
+A file whose columns sit by position — a fixed-width export, a PDF statement's text
+layer — is cited the same way, with `rows` and `at` as the reading step states them:
+each column's `at` is its character range (`chars 41-50`), `header_at` states
+`none - columns by position` (or the header's line), and a PDF's `rows` are page and
+line ranges of its text layer (`p1:L5-7,p2:L4-5`). A re-performer opens the page, reads the lines named and cuts the characters named.
+
 A read of a file the run wrote, e.g. another check's item table under `checks/`, is
 `file_role: run_artifact` with `from_check: <check id>`, never `system_export` or any
 data-room role. Its basis is the producing check's own citations, and the deliverable
 presents the read as derived.
 
 **A span is measured.** A run whose plan scheduled an `extract` step (`PLAYBOOKS.md`
-§ The file) holds the files its steps read as typed parquet under `<run_dir>/cache/`,
-with `cache/manifest.json` recording each file's source path, bytes, header row,
-columns with their letters, and control total. A step reads a population with one SQL
-statement through `scripts/evidence.py select`, which returns the rows and the span of
-the same rows: `file`, `source`, `file_role`, `header_at`, `rows` and the column letters
-from the manifest, `filter` as the WHERE clause verbatim in the file's own column
-names, `row_count` and `control_total` measured over the rows returned. The caller
-supplies the id, the control column and the note. A span cites one table; a join
-across two files is two spans, and the figure's `expression` carries the arithmetic.
-The parquet is named nowhere: a reader holding the workbook and the data room opens
-the file at `header_at`, applies the filter, counts the rows and sums the control
-column. For a read the cache did not serve, `scripts/evidence.py span <path>` measures
-the same entry on the file.
+§ The file) holds the tables its steps read under `<run_dir>/cache/`, written by the
+extract step's script through `scripts/cache.py` with true file coordinates and each
+column's parse (`RUN_CONTRACT.md`, the file table). A step reads a population with one
+SQL statement through `scripts/evidence.py select`, which returns the rows and their
+span: coordinates and columns from the manifest, `filter` as the WHERE clause verbatim
+in the file's own column names, `row_count` and `control_total` measured over the rows
+returned. A span cites one table; a join across two files is two spans, and the
+figure's `expression` carries the arithmetic. The parquet is named nowhere: a reader
+holding the workbook and the data room opens the file at `header_at`, reads the columns
+as their `parse` says, applies the filter, counts the rows and sums the control column.
+A file the step reads directly is parsed in its own code and cited with
+`span(frame=<the parsed df>, file=, source=, file_role=, sheet=, header_at=, rows=,
+columns={name: {at, parse}}, filter=, control=)`: the step states the coordinates and
+parse, and the count and total are measured over the frame.
+
+**A control total is never taken over a column with an unparsed cell.**
 
 ### cell
 
@@ -165,7 +173,7 @@ that entry covers the table's cells.
 - id: F.tie_gl_tb.delta
   label: "GL roll-up to TB - difference at 2026-03-31"
   value: 3306.11
-  unit: usd                           # usd | pct | count | ratio
+  unit: usd                           # a `figures.UNITS` unit
   expression: "F.tie_gl_tb.gl_side - F.tie_gl_tb.tb_side"
   inputs:
     - {role: gl_side, source_type: figure, figure_id: F.tie_gl_tb.gl_side}
@@ -187,7 +195,7 @@ at the seal. `Ledger.tie()` mints a tie's difference figure and classifies it
 - **`inputs[]` is never empty, and `role` is required.** `source_type` is one of
   `room_file` (with `citation_id`: a read of a file the user gave us), `figure` (with
   `figure_id`), `check_output` (with `citation_id`: a `run_artifact` read of another
-  check's item table; never labelled `room_file`), or `declared` (with `field`: a
+  check's item table; never labeled `room_file`), or `declared` (with `field`: a
   tolerance or option the user declared). A passthrough records
   `expression: "as stated at E.x (passthrough)"` and its input.
 - **`zero_basis`** on any zero, null or blank value: `measured_zero` (requires
@@ -230,7 +238,7 @@ columns.
 
 ## 5. Item tables
 
-Item-level work is written down, not only summarised. A check that matches, traces or
+Item-level work is written down, not only summarized. A check that matches, traces or
 pairs rosters at item grain writes one CSV per item table at `checks/<check>-<table>.csv`
 (each kind's SKILL.md names its own tables and columns) plus a manifest block in
 `checks/<check>.md` recording what built it: the citations behind each side, the keys

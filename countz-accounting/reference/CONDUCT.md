@@ -75,6 +75,11 @@ Do both of these on every file:
 
 ### Libraries
 
+Prefer, in order: the plugin's own `scripts/` where one fits (`agents/worker.md` § Shared
+modules); SQL (`scripts/evidence.py`'s `select()`); polars and the other libraries below;
+custom Python last, only for what none of those express. A join, a group-by or a window
+is a library call, never a hand-written loop.
+
 - **uv** — use `uv` instead of `pip` wherever possible. The preferred packages are
   pinned in the plugin root's `pyproject.toml` / `uv.lock`; run a script with
   `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 <script>`. Never install into the
@@ -90,6 +95,9 @@ Do both of these on every file:
 - **figures and periods** — every figure ledger is written through `scripts/figures.py`
   (`reference/EVIDENCE.md` § 3) and every period column through `scripts/periods.py`
   (`reference/DOCTRINE.md` § Periods).
+- **pypdf** — a PDF's text layer: the extract step's script reads a statement's pages
+  through it (`skills/check-extract/SKILL.md`), and `scripts/peek.py` shows the first
+  page. A page with no text layer (a scan) is read in the harness, page-ranged.
 - **python-pptx** — the report deck, written only by `scripts/build_report.py` from
   `report.yaml` (`reference/REPORT.md`); no skill writes slides directly.
 
