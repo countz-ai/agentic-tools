@@ -2481,6 +2481,22 @@ def check(root: pathlib.Path) -> list[str]:
         if "## Sign in first" not in rc_txt:
             bad.append(f"{rel(root / 'reference' / 'RUN_CONTRACT.md')}: missing § Sign in first")
 
+    # 8y. The ARR policy catalog (reference/ARR_POLICY.md) has one home,
+    #     scripts/arr_policy.py: 31 decisions, every derivation defined at every position
+    #     under every purpose, and every derived value one of the decision's own options.
+    #     A catalog edit that breaks a derivation fails here, not in a user's run.
+    ap_script = root / "scripts" / "arr_policy.py"
+    if ap_script.is_file():
+        import subprocess
+        r = subprocess.run([sys.executable, str(ap_script), "selftest"],
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            bad.append(f"{rel(ap_script)}: selftest failed - "
+                       f"{(r.stdout or r.stderr).strip().splitlines()[-1]}")
+        for skill in ("create-arr-policy", "extract-arr-policy"):
+            if not (root / "skills" / skill / "SKILL.md").is_file():
+                bad.append(f"{rel(ap_script)}: the ARR policy ships without skills/{skill}")
+
     # 8. A shipped hook must be executable, or it fails silently at run time.
     for h in sorted(root.glob("hooks/*.sh")):
         if not h.stat().st_mode & 0o111:

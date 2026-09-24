@@ -51,6 +51,13 @@ user does not choose, the option's line carries the answer to use and the plan s
 which it took. A line that says *no default* is asked again (`RUN_CONTRACT.md`
 § Parameters).
 
+**`arr_policy`** is the one declared key with a fixed meaning: a recipe that computes
+annual recurring revenue, recurring-revenue retention, churn or an ARR bridge declares
+it, and its body reads every ARR choice from the policy by decision id rather than
+stating a default of its own (`ARR_POLICY.md`). Its line says *no default*: the relay
+settles it through the `create-arr-policy` skill, and its value in `declared` is the
+pinned `<run_dir>/arr_policy.yaml`.
+
 `headline` names a family whose section declares one check. `check-report` finds that
 check in `run.json.checks` by `params.family` and builds the Exec Summary on its walk.
 

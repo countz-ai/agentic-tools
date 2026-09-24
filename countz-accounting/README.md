@@ -27,8 +27,9 @@ Layout:
   distills saved playbooks; opens no client file), `scrubber` (rewrites the one text that
   crosses to the connector, and reads it back blind; opens no client file)
 - `skills/` — the inline launchers (`tieout`, `recon`, `countz-analysis`,
-  one shim per recipe), the internal inline relay `playbook`, plus the forked workers
-  (`create-recipe`, `check-plan`, `check-extract`, `check-tie`, `check-recon`,
+  one shim per recipe, and `create-arr-policy`, which settles the ARR policy a run that
+  computes ARR requires), the internal inline relay `playbook`, plus the forked workers
+  (`create-recipe`, `extract-arr-policy`, `check-plan`, `check-extract`, `check-tie`, `check-recon`,
   `check-completeness`, `check-vouch`, `check-cutoff`, `check-analyze`, `check-review`,
   `check-report`, `playbook-next`, `playbook-save`)
 - `reference/` — `CONDUCT.md` (the standing rules every agent reads first: the reader,
@@ -42,13 +43,16 @@ Layout:
   `PLAYBOOK_RECIPES.md` (the rules every recipe runs under, and the relay
   procedure), `WORKBOOK.md` + `WORKBOOK_STYLE.md` (the workbook's one design:
   where things go, how cells look),
-  `OBSERVABILITY.md` + `rates.json`
+  `OBSERVABILITY.md` + `rates.json`, `ARR_POLICY.md` (the ARR policy: its model, its
+  file, where it lives and how a run reads it)
 - Playbooks — user-saved ones land in `$HOME/.countz-accounting/playbooks/`; a
   plan-driven run drafts its own at `<run_dir>/plan/<name>.json`. New packaged capability
   is a playbook recipe (plus its shim skill — `reference/RECIPE_FORMAT.md`) composing the
   check kinds; a new kind is a worker skill — its procedure and its item tables — plus a `KINDS` row and
   params contract in `scripts/check_playbook.py`.
-- `scripts/` — `setup_run.py` (mechanical workspace registration — mints the run
+- `scripts/` — `arr_policy.py` (the ARR policy's one home: the catalog of purposes,
+  positions, conventions and the 31 decisions, and the commands that resolve, render,
+  approve and check a company's policy), `setup_run.py` (mechanical workspace registration — mints the run
   directory `<skill>-<company>.<stamp>` with its `run.json`, or folds new sources into a
   run named by its path; the relay runs it, never a dispatch), `run_state.py` (the
   relay's pen for `run.json`: check registration, playbook binding, plan approval, wave

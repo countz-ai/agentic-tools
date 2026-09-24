@@ -10,6 +10,7 @@ mechanical, not a dispatch: no seq, no step record.
     setup_run.py <run_dir> --session <session id> --sources '<one-line JSON>' \
         [--params '<one-line JSON>']                       # fold into / join a run
     setup_run.py ... --recipe <path> [--recipe-version <v>]  # pin the run's recipe
+    setup_run.py <run_dir> ... --arr-policy <path>           # pin the run's ARR policy
 
 A new run's directory is MINTED here, never named by the relay:
 `<output_root>/<skill>-<company>.<YYYYMMDD-HHMMSS>` — `--skill` is the launcher skill
@@ -294,6 +295,30 @@ def pin_recipe(run_dir: pathlib.Path, run: dict, src: pathlib.Path,
     return {"name": name, "version": version, "path": str(dest)}
 
 
+def pin_arr_policy(run_dir: pathlib.Path, run: dict, src: pathlib.Path) -> dict | str:
+    """Copy an approved ARR policy to <run_dir>/arr_policy.yaml unchanged and return the
+    record for `run.json.inputs.arr_policy`, or the refusal reason (ARR_POLICY.md § Where
+    a policy lives). `arr_policy.py check` is the gate: complete and approved."""
+    import subprocess
+    if not src.is_file():
+        return f"--arr-policy: no such file: {src}"
+    chk = subprocess.run([sys.executable, str(pathlib.Path(__file__).resolve().parent /
+                                              "arr_policy.py"), "check", str(src)],
+                         capture_output=True, text=True)
+    if chk.returncode != 0:
+        return (f"--arr-policy: {src} is not a complete, approved policy - "
+                f"{(chk.stdout or chk.stderr).strip()}")
+    data = src.read_bytes()
+    digest = hashlib.sha256(data).hexdigest()[:12]
+    dest = run_dir / "arr_policy.yaml"
+    held = run.get("inputs", {}).get("arr_policy")
+    if held and held.get("sha256") != digest:
+        return (f"--arr-policy: the run already pins a policy ({held.get('source')}, "
+                f"sha256 {held.get('sha256')}); a run executes one policy - start a new run")
+    dest.write_bytes(data)
+    return {"path": str(dest), "source": str(src), "sha256": digest}
+
+
 def _kb(n: int) -> str:
     return f"{max(1, round(n / 1024)):,}" if n else "0"
 
@@ -456,6 +481,9 @@ def main() -> int:
     ap.add_argument("--recipe-version", default=None,
                     help="the recipe_version the connector served with the body; its "
                          "sha must match the file")
+    ap.add_argument("--arr-policy", type=pathlib.Path, default=None,
+                    help="an approved ARR policy to pin: copied unchanged to "
+                         "<run_dir>/arr_policy.yaml (reference/ARR_POLICY.md)")
     a = ap.parse_args()
     if a.recipe_version and not a.recipe:
         return fail("--recipe-version needs --recipe")
@@ -509,8 +537,18 @@ def main() -> int:
             if isinstance(pinned, str):
                 return fail(pinned)
             run["inputs"]["recipe"] = pinned
+        policy = None
+        if a.arr_policy is not None:
+            policy = pin_arr_policy(run_dir, run, a.arr_policy.resolve())
+            if isinstance(policy, str):
+                return fail(policy)
+            run["inputs"]["arr_policy"] = policy
+            params["arr_policy"] = policy["path"]
         run["updated_at"] = ts
         _write_json(run_path, run)
+        if policy:
+            _append_event(run_dir, "arr_policy_pinned", sha256=policy["sha256"])
+            print(f"ARR policy pinned at {policy['path']} (sha256 {policy['sha256']})")
         if pinned:
             _append_event(run_dir, "recipe_pinned", name=pinned["name"], version=pinned["version"])
             print(f"recipe {pinned['name']} ({pinned['version']}) pinned at {pinned['path']}")
@@ -589,7 +627,17 @@ def main() -> int:
         if isinstance(pinned, str):
             return fail(pinned)
         run["inputs"]["recipe"] = pinned
+    policy = None
+    if a.arr_policy is not None:
+        policy = pin_arr_policy(run_dir, run, a.arr_policy.resolve())
+        if isinstance(policy, str):
+            return fail(policy)
+        run["inputs"]["arr_policy"] = policy
+        run["inputs"]["params"]["arr_policy"] = policy["path"]
     _write_json(run_path, run)
+    if policy:
+        _append_event(run_dir, "arr_policy_pinned", sha256=policy["sha256"])
+        print(f"ARR policy pinned at {policy['path']} (sha256 {policy['sha256']})")
     _append_event(run_dir, "run_created", run_id=run["run_id"],
                   output_root=run["inputs"]["output_root"],
                   plugin_version=run["plugin"]["version"], plugin_tree=run["plugin"]["tree"])

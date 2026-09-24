@@ -27,7 +27,7 @@ Subcommands:
         steps as checks, append the `plan_approved` event.
 
     dispatch <run_dir> --checks id1,id2 [--mode fresh|fix] [--extra '<one-line JSON>']
-    dispatch <run_dir> --step plan|recipe|review|report --args '<one-line JSON>'
+    dispatch <run_dir> --step plan|recipe|arr_policy|review|report --args '<one-line JSON>'
     dispatch <run_dir> --briefs <brief.md> ...
         Open a wave: allocate seqs from next_seq, append one dispatch row per member
         (state "dispatched"), write every member's brief to dispatch/<NNNN>-<step>.md —
@@ -86,7 +86,7 @@ RUN_SCHEMA = "countz-accounting/run@1"
 # Steps that are not checks, and the skill each dispatches. Check kinds resolve through
 # check_playbook.KINDS.
 STEP_SKILLS = {"plan": "check-plan", "recipe": "create-recipe", "review": "check-review",
-               "report": "check-report"}
+               "report": "check-report", "arr_policy": "extract-arr-policy"}
 
 BRIEF = """\
 # countz-accounting dispatch {nnnn} — {step}
@@ -182,6 +182,8 @@ def step_say(step: str, args: dict) -> str:
     if step == "recipe":
         return ("Writing the recipe from your answers." if args.get("answers")
                 else "Reading the data room to draft the questions the recipe needs answered.")
+    if step == "arr_policy":
+        return "Reading the company's documents for the rules it computes ARR by."
     if step == "review":
         ids = args.get("checks") or []
         if isinstance(ids, str):

@@ -99,5 +99,7 @@ on `revise=`.
    Show the recipe to the user (`preview.py` names it) before the plan step. A generated
    recipe belongs to this run: a later run over the same analysis generates again.
 
-Then `PLAYBOOK_RECIPES.md § Plan`, with `recipe=` the pinned path and `instructions=`
-the ask, and everything after it unchanged.
+Where the pinned recipe declares `arr_policy`, served or generated, settle it first
+(`PLAYBOOK_RECIPES.md § Fetch the recipe and register`, *The ARR policy*). Then
+`PLAYBOOK_RECIPES.md § Plan`, with `recipe=` the pinned path and `instructions=` the
+ask, and everything after it unchanged.

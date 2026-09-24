@@ -27,7 +27,14 @@ You are the relay and overseer. You do no analysis and you open no client file. 
 `--skill` is `revenue-analysis`: the run directory is
 `<output_root>/revenue-analysis-<company>.<YYYYMMDD-HHMMSS>`.
 
-Put the two declared options to the user with the rest of the collection —
-`consumption_basis`, `acquired_window` — each with the line the recipe's frontmatter
-carries. Where they do not choose, take the default each line states:
-`trailing_three_months`, `12`.
+**The run computes ARR only under an approved ARR policy.** The recipe declares
+`arr_policy`, and nothing is planned before one is pinned. With the rest of the
+collection, ask whether the company has an approved ARR policy, naming the one the
+library holds for it where there is one (`${CLAUDE_PLUGIN_ROOT}/reference/ARR_POLICY.md`
+§ Where a policy lives). Where there is none, say that the run will first read the data
+room for the company's own ARR rules and ask only what they leave open. After
+registration, settle it per `PLAYBOOK_RECIPES.md § Fetch the recipe and register`, *The
+ARR policy*: pin the one they named, or invoke the `create-arr-policy` skill with
+`run_dir` and `company`. The measurement window, the consumption treatment and the
+acquired window are decisions in that policy (S2, R1, A2), so none of them is asked
+here.

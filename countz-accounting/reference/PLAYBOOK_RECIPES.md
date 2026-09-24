@@ -108,7 +108,10 @@ classification, and what every wave owes the user.
   they give one: a fiscal year, a quarter, the months of a close.
 - **Each option the recipe `declares`**: put its line to the user and record the choice.
   Where they do not choose, take the answer its line carries (`RUN_CONTRACT.md`
-  § Parameters).
+  § Parameters). `arr_policy` is the exception: it is a file, not a one-line choice. Ask
+  whether the company has an approved ARR policy (`ARR_POLICY.md` § Where a policy
+  lives). A policy in the library for this company is offered by name. The rest is
+  settled after registration (§ 2).
 - **The company** whose books the run is over, in the user's words. It names the run
   folder.
 - **Where the output goes**: a folder you may write into. Do not guess paths.
@@ -157,6 +160,17 @@ and pins the generated recipe afterwards (its SKILL.md).
 Sources arriving after the plan is drafted: run the same script with `<run_dir>` in place
 of `--output-root`, `--skill` and `--company`, then re-dispatch `check-plan` with
 `revise=` naming them.
+
+**The ARR policy.** Where the recipe declares `arr_policy`, the plan waits for an
+approved policy pinned in the run. When the user named one, or the library holds one
+they chose, pin it: `setup_run.py <run_dir> --session ${CLAUDE_SESSION_ID} --sources '[]'
+--arr-policy <path>`. Otherwise invoke the `create-arr-policy` skill with `run_dir` and
+`company`. It reads the registered data room for the company's own ARR rules (a policy
+memo, KPI definitions, a filing's metrics section), asks the user only what those leave
+open, has the whole policy approved, saves it to the library and pins it. The pinned
+path is the `arr_policy` value `declared` carries to the plan. A refusal from
+`--arr-policy` means the file is not complete and approved: hand it to
+`create-arr-policy` as the company's policy file.
 
 The script also writes `<run_dir>/engagement-preview.md`: the parameters, each source's
 location and the data room's directory shape, from directory metadata only. Before
