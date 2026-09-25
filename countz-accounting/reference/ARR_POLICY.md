@@ -8,11 +8,14 @@ the company approved, and states that policy beside every figure that depends on
 
 This document is the contract for that policy. The catalog itself (every purpose,
 position, convention, decision, option and derivation) has one home,
-`scripts/arr_policy.py`. Print it with:
+`scripts/arr_policy.py`, which reads and writes YAML, so it always runs through the
+plugin's pinned libraries. Print the catalog with:
 
 ```
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/arr_policy.py catalog
+uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/arr_policy.py catalog
 ```
+
+Below, `arr_policy.py` means that same invocation.
 
 ## The model
 
@@ -57,8 +60,12 @@ One YAML file per company. `arr_policy.py resolve` writes it; `arr_policy.py app
 stamps it; nothing else edits a saved policy.
 
 ```yaml
+# ARR policy. Before you use any value in this file, read how it is applied:
+#   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py reference/ARR_POLICY.md "Applying the policy"
+# ...
 schema: countz-accounting/arr-policy@1
-company: Demo DGII Corp
+apply_per: ${CLAUDE_PLUGIN_ROOT}/reference/ARR_POLICY.md § Applying the policy
+company: Acme Corp
 status: approved                  # draft until `approve`; any re-resolve returns it to draft
 approved: {by: Jane Smith, at: 2026-09-24T22:22:32Z}
 purpose: sell_side                # optional; the dial
@@ -79,8 +86,20 @@ decisions:
   R6: {value: include, basis: override, derived: include_term_contracted,
        cite: "ARR policy memo p.2: warranty is ARR from shipment"}
   # ... all 31
+instructions:                     # free text: how the decisions apply to this business
+  - id: I1
+    text: >-
+      Certificate ARR is coverage per protected domain per year: a plan counts its annual
+      price once, however many certificates are reissued under it.
+    applies_to: [S5]
+    source: inferred              # user | stated | inferred
+    basis: "S5 timing is coverage_per_year; a reissue carries no price"
+    added: {at: 2026-09-25T10:02:11Z, in: revenue-analysis-acme.20260925-095811}
 ```
 
+- The header comment and `apply_per` point whoever opens the file to § Applying the
+  policy before any value is used. `arr_policy.py` writes both on every save, so they
+  survive every resolve, amend and approval.
 - `set_by` on a position: `stated` (a document names the position), `inferred` (from the
   stated decisions it decides), `purpose`, `answer` (the user said so).
 - `set_by` on a convention: `stated`, `answer`, `default` (proposed and approved as shown),
@@ -89,11 +108,36 @@ decisions:
   (a document states it and it agrees with the positions), `override`.
 - Values are the catalog's option ids. A composite decision (S5, R3, R5, R7, L2, L4, V1,
   V5, A2, A6) is a mapping of fields.
+- `instructions` are free text (§ Instructions). `source: stated` carries a `cite`,
+  `source: inferred` a `basis`; `applies_to` names the decisions an instruction refines,
+  or is empty for one that applies throughout.
 
 **Stated input.** A document's rules enter as a partial file: `company`, `documents`, and
 under `decisions` each rule the document states, as `{value, basis: stated, cite,
 quote}`. A document that names a position or a convention directly enters under
-`policies` or `conventions` with `set_by: stated`. `resolve` does the rest.
+`policies` or `conventions` with `set_by: stated`. A stated rule no option can express
+enters under `instructions` with `source: stated` and its `cite`. `resolve` does the rest.
+
+## Instructions
+
+The 31 decisions are generic: they name choices every recurring-revenue business faces.
+A business also has its own products, contracts and channels, and how a decision applies
+to them often cannot be an option id. For example: that a certificate plan counts once
+however many reissues it carries, that a reseller's prepaid balance is not ARR until it
+is drawn, or that a usage tier resetting monthly is annualized at twelve times the tier.
+An **instruction** records that in plain English.
+
+- **An instruction refines a decision; it never contradicts one.** It says how a
+  decision's value applies to this business's records. To change the value itself, the
+  decision is overridden, with its reason. An instruction that reads against its
+  decision's value is resolved by the user before the policy is approved.
+- **Three sources.** `stated`: a company document says it, with a `cite`. `user`: the
+  user said it, in create-arr-policy or in answer to a question. `inferred`: it follows
+  from the policy's own settings, with a `basis` naming them. Every instruction is
+  approved with the policy, whatever its source.
+- **Added when needed.** create-arr-policy records the ones the company's documents
+  state and the user gives. A run adds the ones its steps meet, and saves them to the
+  library policy (§ Applying the policy, steps 5 and 6).
 
 ## Where a policy lives
 
@@ -103,22 +147,88 @@ quote}`. A document that names a position or a convention directly enters under
 - **In a run:** pinned at `<run_dir>/arr_policy.yaml` by
   `setup_run.py <run_dir> --arr-policy <file>`, which refuses a policy `arr_policy.py
   check` does not pass (complete and approved) and records its sha in
-  `run.json.inputs.arr_policy`. A run pins one policy and never edits it. A change to the
-  policy is a new approval and a new run.
+  `run.json.inputs.arr_policy`. The pinned file is never edited. A policy amended during
+  the run (§ Applying the policy, step 6) replaces it: any approved policy before the plan
+  is approved; after that, only one that adds instructions and changes no position,
+  convention or decision (`arr_policy.py same-core`). Any other change is a new run.
 
-## How a run uses it
+## How a run carries it
 
 A recipe that computes ARR, recurring revenue, retention, churn or an ARR bridge declares
 `arr_policy` in its frontmatter (`RECIPE_FORMAT.md` § The document). The relay settles
-it through the `create-arr-policy` skill before the plan is drafted
-(`PLAYBOOK_RECIPES.md` § 1 and § 2). Its value in `declared` is the pinned path.
+it through the `create-arr-policy` skill and pins it before the plan is drafted
+(`PLAYBOOK_RECIPES.md` § 2), and the plan writes its path into the `params.arr_policy`
+of every step the recipe names. From there, § Applying the policy governs.
 
-- The plan writes `params.arr_policy` into every step whose recipe section names it.
-- A worker reads the decisions it applies by id (`decisions.S1.value`), never from a
-  default of its own. The step's record cites the decision id beside each figure the
-  decision moves, so the reader can trace a number to the policy line that produced it.
-- The workbook's Basis of Preparation states the purpose, the four positions, the
-  conventions, and every override and rule breach, each with its reason or citation.
-- Where the records cannot apply a decision as written (a policy counts committed
-  consumption, and no record carries the commitment), the figure is withheld with the
-  `D.`. The decision is never re-made in the run.
+## Applying the policy
+
+This section is the one statement of how an ARR policy is applied. The worker computing a
+figure, the critic reviewing it and the relay recording what they find all follow it.
+The worker and the critic reach it through the recipe, which they read whole and which
+routes every step carrying `params.arr_policy` here (`RECIPE_FORMAT.md` § The
+document), and through the header of the policy file itself. The relay reaches step 6
+through `PLAYBOOK_RECIPES.md` § 4.
+
+**When.** Every step whose `params` carry `arr_policy`, for every figure, population or
+ruling that a decision could move. The critic applies it to every such step it reviews:
+treatment that departs from what this section requires, or a ruling that fails step 5's
+tests, is a `judgment` finding, graded by the amount it moves.
+
+1. **Read the policy.** Run `arr_policy.py render <params.arr_policy>`. It prints the positions, the conventions, all 31 decisions and
+   the instructions.
+2. **State what applies, before computing.** Name the decisions the step applies, each
+   with its value, and the instructions that refine them: every instruction whose
+   `applies_to` names one of those decisions, and every instruction whose `applies_to`
+   is empty.
+3. **Apply them as written.** A decision's value governs, and its instructions govern how
+   that value meets this company's rows. Never substitute a default of your own, and
+   never re-make a decision. Where the records cannot carry a decision as written (the
+   policy counts a committed consumption minimum and no record carries the commitment),
+   withhold the figure with the `D.` naming the record that would allow it.
+4. **Cite the policy.** Beside every figure a decision or instruction moves, in the
+   figure's description and in the check's narrative, cite their ids: `S5, I1`. The
+   reader traces the number to the policy line that produced it.
+5. **Settle what is still pending, lazily.** A question is pending when this company's
+   records raise it and no decision value, override or instruction answers it: a
+   certificate reissued under one plan, a prepaid balance drawn down per purchase, a
+   usage tier that resets monthly. Settle it when you meet it, never ahead of need:
+   - **Infer it when the policy decides it.** Infer when the positions, conventions and
+     decisions admit one reading, or when the readings differ by less than materiality
+     (`DOCTRINE.md` § Materiality). A reading that contradicts a decision's value is
+     never inferred. Append it to `<run_dir>/arr_policy/gaps-<check_id>.yaml` under
+     `inferred` as `{id: I.<check_id>.<n>, text, applies_to, basis}`, where `basis` names
+     the settings it follows from. Apply it, cite its id, and go on.
+   - **Ask only when it does not.** Where two readings each fit the policy and would move a
+     figure beyond materiality, append the question under `questions` as `{id:
+     Q.<check_id>.<n>, question, why, readings, applies_to}`. Compute everything the
+     question does not move. Then finish `blocked`, with one blocker per question whose
+     `what` begins `ARR policy question Q.<check_id>.<n>` and whose `effect` names the
+     figures held for the answer. A step cannot ask the user; the relay does (step 6).
+   - **Review the ruling.** The critic tests each inferred ruling like any other. It
+     checks that the ruling follows from the basis it names, contradicts no decision's
+     value, and is not a material choice that should have been asked.
+6. **Record the addition in the policy (the relay).** After each wave's `record`, and
+   before the next wave launches, the relay reads the steps' `gaps-*.yaml`:
+   - **A question stops the run.** A question is open until `answers.yaml` carries its
+     id. Put every open question to the user in one message, with its readings and the
+     evidence that raised it. Write the answers to
+     `<run_dir>/arr_policy/answers.yaml` (`{Q.<check_id>.<n>: "<their words>"}`).
+   - **An inferred addition does not stop the run.** Collect it, and put it to the user
+     for confirmation with the review's findings. A correction is an answer, and re-runs
+     the steps it moves.
+   - **Amend and approve.** Whenever answers or confirmations are in hand, run
+     `arr_policy.py amend <run_dir>/arr_policy.yaml --gaps <run_dir>/arr_policy/gaps-*.yaml
+     --answers <run_dir>/arr_policy/answers.yaml --run <run id> --out
+     <run_dir>/arr_policy/amended.yaml`. Show the § Instructions of its render, then
+     approve and save it to the library path the pinned policy came from
+     (`run.json.inputs.arr_policy.source`): `arr_policy.py approve --by "<the user's
+     name>" --out <that path>`. Pin it again with `setup_run.py <run_dir> --arr-policy
+     <that path>`, and re-dispatch each step that blocked on a question now answered
+     (`run_state.py dispatch <run_dir> --checks <check id>`). `amend` skips an addition
+     the policy already carries, so the gap files are passed whole every time.
+   - **Instructions accumulate.** Every addition lands in the library policy, so the next
+     run over the same company starts with it and does not ask again.
+
+**The deliverable** states the policy on the Basis of Preparation: the purpose, the four
+positions, the conventions, every override and rule breach with its reason or citation,
+and every instruction with its source.

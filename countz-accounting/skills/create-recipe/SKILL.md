@@ -51,8 +51,7 @@ Write `<run_dir>/recipes/<name>.md`, `name` kebab-case and not a name the catalo
 carries. Frontmatter per `RECIPE_FORMAT.md`: `name`, `objective` (from the confirmed
 answer, verbatim), `declares` for any option the answers left to the user (and
 `arr_policy` whenever the objective computes ARR, recurring-revenue retention, churn or
-an ARR bridge: those families read every ARR choice from the policy by decision id,
-`${CLAUDE_PLUGIN_ROOT}/reference/ARR_POLICY.md`), `headline`
+an ARR bridge, per `RECIPE_FORMAT.md` § The document), `headline`
 naming the one-check family whose walk the deliverable leads with, `lead` where more
 than one tab follows the Exec Summary. The seven required sections in order, `## Report`
 among them: its `metrics.title` is the headline of the deck's key-metrics page — the

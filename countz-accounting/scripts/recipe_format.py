@@ -200,6 +200,14 @@ def validate(text: str, kinds: set[str] | None = None) -> list[tuple[str, str]]:
                                         f"(lower-case letters, digits, single hyphens)"))
     for k in sorted(set(fm) - FRONTMATTER_KEYS):
         bad.append(("frontmatter.unknown_key", f"unknown frontmatter key `{k}`"))
+    # The recipe is what routes a worker and the critic to the ARR policy: they read it
+    # whole, and nothing generic points them there (RECIPE_FORMAT.md § The document).
+    flat = " ".join(text.split())
+    if "arr_policy" in (fm.get("declares") or {}) and not (
+            "params.arr_policy" in flat and "Applying the policy" in flat):
+        bad.append(("arr_policy.route", "declares `arr_policy` but its body never says that "
+                                        "a step carrying `params.arr_policy` applies it per "
+                                        "ARR_POLICY.md § Applying the policy"))
     heads = re.findall(r"^## (.+?)\s*$", text, re.M)
     pos = [heads.index(h) if h in heads else None for h in REQUIRED]
     for h, at in zip(REQUIRED, pos):

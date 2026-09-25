@@ -14,8 +14,8 @@ context: inline
 
 Read `${CLAUDE_PLUGIN_ROOT}/reference/ARR_POLICY.md` whole. A § citation below is read
 with `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py <document> "<heading>"`. Every
-command below is `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/arr_policy.py`, called
-`arr_policy.py` here.
+command below is `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/arr_policy.py`
+(it needs the plugin's pinned libraries), called `arr_policy.py` here.
 
 **Aim for the fewest questions.** One purpose settles four positions, and the positions
 settle 18 decisions. The rules need no answer. Every convention has a default the user
@@ -88,8 +88,9 @@ the user in **one message**:
   with their citations.
 - **`ASK convention` lines**: one table of every convention with its proposed default,
   answered all at once ("keep the defaults, or name the ones to change").
-- **The document's unmapped `notes`**: each one quoted, asking which decision it
-  settles, or whether it is outside the policy.
+- **The document's `notes`**: each is a rule that contradicts a decision or another
+  document. Quote it with its citation and ask which reading holds. Rules the documents
+  state that no option expresses are already `instructions`, and need no question.
 
 Where the host offers a multiple-choice question tool, use it for the purpose and the
 positions. Record each answer in the draft:
@@ -107,15 +108,20 @@ not questions.
 
 Show the output of `arr_policy.py render <draft.yaml>` verbatim. It is the one
 presentation of a policy: the purpose, the four positions and how each was set, the
-conventions, the 31 decisions with the basis of each, and every override. Then say, in
-at most three lines:
+conventions, the 31 decisions with the basis of each, every override, and the
+instructions. Then say, in at most three lines:
 
 - which positions were inferred from their documents and which came from answers;
 - each override and rule breach, and what it departs from;
 - that the conventions marked "proposed default" stand unless they change them.
 
-Ask for approval. A change is recorded in the draft as in step 3 and resolved again,
-then shown again. Nothing is saved before the user approves.
+Ask for approval, and invite any rule of theirs the policy does not yet carry: how
+their own products, plans or channels are counted, in their words. Record each under
+`instructions` as `{text, applies_to, source: user}`, where `applies_to` names the
+decisions it refines (`ARR_POLICY.md` § Instructions). An instruction that contradicts a
+decision's value is a change to that decision instead: record it as an override with
+their reason. A change is recorded in the draft as in step 3 and resolved again, then
+shown again. Nothing is saved before the user approves.
 
 ## 5. Save it
 

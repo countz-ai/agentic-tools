@@ -295,16 +295,28 @@ def pin_recipe(run_dir: pathlib.Path, run: dict, src: pathlib.Path,
     return {"name": name, "version": version, "path": str(dest)}
 
 
+def _arr_policy_cmd(*args: str) -> list[str]:
+    """arr_policy.py needs PyYAML: this interpreter when it has it, else the plugin's
+    pinned environment through uv (CONDUCT.md § Libraries)."""
+    script = str(pathlib.Path(__file__).resolve().parent / "arr_policy.py")
+    try:
+        import yaml  # noqa: F401
+        return [sys.executable, script, *args]
+    except ImportError:
+        root = str(pathlib.Path(__file__).resolve().parent.parent)
+        return ["uv", "run", "--project", root, "python3", script, *args]
+
+
 def pin_arr_policy(run_dir: pathlib.Path, run: dict, src: pathlib.Path) -> dict | str:
     """Copy an approved ARR policy to <run_dir>/arr_policy.yaml unchanged and return the
     record for `run.json.inputs.arr_policy`, or the refusal reason (ARR_POLICY.md § Where
-    a policy lives). `arr_policy.py check` is the gate: complete and approved."""
+    a policy lives). `arr_policy.py check` is the gate: complete and approved. An amended
+    policy replaces the pinned one: any, before the plan is approved; after it, one that
+    only adds instructions (`arr_policy.py same-core`)."""
     import subprocess
     if not src.is_file():
         return f"--arr-policy: no such file: {src}"
-    chk = subprocess.run([sys.executable, str(pathlib.Path(__file__).resolve().parent /
-                                              "arr_policy.py"), "check", str(src)],
-                         capture_output=True, text=True)
+    chk = subprocess.run(_arr_policy_cmd("check", str(src)), capture_output=True, text=True)
     if chk.returncode != 0:
         return (f"--arr-policy: {src} is not a complete, approved policy - "
                 f"{(chk.stdout or chk.stderr).strip()}")
@@ -313,8 +325,21 @@ def pin_arr_policy(run_dir: pathlib.Path, run: dict, src: pathlib.Path) -> dict 
     dest = run_dir / "arr_policy.yaml"
     held = run.get("inputs", {}).get("arr_policy")
     if held and held.get("sha256") != digest:
-        return (f"--arr-policy: the run already pins a policy ({held.get('source')}, "
-                f"sha256 {held.get('sha256')}); a run executes one policy - start a new run")
+        # A step may find what the policy leaves open (ARR_POLICY.md § Applying the
+        # policy); the policy, amended and re-approved, replaces the pinned one. Before
+        # the plan is approved any approved policy may; after it, only one that adds
+        # instructions and changes no position, convention or decision.
+        if run.get("plan"):
+            same = subprocess.run(_arr_policy_cmd("same-core", held["path"], str(src)),
+                                  capture_output=True, text=True)
+            if same.returncode != 0:
+                return (f"--arr-policy: the plan is approved under policy sha256 "
+                        f"{held.get('sha256')}, and this one changes more than its "
+                        f"instructions ({(same.stdout or same.stderr).strip()}) - start a new run")
+        prior = [h for h in held.get("history", [])] + [
+            {k: held[k] for k in ("source", "sha256") if k in held}]
+        dest.write_bytes(data)
+        return {"path": str(dest), "source": str(src), "sha256": digest, "history": prior}
     dest.write_bytes(data)
     return {"path": str(dest), "source": str(src), "sha256": digest}
 

@@ -8,6 +8,9 @@ approves and checks a company's `arr_policy.yaml` (reference/ARR_POLICY.md).
     arr_policy.py render <file>                       # the one presentation the user approves
     arr_policy.py approve <file> --by "<name>" --out <dest>
     arr_policy.py check <file>                        # exit 0 only for a complete, approved policy
+    arr_policy.py amend <file> --gaps <gaps-*.yaml>... [--answers <answers.yaml>] --out <draft>
+                                                      # add the instructions a run's steps found
+    arr_policy.py same-core <a> <b>                   # exit 0 when b only adds instructions to a
 
 An ARR policy settles every one of the 31 decisions (ARR_POLICY.md § The decisions) from
 four top-level policy positions, a set of conventions, seven fixed rules, and the
@@ -33,6 +36,13 @@ and 1 on a malformed input. Lines:
     RULE-BREACH <id> <value> (the rule fixes <value>)
     ASK purpose | ASK policy <name> [candidates] | ASK convention <name> default=<value>
     STATUS complete | incomplete (<n> questions)
+
+**Instructions** are the policy's free-text part (ARR_POLICY.md § Instructions): how a
+decision applies to this business's own products and records, where no option can say
+it. Each is `{id, text, applies_to: [decision ids], source: user | stated | inferred,
+basis?, cite?, added?}`. `resolve` validates them and carries them unchanged; `amend`
+adds the ones a run's steps inferred and the user's answers to the questions they raised
+(ARR_POLICY.md § Applying the policy).
 """
 from __future__ import annotations
 
@@ -45,6 +55,16 @@ import re
 import sys
 
 SCHEMA = "countz-accounting/arr-policy@1"
+
+# Where every policy file points its reader before any value in it is used. A worker that
+# opens the policy to read a decision meets this first (ARR_POLICY.md § Applying the policy).
+APPLY_PER = "${CLAUDE_PLUGIN_ROOT}/reference/ARR_POLICY.md § Applying the policy"
+HEADER = (
+    "# ARR policy. Before you use any value in this file, read how it is applied:\n"
+    "#   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py reference/ARR_POLICY.md "
+    "\"Applying the policy\"\n"
+    "# It says how decisions and instructions are applied and cited, and what to do with a\n"
+    "# question this policy does not answer. Edit this file only through arr_policy.py.\n")
 
 # ---------------------------------------------------------------------------- catalog
 
@@ -372,16 +392,24 @@ def _load(path: pathlib.Path) -> dict:
     try:
         import yaml
     except ImportError:
-        return json.loads(text)
+        try:
+            return json.loads(text)
+        except ValueError:
+            raise SystemExit("arr_policy: PyYAML is not importable - run this script as "
+                             "`uv run --project <plugin root> python3 scripts/arr_policy.py ...`")
     return yaml.safe_load(text) or {}
 
 
 def _dump(obj: dict) -> str:
+    """Every policy file is written here, so every one carries the header and `apply_per`,
+    however many times it is resolved, amended or approved."""
+    obj = {"schema": obj.get("schema", SCHEMA), "apply_per": APPLY_PER,
+           **{k: v for k, v in obj.items() if k not in ("schema", "apply_per")}}
     try:
         import yaml
     except ImportError:
         return json.dumps(obj, indent=2) + "\n"
-    return yaml.safe_dump(obj, sort_keys=False, allow_unicode=True, width=100)
+    return HEADER + yaml.safe_dump(obj, sort_keys=False, allow_unicode=True, width=100)
 
 
 # What a resolve recomputes rather than carries forward: a position the purpose or the
@@ -423,6 +451,54 @@ def _valid_value(d_or_opts, value) -> str | None:
 
 
 # ---------------------------------------------------------------------------- resolve
+
+INSTRUCTION_SOURCES = ("user", "stated", "inferred")
+
+
+def instructions(doc: dict, errors: list[str]) -> list[dict]:
+    """Validate the free-text instructions and give each a stable id (I1, I2, ...)."""
+    raw = doc.get("instructions") or []
+    if not isinstance(raw, list):
+        errors.append("instructions: a list of {text, applies_to, source, ...}")
+        return []
+    out, seen_ids, seen_text = [], set(), set()
+    taken = {str(e.get("id")) for e in raw if isinstance(e, dict) and e.get("id")}
+    n = 0
+    for k, e in enumerate(raw, 1):
+        if isinstance(e, str):
+            e = {"text": e, "source": "user"}
+        if not isinstance(e, dict) or not str(e.get("text") or "").strip():
+            errors.append(f"instructions[{k}]: needs `text`")
+            continue
+        e = dict(e)
+        if e.get("source") not in INSTRUCTION_SOURCES:
+            errors.append(f"instructions[{k}]: `source` is one of {', '.join(INSTRUCTION_SOURCES)}")
+            continue
+        if e["source"] == "inferred" and not e.get("basis"):
+            errors.append(f"instructions[{k}]: an inferred instruction states its `basis` - "
+                          f"the positions, conventions or decisions it follows from")
+        if e["source"] == "stated" and not e.get("cite"):
+            errors.append(f"instructions[{k}]: a stated instruction carries its `cite`")
+        at = e.get("applies_to") or []
+        at = [at] if isinstance(at, str) else list(at)
+        bad = [i for i in at if i not in DEC]
+        if bad:
+            errors.append(f"instructions[{k}]: applies_to names no such decision: {', '.join(bad)}")
+        e["applies_to"] = [i for i in at if i in DEC]
+        key = " ".join(e["text"].split()).lower()
+        if key in seen_text:
+            continue
+        seen_text.add(key)
+        if not e.get("id") or str(e["id"]) in seen_ids:
+            while True:
+                n += 1
+                if f"I{n}" not in taken and f"I{n}" not in seen_ids:
+                    break
+            e["id"] = f"I{n}"
+        seen_ids.add(str(e["id"]))
+        out.append({"id": e["id"], **{k2: v for k2, v in e.items() if k2 != "id"}})
+    return out
+
 
 def resolve(doc: dict) -> tuple[dict, list[str], list[str], list[str]]:
     """Settle what can be settled. Returns (policy, report lines, asks, errors)."""
@@ -622,6 +698,7 @@ def resolve(doc: dict) -> tuple[dict, list[str], list[str], list[str]]:
         "conventions": convs,
         "decisions": decisions,
     }
+    out["instructions"] = instructions(doc, errors)
     for k in ("documents", "notes"):
         if doc.get(k):
             out[k] = doc[k]
@@ -655,6 +732,8 @@ def render(policy: dict) -> str:
     L = []
     L.append(f"# ARR policy: {policy.get('company') or '(company not named)'}")
     L.append("")
+    L.append(f"**Apply per** {APPLY_PER}: read it before you use any value below.")
+    L.append("")
     st = policy.get("status", "draft")
     ap = policy.get("approved") or {}
     L.append(f"**Status:** {st}" + (f", approved by {ap.get('by')} on {ap.get('at')}" if ap else ""))
@@ -681,6 +760,7 @@ def render(policy: dict) -> str:
     L += ["", "## The 31 decisions", "",
           "| ID | Decision | Type | Value | Basis | Note |", "|---|---|---|---|---|---|"]
     decs = policy.get("decisions") or {}
+    ins = policy.get("instructions") or []
     for d in DECISIONS:
         e = decs.get(d["id"])
         if not e:
@@ -694,11 +774,26 @@ def render(policy: dict) -> str:
         for k in ("reason", "cite"):
             if e.get(k):
                 note.append(str(e[k]))
+        refs = [x["id"] for x in ins if d["id"] in (x.get("applies_to") or [])]
+        if refs:
+            note.append("see " + ", ".join(refs))
         L.append(f"| {d['id']} | {d['name']} | {d['type']} | {_fmt(e['value'])} | "
                  f"{BASIS.get(e.get('basis'), e.get('basis'))} | {'; '.join(note)} |")
+    L += ["", "## Instructions", ""]
+    if ins:
+        L += ["How the decisions apply to this business, in words no option can carry.", "",
+              "| ID | Instruction | Applies to | Source | Basis |", "|---|---|---|---|---|"]
+        src = {"user": "the user", "stated": "stated in the company's documents",
+               "inferred": "inferred from the policy"}
+        for x in ins:
+            L.append(f"| {x['id']} | {x['text']} | {', '.join(x.get('applies_to') or []) or 'all'} | "
+                     f"{src.get(x.get('source'), x.get('source'))} | "
+                     f"{x.get('basis') or x.get('cite') or ''} |")
+    else:
+        L.append("None.")
     ov = [i for i, e in decs.items() if e.get("basis") == "override"]
     L += ["", f"**Overrides:** {', '.join(ov) if ov else 'none'}. "
-              f"**Settled:** {len(decs)} of {len(DECISIONS)}."]
+              f"**Instructions:** {len(ins)}. **Settled:** {len(decs)} of {len(DECISIONS)}."]
     return "\n".join(L) + "\n"
 
 
@@ -797,6 +892,59 @@ def selftest() -> list[str]:
     return bad
 
 
+def amend(doc: dict, args) -> int:
+    """Add a run's pending additions to a policy as instructions (ARR_POLICY.md § Applying
+    the policy): every `inferred` entry as it stands, with the id the step cited it by,
+    and every question the user answered as a `user` instruction. An unanswered question
+    is an ASK line; the draft is written either way, and needs approval before it is
+    pinned again."""
+    try:
+        gaps = {"inferred": [], "questions": []}
+        for g in args.gaps:
+            one = _load(g) or {}
+            for k in gaps:
+                gaps[k] += one.get(k) or []
+        answers = (_load(args.answers) or {}) if args.answers else {}
+    except Exception as exc:  # noqa: BLE001
+        print(f"ERROR the gaps or answers file is not YAML or JSON ({exc})")
+        return 1
+    stamp = {"at": datetime.datetime.now(datetime.timezone.utc).isoformat(
+        timespec="seconds").replace("+00:00", "Z"), **({"in": args.run} if args.run else {})}
+    new = list(doc.get("instructions") or [])
+    added, asks = [], []
+    for e in gaps.get("inferred") or []:
+        new.append({**({"id": e["id"]} if e.get("id") else {}),
+                    "text": e.get("text"), "applies_to": e.get("applies_to") or [],
+                    "source": "inferred", "basis": e.get("basis"), "added": stamp})
+        added.append(("inferred", e.get("text")))
+    for q in gaps.get("questions") or []:
+        a = answers.get(q.get("id"))
+        if a is None:
+            asks.append(f"ASK {q.get('id')} {q.get('question')}")
+            continue
+        a = a if isinstance(a, dict) else {"text": str(a)}
+        new.append({**({"id": "I" + str(q["id"])} if q.get("id") else {}),
+                    "text": a.get("text"), "applies_to": a.get("applies_to") or q.get("applies_to") or [],
+                    "source": "user", "basis": f"answer to: {q.get('question')}", "added": stamp})
+        added.append(("user", a.get("text")))
+    doc = {**doc, "instructions": new}
+    policy, lines, _asks, errors = resolve(doc)
+    if errors:
+        for e in errors:
+            print(f"ERROR {e}")
+        return 1
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    args.out.write_text(_dump(policy))
+    for src, text in added:
+        print(f"ADDED {src}: {text}")
+    for x in asks:
+        print(x)
+    print("STATUS " + ("complete" if not asks and is_complete(policy) else
+                       f"incomplete ({len(asks)} questions)"))
+    print(f"WROTE {args.out} (draft: approve it before it is pinned again)")
+    return 0 if not asks else 2
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -818,6 +966,17 @@ def main() -> int:
     a.add_argument("--out", type=pathlib.Path, required=True)
     k = sub.add_parser("check")
     k.add_argument("file", type=pathlib.Path)
+    am = sub.add_parser("amend")
+    am.add_argument("file", type=pathlib.Path)
+    am.add_argument("--gaps", type=pathlib.Path, nargs="+", required=True,
+                    help="the steps' gaps files: `inferred` instructions and `questions`")
+    am.add_argument("--answers", type=pathlib.Path,
+                    help="{<question id>: <the user's words> | {text, applies_to}}")
+    am.add_argument("--run", default=None, help="the run the gaps were found in")
+    am.add_argument("--out", type=pathlib.Path, required=True)
+    sc = sub.add_parser("same-core")
+    sc.add_argument("a", type=pathlib.Path)
+    sc.add_argument("file", type=pathlib.Path)
     sub.add_parser("selftest")
     args = ap.parse_args()
 
@@ -849,6 +1008,26 @@ def main() -> int:
 
     if args.cmd == "render":
         print(render(doc), end="")
+        return 0
+
+    if args.cmd == "amend":
+        return amend(doc, args)
+
+    if args.cmd == "same-core":
+        try:
+            a_doc = _load(args.a)
+        except Exception as exc:  # noqa: BLE001
+            print(f"arr_policy: {args.a} is not YAML or JSON ({exc})", file=sys.stderr)
+            return 1
+        core = ("purpose", "policies", "conventions", "decisions")
+        diff = [k for k in core if a_doc.get(k) != doc.get(k)]
+        old = {x.get("id"): x for x in a_doc.get("instructions") or []}
+        new = {x.get("id"): x for x in doc.get("instructions") or []}
+        changed = [i for i in old if new.get(i) != old[i]]
+        if diff or changed:
+            print("DIFFERS " + ", ".join(diff + [f"instruction {i}" for i in changed]))
+            return 2
+        print(f"SAME-CORE {len(new) - len(old)} instruction(s) added")
         return 0
 
     policy, lines, asks, errors = resolve(doc)

@@ -140,7 +140,7 @@ Where an option is still unset when the run executes:
 | a transaction reader (an M&A buyer, a seller preparing to be bought, a deal desk, a lender) | declared by the user only. A data room named `diligence`, a folder of deal files or a CIM in the room is not a declaration |
 | quality of earnings | sell-side |
 | an option whose line says *no default* | ask again; the run waits |
-| `arr_policy` | never defaulted: the `create-arr-policy` skill settles it with the user and pins it before the plan (`ARR_POLICY.md`) |
+| `arr_policy` | never defaulted: settled and pinned before the plan (`ARR_POLICY.md` § How a run carries it) |
 
 ## The relay's pen — scripts/run_state.py
 

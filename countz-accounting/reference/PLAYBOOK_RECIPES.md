@@ -161,16 +161,12 @@ Sources arriving after the plan is drafted: run the same script with `<run_dir>`
 of `--output-root`, `--skill` and `--company`, then re-dispatch `check-plan` with
 `revise=` naming them.
 
-**The ARR policy.** Where the recipe declares `arr_policy`, the plan waits for an
-approved policy pinned in the run. When the user named one, or the library holds one
-they chose, pin it: `setup_run.py <run_dir> --session ${CLAUDE_SESSION_ID} --sources '[]'
---arr-policy <path>`. Otherwise invoke the `create-arr-policy` skill with `run_dir` and
-`company`. It reads the registered data room for the company's own ARR rules (a policy
-memo, KPI definitions, a filing's metrics section), asks the user only what those leave
-open, has the whole policy approved, saves it to the library and pins it. The pinned
-path is the `arr_policy` value `declared` carries to the plan. A refusal from
-`--arr-policy` means the file is not complete and approved: hand it to
-`create-arr-policy` as the company's policy file.
+**The ARR policy.** Where the recipe declares `arr_policy`, pin an approved policy before
+the plan: the one the user named, or the library's for this company, with
+`setup_run.py <run_dir> --session ${CLAUDE_SESSION_ID} --sources '[]' --arr-policy
+<path>`. Where there is none, or `--arr-policy` refuses the file, invoke the
+`create-arr-policy` skill with `run_dir` and `company`; it settles, saves and pins the
+policy.
 
 The script also writes `<run_dir>/engagement-preview.md`: the parameters, each source's
 location and the data room's directory shape, from directory metadata only. Before
@@ -218,7 +214,8 @@ execute the lines it prints in order: `RECORD:`, `LAUNCH:`, `NEXT:`, then the `T
 lines (`record`, any `RETRY:`, the script again). On `ESCALATE:` (exit code 3) or any
 other failure, invoke the `playbook-next` skill with the same arguments, execute its
 imperatives, then return to the script. Repeat until `DONE:`. Relay any skipped or failed
-steps it names.
+steps it names. Where the recipe declares `arr_policy`, each `record` is followed by
+`ARR_POLICY.md` § Applying the policy, step 6, before the script runs again.
 
 ### 5. Review and report
 

@@ -53,10 +53,12 @@ which it took. A line that says *no default* is asked again (`RUN_CONTRACT.md`
 
 **`arr_policy`** is the one declared key with a fixed meaning: a recipe that computes
 annual recurring revenue, recurring-revenue retention, churn or an ARR bridge declares
-it, and its body reads every ARR choice from the policy by decision id rather than
-stating a default of its own (`ARR_POLICY.md`). Its line says *no default*: the relay
-settles it through the `create-arr-policy` skill, and its value in `declared` is the
-pinned `<run_dir>/arr_policy.yaml`.
+it. Its line says *no default*. Its body names the decision ids its sections turn on and
+states no ARR default of its own. It also says, in so many words, that every step
+carrying `params.arr_policy` applies it, and the review holds it to it, per
+`ARR_POLICY.md` § Applying the policy. The recipe is what routes the worker and the
+critic to the policy, and `validate_recipe.py` refuses a recipe that declares
+`arr_policy` without that sentence.
 
 `headline` names a family whose section declares one check. `check-report` finds that
 check in `run.json.checks` by `params.family` and builds the Exec Summary on its walk.
