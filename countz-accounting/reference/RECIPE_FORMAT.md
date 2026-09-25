@@ -54,7 +54,8 @@ which it took. A line that says *no default* is asked again (`RUN_CONTRACT.md`
 **`arr_policy`** is the one declared key with a fixed meaning: a recipe that computes
 annual recurring revenue, recurring-revenue retention, churn or an ARR bridge declares
 it. Its line says *no default*. Its body names the decision ids its sections turn on and
-states no ARR default of its own. It also says, in so many words, that every step
+states no ARR default of its own, and no rule for computing one: how every decision's
+value becomes a figure is `ARR_POLICY.md` § Computing ARR, which the recipe cites. It also says, in so many words, that every step
 carrying `params.arr_policy` applies it, and the review holds it to it, per
 `ARR_POLICY.md` § Applying the policy. The recipe is what routes the worker and the
 critic to the policy, and `validate_recipe.py` refuses a recipe that declares

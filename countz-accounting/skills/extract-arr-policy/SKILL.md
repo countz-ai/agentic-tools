@@ -21,7 +21,9 @@ settles the rest with the user.
 
 Start with `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/step_record.py start <run_dir> <seq>`.
 Read `${CLAUDE_PLUGIN_ROOT}/reference/CONDUCT.md` § Reading client files and
-`${CLAUDE_PLUGIN_ROOT}/reference/ARR_POLICY.md` whole, then print the catalog:
+`${CLAUDE_PLUGIN_ROOT}/reference/ARR_POLICY.md` except § Computing ARR
+(`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py reference/ARR_POLICY.md "The model" "The file" "Instructions" "Where a policy lives" "How a run carries it" "Applying the policy"`),
+then print the catalog:
 `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/arr_policy.py catalog`. Every value you write is
 an option id the catalog prints.
 

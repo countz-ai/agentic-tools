@@ -173,12 +173,9 @@ CONVENTIONS = {
         "default": {"basis": "point_to_point_arr", "grain": "customer",
                     "grr_cap": "per_customer"}, "needed": None,
     },
-    "grace_days": {
-        "decision": "L3", "label": "Grace window for late renewals, days",
-        "options": "int", "default": 90,
-        "needed": lambda p: p.get("lifecycle") == "grace",
-        "not_needed": "none", "why_not_needed": "the lifecycle position uses no grace window",
-        "needed_text": "when lifecycle is grace",
+    "signing_lag_months": {
+        "decision": "L1", "label": "Months after the signing month a new stream enters ARR",
+        "options": "int", "default": 0, "needed": None,
     },
     "outlier_threshold_pct": {
         "decision": "L4", "label": "Contract size, % of ARR, that needs document support",
@@ -270,7 +267,8 @@ DECISIONS = [
                 "refund_window": ["count_after_window", "count_at_booking"]},
      "derive": lambda p, c: {"pilots": "exclude", "refund_window": "count_after_window"}},
     # Lifecycle
-    {"id": "L1", "name": "Signed but not started (CARR vs ARR)", "type": "policy",
+    {"id": "L1", "name": "Signed but not started (CARR vs ARR), and entry after signing",
+     "type": "policy",
      "by": ["lifecycle"], "options": ["exclude_report_separately", "include"],
      "derive": _by("lifecycle", ["exclude_report_separately", "exclude_report_separately",
                                  "exclude_report_separately", "include"])},
@@ -285,9 +283,11 @@ DECISIONS = [
                                  "last_recognized_month",
                                  "last_billed_service_period"][_ix("source", p["source"])]}},
     {"id": "L3", "name": "Renewal gaps, holdover and grace periods", "type": "policy",
-     "by": ["lifecycle"], "options": ["churn_and_reinstate", "grace_window", "continuation"],
-     "derive": _by("lifecycle", ["churn_and_reinstate", "churn_and_reinstate",
-                                 "grace_window", "continuation"])},
+     "by": ["lifecycle"],
+     "fields": {"treatment": ["grace_window", "continuation"], "grace_months": "int"},
+     "derive": lambda p, c: {
+         "treatment": "continuation" if p["lifecycle"] == "signed_assumed" else "grace_window",
+         "grace_months": 3 if p["lifecycle"] == "grace" else 0}},
     {"id": "L4", "name": "Outlier and short-lived contracts", "type": "rule", "by": [],
      "constrained_by": ["source"],
      "fields": {"short_terminated": ["service_months_only", "annualize"],
@@ -757,7 +757,7 @@ def render(policy: dict) -> str:
         L.append(f"| {spec['label']} | {spec['decision']} | {_fmt(s.get('value', 'not set'))} | "
                  f"{SET_BY.get(s.get('set_by'), s.get('set_by') or '')}"
                  f"{(' (' + s['why'] + ')') if s.get('why') else ''} |")
-    L += ["", "## The 31 decisions", "",
+    L += ["", f"## The {len(DECISIONS)} decisions", "",
           "| ID | Decision | Type | Value | Basis | Note |", "|---|---|---|---|---|---|"]
     decs = policy.get("decisions") or {}
     ins = policy.get("instructions") or []
@@ -889,6 +889,35 @@ def selftest() -> list[str]:
     for k, s in CONVENTIONS.items():
         if s["decision"] not in DEC:
             bad.append(f"convention {k} names decision {s['decision']}, which is not in the catalog")
+    return bad + _computing_gaps()
+
+
+def _computing_gaps() -> list[str]:
+    """Every decision has a paragraph in ARR_POLICY.md § Computing ARR, opened by its
+    bold id, and that paragraph names every option and field in backticks: an option
+    added here without its computing rule fails the selftest."""
+    doc = pathlib.Path(__file__).resolve().parent.parent / "reference" / "ARR_POLICY.md"
+    m = re.search(r"^## Computing ARR\n(.*?)(?=^## |\Z)", doc.read_text(), re.S | re.M)
+    if not m:
+        return ["ARR_POLICY.md carries no § Computing ARR"]
+    marks = list(re.finditer(r"^\*\*([SRLVA]\d) ", m.group(1), re.M))
+    block = {x.group(1): m.group(1)[x.start():marks[i + 1].start() if i + 1 < len(marks)
+                                   else len(m.group(1))] for i, x in enumerate(marks)}
+    bad = []
+    for d in DECISIONS:
+        text = block.get(d["id"])
+        if text is None:
+            bad.append(f"{d['id']}: no paragraph in ARR_POLICY.md § Computing ARR")
+            continue
+        names = list(d["options"]) if isinstance(d.get("options"), list) else []
+        for f, opts in (d.get("fields") or {}).items():
+            names += [f] + (list(opts) if isinstance(opts, list) else [])
+        names += [k for k, s in CONVENTIONS.items()
+                  if s["decision"] == d["id"] and not isinstance(s.get("options"), list)
+                  and "fields" not in s]
+        for n in names:
+            if f"`{n}`" not in text:
+                bad.append(f"{d['id']}: `{n}` has no rule in ARR_POLICY.md § Computing ARR")
     return bad
 
 
@@ -1053,7 +1082,7 @@ def main() -> int:
 
     if args.cmd == "approve":
         if not is_complete(policy):
-            print("REFUSED: the policy does not settle all 31 decisions - resolve it first")
+            print(f"REFUSED: the policy does not settle all {len(DECISIONS)} decisions - resolve it first")
             return 2
         policy["status"] = "approved"
         policy["approved"] = {"by": args.by, "at": datetime.datetime.now(
@@ -1065,13 +1094,18 @@ def main() -> int:
         return 0
 
     if args.cmd == "check":
-        if not is_complete(policy):
-            print("NOT-COMPLETE: the policy does not settle all 31 decisions")
+        # The approved file itself must settle every decision: resolving fills a decision
+        # added to the catalog since approval with its default, which nobody approved.
+        missing = [d["id"] for d in DECISIONS if d["id"] not in (doc.get("decisions") or {})]
+        if missing or not is_complete(policy):
+            print(f"NOT-COMPLETE: the policy does not settle all {len(DECISIONS)} decisions"
+                  + (f" (missing {', '.join(missing)}: resolve and approve it again)"
+                     if missing else ""))
             return 2
         if doc.get("status") != "approved" or not doc.get("approved"):
             print("NOT-APPROVED: the policy was never approved - run create-arr-policy")
             return 2
-        print(f"OK {policy.get('company')}: 31 decisions settled, approved "
+        print(f"OK {policy.get('company')}: {len(DECISIONS)} decisions settled, approved "
               f"{doc['approved'].get('at')}")
         return 0
     return 1

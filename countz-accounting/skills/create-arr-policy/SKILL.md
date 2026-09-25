@@ -12,7 +12,10 @@ context: inline
 
 # Settle the ARR policy
 
-Read `${CLAUDE_PLUGIN_ROOT}/reference/ARR_POLICY.md` whole. A § citation below is read
+Read `${CLAUDE_PLUGIN_ROOT}/reference/ARR_POLICY.md` except § Computing ARR, which says how
+figures are computed and settles nothing here:
+`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py reference/ARR_POLICY.md "The model" "The file" "Instructions" "Where a policy lives" "How a run carries it" "Applying the policy"`.
+A § citation below is read
 with `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py <document> "<heading>"`. Every
 command below is `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/arr_policy.py`
 (it needs the plugin's pinned libraries), called `arr_policy.py` here.
