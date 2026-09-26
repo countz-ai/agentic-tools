@@ -2308,7 +2308,7 @@ def check(root: pathlib.Path) -> list[str]:
     for name, extra in (("style.py", ()), ("figures.py", ()), ("periods.py", ()),
                         ("step_record.py", ()), ("check_prose.py", ("--self-check",)),
                         ("rework.py", ()), ("items.py", ()),
-                        ("matching.py", ()), ("cache.py", ())):
+                        ("matching.py", ()), ("resolve.py", ()), ("cache.py", ())):
         mod = root / "scripts" / name
         if mod.is_file():
             import subprocess

@@ -39,11 +39,31 @@ Take the difference before explaining anything.
 
 ## 3. Match at item level
 
-Match with polars joins, one per pass; check the assignment with
+Where both sides are items that settle each other — invoices and the deposits that paid
+them, book entries and statement lines, bills and payments — match with
+`${CLAUDE_PLUGIN_ROOT}/scripts/resolve.py` (its docstring is the method and the
+contract); write no matching passes of your own. Your part is the mapping: each side as a
+stream of `id`, `date`, `value`, and `entity`, `ref` and `text` (a description, a memo,
+a payer name) wherever the source carries one. Measure the date on
+which the two sides agree, and the lag between them, before you choose it: the `window`
+is that measured lag, and `split_days` the span over which part payments are seen to
+arrive, zero where the data shows none. State both as elections.
+
+Elsewhere, match with polars joins, one per pass — by reference, then amount-and-date,
+then looser keys, each pass recorded. One-to-many matches are allowed and recorded as
+such. Either way, check the assignment with
 `${CLAUDE_PLUGIN_ROOT}/scripts/matching.py`'s `check_assignment()` before writing it.
 
-Where both sides carry item grain, match — by reference, then amount-and-date, then
-looser keys, each pass recorded. One-to-many matches are allowed and recorded as such.
+A group is matched only where its two sides agree to the cent. Which counterparty item
+carries an item (a bank row id against an invoice) is `resolve.py`'s `link`, with its
+basis: `allocation` is proved to the cent; `anchor` is proved by entity and date under a
+rule the engine trusted only after testing it on the proved items (`calibration`, stated
+in the record); `solver` and `remainder` links are inferences and carry a flag. Every item with a `review` flag is yours to settle before the table is
+written: read what the engine cannot — names, memo text, the rest of the data room —
+and either confirm the link with the evidence that settles it, narrow a set to its one
+item, or leave it flagged as an open item. `note` carries the arithmetic to read them
+with: what each open group is over or short by, and which open items equal it. Report links by basis, and the flagged ones
+as their own count.
 Write the match table `checks/<check>-matches.csv` (side, match key, date, amount,
 matched-to, classification) with its manifest block in `checks/<check>.md` per
 EVIDENCE.md § 5: the citations behind each side, the keys used, `row_count` and a control
@@ -57,7 +77,11 @@ closing-figure-plus-known-items, and the record states the reduced strength.
 
 Every unmatched item lands in a class — timing (deposits in transit, outstanding
 payments), items on one side not recorded on the other (fees, interest), errors (with the
-correcting side named), or unexplained. Each reconciling item `RI.<slug>` is quantified
+correcting side named), or unexplained. Before calling an item unexplained, test whether
+its cash is on the other side at another grain: an unmatched item and an unmatched
+counterparty item of the same entity and period are one question, not two, and the
+bridge carries them together, stated as cash the files cannot place at item grain, with
+the document that would place it. Each reconciling item `RI.<slug>` is quantified
 from its OWN composing items — listed, with citations — never backed out of the gap
 (DOCTRINE.md § Resolving issues). A `candidate` explanation (plausible, needs the user or
 management to confirm) is presented as such and never netted into the bridge.
@@ -67,7 +91,9 @@ management to confirm) is presented as such and never netted into the bridge.
 Side A, the classified reconciling items, the unexplained residual as its own labeled
 line, side B — footing exactly at computation precision (no plug, no `other`, no
 scaling). An unexplained residual is stated with its magnitude; where it is material
-to the goal, the check says so plainly and the residual carries a data request.
+to the goal, the check says so plainly and the residual carries a data request. A line
+whose components offset states its gross beside its net — the unmatched count and amount
+on each side — wherever its net is stated, the answer included.
 
 Files:
 
@@ -77,7 +103,8 @@ Files:
 - `out/tabs/<check>.xlsx` — your tab, blocks per `WORKBOOK.md` § 4, with the
   reconciliation statement as the primary table and the item schedules.
 
-Close `checks/<check>.md` with the answer: whether the difference is fully explained.
+Close `checks/<check>.md` with the answer: whether the difference is fully explained,
+and at which grain the items are proved — linked, tied in groups, or open.
 Then the residual left unexplained beyond rounding, whether it is material, the caveats
 the reader must weigh (carry-forwards as in `check-tie`), and any side you could not
 establish with no defensible election available.

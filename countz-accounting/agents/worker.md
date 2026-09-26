@@ -88,6 +88,8 @@ Where one fits:
 
 - `matching.py` — `check_assignment()`: a match you built with joins accounts for every
   item of both populations exactly once.
+- `resolve.py` — `resolve()`: two streams of items that settle each other, grouped into
+  sets that tie to the cent, with the allocation where it is provable.
 - `items.py` — item tables and their manifest (`EVIDENCE.md` § 5).
 - `rework.py` — `snapshot()` before a fix pass, `diff_ledger()` after, to state what moved.
 

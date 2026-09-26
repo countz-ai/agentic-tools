@@ -84,7 +84,7 @@ Layout:
   from the step's citations, `produced` from its own files),
   `style.py` (how a number or a date is written — the currency table, US forms, scale
   suffixes — and the token grammar the gates read them back with),
-  `matching.py`, `items.py` (`agents/worker.md` § Shared modules),
+  `matching.py`, `resolve.py`, `items.py` (`agents/worker.md` § Shared modules),
   `rework.py` (a fix pass: snapshot, ledger diff),
   `build_report.py` (renders `out/report.pptx`
   from `report.yaml` and the sealed workbook — the deck mints nothing;
