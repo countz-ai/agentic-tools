@@ -29,8 +29,10 @@ of tables it cached, from `cache/manifest.json`.
 ## 1. The workbook — `out/workbook.xlsx`
 
 The tab strip, the band and the content of every run-level tab are `WORKBOOK.md` § 2
-and § 6. Copy each check's tab cell by cell with its resolved formatting; write
-the run-level tabs yourself.
+and § 6. Copy each check's tab cell by cell with its resolved formatting — every sheet
+of its tab file, the match tabs included; write the run-level tabs yourself. The match
+tabs follow the Exec Summary; where the Exec Summary tells how much of the population is
+matched, copy the match summary's walk.
 
 **Exec Summary.** Read the recipe's `## Exec summary` (the recipe is at
 `run.json.plan.recipe`) and tell that story from the checks' results, in whatever form

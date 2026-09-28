@@ -335,7 +335,10 @@ def span(what=None, *, run_dir=None, frame=None, file=None, id: str | None = Non
     step parsed a data-room file itself: `file`, `source`, `file_role`, `sheet`,
     `header_at`, `rows` and `columns` ({name: {"at", "parse"}}, the columns cited) are
     the step's coordinates, and `row_count` / `control_total` are measured over the frame
-    after `filter`. A data-room path with no frame is refused — this module parses no
+    after `filter`. With `run_dir`, `file` is relative to the folder of the source whose
+    id `source` names in run.json; without it, `file` is the file's path on disk, which
+    must exist, and `source` is a short name for where it came from (`bank`,
+    `invoices`). A data-room path with no frame is refused — this module parses no
     client file. With `reperform`, a cache read first runs `cache.verify` and raises
     CacheDefect on a disagreement. With no `control` and none on the manifest, the
     control total is the row count."""

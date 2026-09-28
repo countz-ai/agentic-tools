@@ -16,6 +16,9 @@ what goes where.
 
 ### Tab order
 - Exec Summary
+- The match tabs — for each check that matched items (check-recon § 3), in roster
+  order: its match summary, its match schedule, its reconciling items, its match
+  rules (§ 6)
 - The lead tabs — the recipe's `lead:` list (`RECIPE_FORMAT.md` § The document);
   absent, the headline family's tab alone
 - Basis of Preparation
@@ -163,6 +166,33 @@ is Coverage), not the list of open items (Open Items), and not the background of
 - A check that did not run, or ran degraded, appears here only where it limits the
   answer. The full list is on Basis of Preparation.
 
+**The match tabs** — written by `scripts/match_tabs.py`, never by hand, for every check
+that matched items with `resolve.py`. They report the matching as reconciliation software
+does, so a reader can verify it one item at a time.
+
+- `<token> Match summary` walks from all left items (every invoice, paid or not) to each
+  status, as a count and an amount: Matched, In transit (dated after the statement's end;
+  Outstanding for payments), Unmatched, No cash. Each status line is the schedule filtered
+  on that status, and its words link to that status's rows. Then what each rule matched,
+  and the right items matched and not in the book.
+- `<token> Match schedule` has one row per left item: its label, date, amount, status, the
+  rule that matched it and its match group, what it matched to, the difference a rule
+  tolerated, and why an unmatched item is unmatched (no candidate, or more than one). It
+  is sorted by status in the summary's order, so each status is one block of rows, and its
+  AutoFilter sits on the header.
+- `<token> Reconciling items` (`<token> Recon items` where the name would pass 31
+  characters) is the reconciliation, each line gross and each a figure: the left items per
+  books; less those dated after the statement's end; less those not matched; each
+  difference a rule tolerated; plus the right items not in the book; the right items per
+  bank. Then every item not matched, with its age at the statement's end.
+- `<token> Match rules` (`<token> Rules` where the name would pass 31 characters) lists the
+  rules in the order they ran, each with its criteria and what it matched.
+
+A hyperlink cannot apply a filter; the link selects the status's block instead, and
+`check_workbook.py` GATE 6 refuses a line whose count or amount differs from the schedule
+filtered on its status, and a reconciliation that does not foot. The tabs belong to the
+check (the token leads their names) and are copied like its other tabs.
+
 **Basis of Preparation** — what the run stood on and how to read what it produced.
 Tables, not paragraphs, in this order:
 
@@ -263,8 +293,8 @@ covers what a parser cannot judge — the style's § 10 checklist, then:
   freeze at `B4` on every tab — the band alone, never a table header row;
 - the tab name is `<token> <Title>`, at most 31 characters; tab color per
   `WORKBOOK_STYLE.md` § 4;
-- at the seal, the strip reads Exec Summary, the lead tabs, Basis of Preparation, the
-  roster, the tail (§ 2);
+- at the seal, the strip reads Exec Summary, the match tabs, the lead tabs, Basis of
+  Preparation, the roster, the tail (§ 2);
 - no merged cells, no hidden rows or columns, no `General` numeric cell; prose only in
   a description or last column, or an overflowing cell; every wrapped row sized to fit
   (§ 4, § 5);

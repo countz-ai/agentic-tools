@@ -39,31 +39,44 @@ Take the difference before explaining anything.
 
 ## 3. Match at item level
 
-Where both sides are items that settle each other — invoices and the deposits that paid
-them, book entries and statement lines, bills and payments — match with
-`${CLAUDE_PLUGIN_ROOT}/scripts/resolve.py` (its docstring is the method and the
-contract); write no matching passes of your own. Your part is the mapping: each side as a
-stream of `id`, `date`, `value`, and `entity`, `ref` and `text` (a description, a memo,
-a payer name) wherever the source carries one. Measure the date on
-which the two sides agree, and the lag between them, before you choose it: the `window`
-is that measured lag, and `split_days` the span over which part payments are seen to
-arrive, zero where the data shows none. State both as elections.
+Where both sides are records of the same money — the book's deposits and the statement's
+credits, its payments and the statement's debits, invoices and a cash-application file —
+match with `${CLAUDE_PLUGIN_ROOT}/scripts/resolve.py` (its docstring is the method and the
+contract). It matches by ordered rules, as reconciliation software does, and every match
+names its rule.
+
+Match adjacent records, never across them. An invoice is settled by a payment through
+cash application, and the payment reaches the bank inside a deposit: reconcile invoices to
+the cash-application record, and the book's deposits to the statements, one call each.
+Where the data room has no cash-application record, invoices matched straight to bank
+lines mostly stay unmatched (parts, lump sums, deposits of several customers); report
+their payment as not established from the records, never inferred.
+
+Your part is the mapping and the rules. Each side is a stream of `id`, `date`, `value`,
+with `entity`, `ref`, `text` and `batch` wherever the source carries them: `ref` a
+transaction, cheque or invoice number either side may carry, `text` a bank description,
+`batch` the key the lines of one deposit share. One direction per call: receipts, or
+payments. Measure the window on the data (the days from the book's date to the bank's that
+pairs of a unique amount show) and pass it to `rules(window=...)`; pass `same_entity=True`
+where both sides name the same account or party. Add a `Rule` with a named `difference`
+only for what a record says the bank keeps or converts: a processor's fee on its
+settlement report, a bank's conversion on its advice. State each choice as an election,
+with the measurement behind it.
+
+Call `resolve()` once, over the whole population: never filter a stream first or hold
+items out of it (undated items included); an item left out is a counterpart no rule
+could see.
 
 Elsewhere, match with polars joins, one per pass — by reference, then amount-and-date,
-then looser keys, each pass recorded. One-to-many matches are allowed and recorded as
-such. Either way, check the assignment with
+then looser keys, each pass recorded. Either way, check the assignment with
 `${CLAUDE_PLUGIN_ROOT}/scripts/matching.py`'s `check_assignment()` before writing it.
 
-A group is matched only where its two sides agree to the cent. Which counterparty item
-carries an item (a bank row id against an invoice) is `resolve.py`'s `link`, with its
-basis: `allocation` is proved to the cent; `anchor` is proved by entity and date under a
-rule the engine trusted only after testing it on the proved items (`calibration`, stated
-in the record); `solver` and `remainder` links are inferences and carry a flag. Every item with a `review` flag is yours to settle before the table is
-written: read what the engine cannot — names, memo text, the rest of the data room —
-and either confirm the link with the evidence that settles it, narrow a set to its one
-item, or leave it flagged as an open item. `note` carries the arithmetic to read them
-with: what each open group is over or short by, and which open items equal it. Report links by basis, and the flagged ones
-as their own count.
+Read the result the way a preparer reads auto-match output. Each match names its rule
+and its match group; each unmatched item states why: no candidate, or the number of
+candidates a rule found. The exceptions are yours to clear with what the engine cannot
+read — names, memo text, the cash-application record, the cutoff statement — each one you
+clear recorded with its evidence. Report matched by rule, cleared by you, and still open
+as three separate counts.
 Write the match table `checks/<check>-matches.csv` (side, match key, date, amount,
 matched-to, classification) with its manifest block in `checks/<check>.md` per
 EVIDENCE.md § 5: the citations behind each side, the keys used, `row_count` and a control
@@ -74,6 +87,15 @@ Where a side has no item grain, say so; the reconciliation degrades to
 closing-figure-plus-known-items, and the record states the reduced strength.
 
 ## 4. Classify the unmatched
+
+The reconciliation statement is `resolve.py`'s `res.summary`, which the reconciling items
+tab shows (`WORKBOOK.md` § 6): the left items per books, less those dated after the
+statement's end (deposits in transit, outstanding payments), less those not matched, each
+difference a rule tolerated, plus the right items not in the book, to the right items per
+bank, every line gross. Copy it, and classify the items `res.exceptions` lists, with the
+cutoff statement (the first statement after the end) as the evidence for items in transit
+and the cash-application record and the bank's advices for the rest. Never net a line into
+another.
 
 Every unmatched item lands in a class — timing (deposits in transit, outstanding
 payments), items on one side not recorded on the other (fees, interest), errors (with the
@@ -100,11 +122,16 @@ Files:
 - `checks/<check>.md` — the definition, the sides, the match summary by pass, the items
   with their evidence, the elections where any, and the statement.
 - `checks/<check>-matches.csv` — the match table of § 3, with its manifest block.
-- `out/tabs/<check>.xlsx` — your tab, blocks per `WORKBOOK.md` § 4, with the
-  reconciliation statement as the primary table and the item schedules.
+- `out/tabs/<check>.xlsx` — your tabs. Wherever § 3 matched with `resolve.py`, the
+  file opens with the match tabs, written by `${CLAUDE_PLUGIN_ROOT}/scripts/match_tabs.py`
+  from the engine's result and never by hand: the match summary, the schedule (one row per
+  left item, the ones kept out of the streams included as `others`: an invoice with no
+  cash, with its reason), the reconciling items and the rules (`WORKBOOK.md` § 6). Then
+  your check tab, blocks per `WORKBOOK.md` § 4, with the reconciliation statement as the
+  primary table and the item schedules.
 
 Close `checks/<check>.md` with the answer: whether the difference is fully explained,
-and at which grain the items are proved — linked, tied in groups, or open.
+and how the items stand — matched by rule, cleared by you with evidence, or open.
 Then the residual left unexplained beyond rounding, whether it is material, the caveats
 the reader must weigh (carry-forwards as in `check-tie`), and any side you could not
 establish with no defensible election available.

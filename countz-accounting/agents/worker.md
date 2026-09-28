@@ -88,8 +88,11 @@ Where one fits:
 
 - `matching.py` — `check_assignment()`: a match you built with joins accounts for every
   item of both populations exactly once.
-- `resolve.py` — `resolve()`: two streams of items that settle each other, grouped into
-  sets that tie to the cent, with the allocation where it is provable.
+- `resolve.py` — `resolve()`: two streams of transactions matched by ordered rules, as
+  reconciliation software does; every match names its rule, every other item is an
+  exception with its reason.
+- `match_tabs.py` — `match_tabs()`: the match summary, schedule, reconciling items and
+  rules of a check that matched items with `resolve()` (`WORKBOOK.md` § 6).
 - `items.py` — item tables and their manifest (`EVIDENCE.md` § 5).
 - `rework.py` — `snapshot()` before a fix pass, `diff_ledger()` after, to state what moved.
 

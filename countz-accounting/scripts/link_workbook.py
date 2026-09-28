@@ -44,6 +44,11 @@ What gets wired, in this order:
      the link color and no underline: under a figure, an underline is the accounting rule
      that reads "sum above".
 
+  7. On a match summary (scripts/match_tabs.py), each line's status words link to that
+     status's rows on its match schedule: the link selects the block, which the schedule
+     holds together because it is sorted by status. A hyperlink cannot apply a filter; the
+     selected block is the filter's rows, and check_workbook.py holds the line to them.
+
 Every link carries the cell's own text as its `display` attribute, so a consumer that
 renders the anchor from link metadata instead of the cell shows the same readable text.
 
@@ -282,6 +287,53 @@ def sheet_grid(ws):
     return headers_at, labels, row_texts, numerics
 
 
+# A match summary and its schedule, by the marker their B1 carries after the token;
+# mirrors match_tabs.py and check_workbook.py — change all three.
+SUMMARY_MARK = " · Match summary"
+SCHEDULE_MARK = " · Match schedule"
+
+
+def match_targets(wb):
+    """targets[(summary, C<row>)] = (schedule, "B<first>:<last col><last>") for every line
+    of every match summary whose status the schedule carries."""
+    sums, schs = {}, {}
+    for ws in wb.worksheets:
+        b1 = ws["B1"].value
+        if not isinstance(b1, str):
+            continue
+        if SUMMARY_MARK in b1:
+            sums[b1.split(SUMMARY_MARK)[0].strip()] = ws.title
+        elif SCHEDULE_MARK in b1:
+            schs[b1.split(SCHEDULE_MARK)[0].strip()] = ws.title
+    targets = {}
+    for tok, summ in sums.items():
+        sched = schs.get(tok)
+        if sched is None:
+            continue
+        sh = wb[sched]
+        col = {c.value: c.column for c in sh[4] if isinstance(c.value, str)}.get("Status")
+        if col is None:
+            continue
+        last = sh.cell(4, sh.max_column).column_letter
+        blocks = {}
+        r = 5
+        while True:
+            word = sh.cell(r, col).value
+            if not isinstance(word, str) or not word.strip():
+                break                     # the Total row, or the table's end
+            blocks.setdefault(word, [r, r])[1] = r
+            r += 1
+        ws = wb[summ]
+        r = 5
+        while any(ws.cell(r, c).value is not None for c in range(2, 8)):
+            word = ws.cell(r, 3).value
+            if word in blocks:
+                a, b = blocks[word]
+                targets[(summ, f"C{r}")] = (sched, f"B{a}:{last}{b}")
+            r += 1
+    return targets
+
+
 #: Where a navigation link lands: the tab's title cell. Column A is an empty margin and
 #: the title is B1 (reference/WORKBOOK_STYLE.md § 4); the link gate refuses a link that
 #: lands on an empty cell.
@@ -399,6 +451,9 @@ def main() -> int:
     # The Exec Summary's copied tables: every amount back to the cell it was copied from.
     walk, missed = walk_targets(wb)
     targets.update(walk)
+    # A match summary's lines: each opens its status's rows on the schedule.
+    matches = match_targets(wb)
+    targets.update(matches)
 
     if not a.dry_run:
         # Every link in this workbook is placed here, so a re-run owns them all: clear
@@ -431,7 +486,8 @@ def main() -> int:
            "family_links": fam, "navigation": nav, "walk_amounts": len(walk),
            "unmatched_walk_amounts": [{"cell": c, "row": l, "column": h}
                                       for c, l, h in missed],
-           "other": len(targets) - up - back - nav - len(walk),
+           "match_lines": len(matches),
+           "other": len(targets) - up - back - nav - len(walk) - len(matches),
            "dead_ends": sorted(dead), "internal_refs": sorted(internal),
            "dry_run": a.dry_run}
     if a.json:
@@ -441,7 +497,7 @@ def main() -> int:
     print(f"{a.workbook.name}: {verb} {len(targets)} links over {len(tokens)} ids — "
           f"{up} to {SOURCES}/{EVIDENCE}, {back} back out, {fam} family stems, "
           f"{rep['other'] - fam} to stated homes, {nav} check-tab navigation, "
-          f"{len(walk)} {EXEC} amounts.")
+          f"{len(walk)} {EXEC} amounts, {len(matches)} match-summary lines.")
     if missed:
         print(f"  {len(missed)} {EXEC} amount(s) matched no source cell — the row's "
               f"label and the column's header must be COPIED from the tab the table's "

@@ -38,6 +38,8 @@ Run with no arguments to self-check. Needs polars.
 from __future__ import annotations
 
 import sys
+from collections import defaultdict
+from decimal import Decimal
 
 import polars as pl
 
@@ -117,15 +119,25 @@ def check_assignment(left: pl.DataFrame, right: pl.DataFrame, assignment: pl.Dat
               .otherwise(-pl.col("amount"))).sum(),
         L=pl.col("id").filter(pl.col("side") == "left").sort().str.join(";"),
         R=pl.col("id").filter(pl.col("side") == "right").sort().str.join(";"))
+    # the difference summed exactly, each amount as written (its shortest decimal form): a
+    # float sum of large amounts leaves residue a cent tolerance would refuse
+    exact = defaultdict(Decimal)
+    if amt[0]:
+        for grp, side, a in g.select("group", "side", "amount").iter_rows():
+            if a is not None:
+                exact[grp] += Decimal(repr(a)) if side == "left" else -Decimal(repr(a))
     for r in per.iter_rows(named=True):
         if len(r["curs"]) > 1:
             raise MatchError(f"group {r['group']} spans currencies {sorted(r['curs'])} - "
                              f"translate first and match the translated amount")
         if len(r["passes"]) > 1:
             raise MatchError(f"group {r['group']} is claimed by passes {sorted(r['passes'])}")
-        if tol is not None and amt[0] and abs(r["diff"]) > tol + 1e-9:
-            raise MatchError(f"group {r['group']} leaves {r['diff']:.2f} beyond tol {tol}")
-    per = per.select("group", "L", "R", diff=pl.col("diff").round(10) if amt[0]
+        if tol is not None and amt[0] and abs(exact[r["group"]]) > Decimal(repr(float(tol))):
+            raise MatchError(f"group {r['group']} leaves {exact[r['group']]:.2f} beyond tol {tol}")
+    per = per.with_columns(diff=pl.col("group").replace_strict(
+        {k: float(v) for k, v in exact.items()}, default=0.0, return_dtype=pl.Float64)) \
+        if amt[0] and per.height else per
+    per = per.select("group", "L", "R", diff=pl.col("diff") if amt[0]
                      else pl.lit(None, pl.Float64))
     return (out.join(per, on="group", how="left")
             .with_columns(matched_to=pl.when(pl.col("side") == "left").then("R")

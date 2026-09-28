@@ -2,7 +2,7 @@
 """Refuse a workbook whose figures are invisible, whose ids do not resolve, or whose
 figure rows a reader cannot re-perform from.
 
-Five gates over the stored file, all parsed from the XML rather than through a library so
+Six gates over the stored file, all parsed from the XML rather than through a library so
 the check sees what is actually stored, not what a loader reconstructs.
 
 GATE 1 — cached values. An .xlsx cell stores two things: the formula (`<f>`) and the last
@@ -92,7 +92,8 @@ belongs below the data (check-report SKILL § 1). A table header row is never fr
 the row-4 header belongs to the primary table alone, not to the tables below it.
 
 GATE 5 — the map, on a workbook that has an Exec Summary. The tab strip is the reader's
-path (reference/WORKBOOK.md § 2): Exec Summary first; then the lead tabs — the check
+path (reference/WORKBOOK.md § 2): Exec Summary first; then the match tabs of every check
+that matched items, each summary before its schedule; then the lead tabs — the check
 tabs the Exec Summary's numbers stand on, in the recipe's `lead` order, by default the
 headline family's tab alone; then Basis of Preparation and every other check tab in
 roster order; then Coverage, Open Items, Sources, Evidence. Without `--run-dir` the gate
@@ -100,6 +101,13 @@ holds the shape — Exec Summary first, the tail last. With `--run-dir` it reads
 `run.json` (the roster, each check's `params.family`, `plan.recipe`) and the recipe's
 frontmatter, and refuses any other strip, naming the one wanted. A check tab it cannot
 match to a rostered check is refused too: the name opens with the roster token.
+
+GATE 6 — the match tabs (reference/WORKBOOK.md § 6, scripts/match_tabs.py), on any
+workbook that holds them. Every line of a match summary is its schedule filtered on the
+line's status: the same count of rows and the same amount, to the cent; the opening line
+and the total are the whole schedule; the schedule holds each item once, in one block per
+status; the reconciling items foot; and in an assembled workbook each line's words link
+to its block.
 
 The id grammar and the home rule mirror link_workbook.py — a change here changes both.
 
@@ -149,7 +157,9 @@ EVIDENCE = "Evidence"
 EXEC = "Exec Summary"
 # Which ledger tab an id prefix resolves on. Mirrors link_workbook.py — change both.
 LEDGER = {"F": SOURCES, "P": SOURCES, "E": EVIDENCE}
-LOCATION = re.compile(r"^'?([^'!]+)'?!\$?([A-Z]+\$?\d+)$")
+# A link lands on a cell, or selects a range (a match summary's line opens its rows); the
+# second group is the cell it lands on, the range's first.
+LOCATION = re.compile(r"^'?([^'!]+)'?!\$?([A-Z]+\$?\d+)(?::\$?[A-Z]+\$?\d+)?$")
 REF = re.compile(r"^([A-Z]+)(\d+)$")
 
 
@@ -794,7 +804,7 @@ def lead_families(run: dict) -> list[str] | None:
     return fm_list(fm.get("lead")) or fm_list(fm.get("headline"))
 
 
-def wanted_order(run_dir: pathlib.Path, tabs: list[str]) -> tuple[list[str] | None, list[str], list[str]]:
+def wanted_order(run_dir: pathlib.Path, tabs: list[str], pairs=()) -> tuple[list[str] | None, list[str], list[str]]:
     """(the tab order the run wants, the lead families, failures). The order is None
     when the run cannot say — no run.json, no checks, a recipe not readable here."""
     try:
@@ -827,9 +837,14 @@ def wanted_order(run_dir: pathlib.Path, tabs: list[str]) -> tuple[list[str] | No
             continue
         owner[tab] = hit
     check_tabs = sorted(owner, key=lambda tab: roster.index(owner[tab]))
-    lead_tabs = [tab for fam in lead for tab in check_tabs if family[owner[tab]] == fam]
-    rest = [tab for tab in check_tabs if tab not in lead_tabs]
-    want = ([EXEC] if EXEC in tabs else []) + lead_tabs + \
+    # a check's match tabs follow the Exec Summary, summary then schedule, in roster order
+    matched = {t for p in pairs for t in p}
+    match_tabs = [t for p in sorted((p for p in pairs if p[0] in owner),
+                                    key=lambda p: roster.index(owner[p[0]])) for t in p]
+    lead_tabs = [tab for fam in lead for tab in check_tabs
+                 if family[owner[tab]] == fam and tab not in matched]
+    rest = [tab for tab in check_tabs if tab not in lead_tabs and tab not in matched]
+    want = ([EXEC] if EXEC in tabs else []) + match_tabs + lead_tabs + \
         ([BASIS] if BASIS in tabs else []) + rest + [tab for tab in TAIL_TABS if tab in tabs]
     return want, lead, fails
 
@@ -849,15 +864,181 @@ def audit_order(z: zipfile.ZipFile, run_dir: pathlib.Path | None = None) -> list
     if tail and tabs[-len(tail):] != tail:
         fails.append(f"the strip closes with {' · '.join(tail)}, in that order, after the "
                      f"last check tab; it reads {strip} (WORKBOOK.md § 2)")
-    want, lead, unnamed = (None, [], []) if run_dir is None else wanted_order(run_dir, tabs)
+    shared = shared_strings(z)
+    texts = {tab: sheet_cells(z.read(part).decode("utf-8", "replace"), shared)[0]
+             for part, tab in order}
+    pairs, _ = match_pairs(texts)
+    matched = [t for p in pairs for t in p]
+    after = tabs[1:1 + len(matched)]
+    if matched and (set(after) != set(matched) or
+                    any([after.index(t) for t in p] != list(range(after.index(p[0]),
+                                                                  after.index(p[0]) + len(p)))
+                        for p in pairs)):
+        fails.append(f"the match tabs follow {EXEC}, each summary, then its schedule, its "
+                     f"reconciling items and its assumptions: {' · '.join(matched)}; the strip "
+                     f"reads {strip} (WORKBOOK.md § 2)")
+    want, lead, unnamed = (None, [], []) if run_dir is None else wanted_order(run_dir, tabs, pairs)
     fails.extend(unnamed)
     if want is not None:
         if want != tabs and not unnamed:
             fails.append(f"tab strip reads {strip}; the map wants {' · '.join(want)} — "
-                         f"{EXEC}, the lead tabs (families: {', '.join(lead) or 'none'}), "
+                         f"{EXEC}, the match tabs, the lead tabs (families: "
+                         f"{', '.join(lead) or 'none'}), "
                          f"{BASIS}, the other checks in roster order, the tail "
                          f"(WORKBOOK.md § 2)")
         return fails
+    return fails
+
+
+# GATE 6 — the match tabs (reference/WORKBOOK.md § 6, scripts/match_tabs.py). Found by the
+# marker their B1 carries after the token; mirrors match_tabs.py — change both.
+SUMMARY_MARK = " · Match summary"
+SCHEDULE_MARK = " · Match schedule"
+RULES_MARK = " · Match rules"
+RECON_MARK = " · Reconciling items"
+
+
+def match_pairs(texts: dict[str, dict[str, str]]) -> tuple[list[tuple[str, ...]], list[str]]:
+    """([(summary tab, schedule tab[, reconciling tab][, rules tab])] in tab order,
+    failures), paired on the token their B1 opens with."""
+    sums: dict[str, str] = {}
+    schs: dict[str, str] = {}
+    asms: dict[str, str] = {}
+    recs: dict[str, str] = {}
+    for tab, t in texts.items():
+        b1 = t.get("B1", "")
+        if SUMMARY_MARK in b1:
+            sums[b1.split(SUMMARY_MARK)[0].strip()] = tab
+        elif SCHEDULE_MARK in b1:
+            schs[b1.split(SCHEDULE_MARK)[0].strip()] = tab
+        elif RULES_MARK in b1:
+            asms[b1.split(RULES_MARK)[0].strip()] = tab
+        elif RECON_MARK in b1:
+            recs[b1.split(RECON_MARK)[0].strip()] = tab
+    fails = [f"{tab}: a match summary with no match schedule for `{tok}` (match_tabs.py "
+             f"writes both)" for tok, tab in sums.items() if tok not in schs]
+    fails += [f"{tab}: a match schedule with no match summary for `{tok}`"
+              for tok, tab in schs.items() if tok not in sums]
+    fails += [f"{tab}: match tab with no match summary for `{tok}`"
+              for d_ in (asms, recs) for tok, tab in d_.items() if tok not in sums]
+    order = list(texts)
+    pairs = sorted(((sums[k], schs[k]) + ((recs[k],) if k in recs else ()) +
+                    ((asms[k],) if k in asms else ())
+                    for k in sums if k in schs), key=lambda p: order.index(p[0]))
+    return pairs, fails
+
+
+def _rows(texts: dict[str, str], numbers: dict[str, float]) -> dict[int, dict[str, object]]:
+    out: dict[int, dict[str, object]] = {}
+    for src in (texts, numbers):
+        for ref, v in src.items():
+            m = REF.match(ref)
+            if m:
+                out.setdefault(int(m.group(2)), {})[m.group(1)] = v
+    return out
+
+
+def audit_match(z: zipfile.ZipFile, assembled: bool | None = None) -> list[str]:
+    """GATE 6. Every line of a match summary is its schedule filtered on the line's status:
+    the same count of rows and the same amount, to the cent; the opening line and the total
+    are the whole schedule; the schedule holds each id once, sorted into one block per
+    status; and, once the workbook is assembled, each line's words link to its block."""
+    shared = shared_strings(z)
+    texts: dict[str, dict[str, str]] = {}
+    numbers: dict[str, dict[str, float]] = {}
+    links: dict[str, list] = {}
+    for part, tab in sheet_order(z):
+        xml = z.read(part).decode("utf-8", "replace")
+        texts[tab], _ = sheet_cells(xml, shared)
+        numbers[tab] = sheet_numbers(xml)
+        links[tab] = sheet_links(z, part, xml)
+    if assembled is None:
+        assembled = EXEC in texts
+    pairs, fails = match_pairs(texts)
+    for summ, sched, *_ in pairs:
+        rows = _rows(texts[sched], numbers[sched])
+        hdr = rows.get(4, {})
+        col = {str(v).strip(): c for c, v in hdr.items() if isinstance(v, str)}
+        st_col = col.get("Status")
+        amt_col = next((c for h, c in col.items() if h.split(" (")[0] == "Amount"), None)
+        if not st_col or not amt_col:
+            fails.append(f"{sched}: the row-4 header needs `Status` and `Amount` columns")
+            continue
+        blocks: dict[str, list[int]] = {}
+        seen_ids: set[str] = set()
+        prev = None
+        n_rows, total, foot = 0, 0.0, None
+        for r in range(5, max(rows) + 1 if rows else 5):
+            row = rows.get(r)
+            if not row:
+                break
+            if row.get("C") == "Total" and "B" not in row:
+                foot = float(row.get(amt_col, 0.0))
+                break
+            word, i = row.get(st_col), row.get("B")
+            if not isinstance(word, str) or not word.strip():
+                fails.append(f"{sched}!{st_col}{r}: a row with no status")
+                continue
+            if i in seen_ids:
+                fails.append(f"{sched}!B{r}: `{i}` is on the schedule twice")
+            seen_ids.add(i)
+            if word != prev and word in blocks:
+                fails.append(f"{sched}!{st_col}{r}: `{word}` rows are split — the schedule is "
+                             f"sorted by status, one block each")
+            blocks.setdefault(word, [r, r, 0, 0.0])
+            b = blocks[word]
+            b[1], b[2], b[3] = r, b[2] + 1, b[3] + float(row.get(amt_col, 0.0))
+            prev = word
+            n_rows += 1
+            total += float(row.get(amt_col, 0.0))
+        if foot is not None and abs(foot - total) > 0.005:
+            fails.append(f"{sched}: the Total row reads {foot:,.2f}; its rows sum to {total:,.2f}")
+        srows = _rows(texts[summ], numbers[summ])
+        shown: set[str] = set()
+        slinks = {ref: loc for ref, loc, _ in links[summ]}
+        for r in range(5, max(srows) + 1 if srows else 5):
+            row = srows.get(r)
+            if not row:
+                break
+            word = row.get("C")
+            if not isinstance(word, str):
+                continue
+            n, a = row.get("D"), row.get("E")
+            if word.startswith("All ") or word == "Total":
+                want = (n_rows, total)
+            elif word in blocks:
+                want = (blocks[word][2], blocks[word][3])
+                shown.add(word)
+                if assembled:
+                    m = LOCATION.match(slinks.get(f"C{r}") or "")
+                    first = int(REF.match(m.group(2).replace("$", "")).group(2)) if m else None
+                    if not m or m.group(1) != sched or first != blocks[word][0]:
+                        fails.append(f"{summ}!C{r}: `{word}` does not open its rows on {sched} "
+                                     f"(row {blocks[word][0]}); link_workbook.py places the link")
+            else:
+                want = (0, 0.0)
+            if n is None or a is None or int(n) != want[0] or abs(float(a) - want[1]) > 0.005:
+                fails.append(f"{summ}!C{r}: `{word}` reads {n} for {a}; {sched} filtered on it "
+                             f"holds {want[0]} for {want[1]:,.2f}")
+        for word in sorted(set(blocks) - shown):
+            fails.append(f"{summ}: status `{word}` is on {sched} and not on the summary")
+    # the reconciling items foot: the lines above the per-bank total add up to it
+    for pair in pairs:
+        rec = next((t for t in pair if RECON_MARK in texts[t].get("B1", "")), None)
+        if rec is None:
+            continue
+        rrows = _rows(texts[rec], numbers[rec])
+        body = 0.0
+        for r in range(5, max(rrows) + 1 if rrows else 5):
+            row = rrows.get(r)
+            if not row:
+                break
+            if str(row.get("C", "")).endswith("per bank"):
+                if abs(body - float(row.get("E", 0.0))) > 0.005:
+                    fails.append(f"{rec}!E{r}: the lines above sum to {body:,.2f}, the total "
+                                 f"reads {float(row.get('E', 0.0)):,.2f}")
+                break
+            body += float(row.get("E", 0.0))
     return fails
 
 
@@ -888,6 +1069,7 @@ def audit(path: pathlib.Path, declared: set[str] | None = None,
         rep["links"] = audit_links(z, declared)
         rep["design"] = audit_design(z)
         rep["order"] = audit_order(z, run_dir)
+        rep["match"] = audit_match(z)
     if ledger_fails:
         rep["links"]["link_failures"] = list(ledger_fails) + rep["links"]["link_failures"]
     return rep
@@ -940,7 +1122,8 @@ def main() -> int:
     link_fails = rep["links"]["link_failures"]
     design_fails = rep.get("design", [])
     order_fails = rep.get("order", [])
-    bad = bool(rep["uncached"] or link_fails or design_fails or order_fails)
+    match_fails = rep.get("match", [])
+    bad = bool(rep["uncached"] or link_fails or design_fails or order_fails or match_fails)
 
     if a.json:
         print(json.dumps(rep, indent=2))
@@ -1002,13 +1185,22 @@ def main() -> int:
             print(f"    {f}")
         if len(order_fails) > a.max_report:
             print(f"    … and {len(order_fails) - a.max_report} more")
-        print(f"\n  Fix: order the tabs {EXEC}, the lead tabs (the recipe's `lead`, else its")
+        print(f"\n  Fix: order the tabs {EXEC}, the match tabs, the lead tabs (the recipe's `lead`, else its")
         print(f"  headline family), {BASIS}, the other check tabs in roster order, then Coverage,")
         print("  Open Items, Sources, Evidence (WORKBOOK.md § 2). Pass --run-dir and the gate")
         print("  names the strip it wants.")
     elif EXEC in rep.get("tabs", []):
-        print(f"{a.workbook.name}: the tab strip is the reader's path — {EXEC}, the lead "
-              f"tabs, {BASIS}, the roster, the tail.")
+        print(f"{a.workbook.name}: the tab strip is the reader's path — {EXEC}, the match "
+              f"tabs, the lead tabs, {BASIS}, the roster, the tail.")
+    if match_fails:
+        print(f"{a.workbook.name}: {len(match_fails)} match-tab failure(s) — a summary line is "
+              f"not its schedule filtered on its status.\n")
+        for f in match_fails[:a.max_report]:
+            print(f"    {f}")
+        if len(match_fails) > a.max_report:
+            print(f"    … and {len(match_fails) - a.max_report} more")
+        print("\n  Fix: write both tabs with scripts/match_tabs.py, and never edit one apart")
+        print("  from the other; run link_workbook.py after assembly.")
     return 1 if bad else 0
 
 
