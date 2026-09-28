@@ -35,8 +35,9 @@ The tabs follow the Exec Summary, in that order (WORKBOOK.md § 2).
 optionally `date` and `entity`: a value of 0 (open, void, credited) reads No cash, any
 other Unmatched, each with its reason. `left_label` and `right_label` are DataFrames of
 `id`, `label`, the words a reviewer finds an item by. The nouns default to invoices and
-bank lines; `after_word` names a left item `resolve()` found in transit, dated within the
-window of the statement's end (In transit for receipts, Outstanding for payments).
+bank lines; `after_word` names a left item `resolve()` found in transit, dated close enough
+to the statement's end that its bank line falls after it (In transit for receipts,
+Outstanding for payments).
 """
 from __future__ import annotations
 
@@ -65,7 +66,7 @@ TOP = {"alignment": Alignment(horizontal="right", vertical="top")}
 
 # status -> its style and what it means ({n}/{ns}: the left noun, {o}/{os}: the right one)
 LEFT = [("Matched", "tied", "Matched by the rule the schedule names, to the {os} listed."),
-        ("{after}", "review", "Dated within the window of the last {o}: its {o} would be on a later "
+        ("{after}", "review", "Dated close enough to the last {o} that its {o} falls on a later "
                               "statement."),
         ("Unmatched", "break", "No rule matched it; the Reason column says why (no candidate, or "
                                "more than one). Clear it with the records behind it."),
@@ -300,8 +301,8 @@ def match_tabs(wb, res, left: pl.DataFrame, right: pl.DataFrame, *, check: str, 
     kept_n, kept_a = len(kept), round(sum(kept), decimals)
     kept_p, kept_m = round(sum(v for v in kept if v > 0), decimals), round(sum(v for v in kept if v < 0), decimals)
     words = {"left_total": (f"{Ns} per books", f"Every {nouns[0]} in the matching, and those kept out of it."),
-             "left_in_transit": (f"Less: {W('{after}').lower()}", f"{Ns} not matched, dated within the "
-                                 f"window of the last {other_nouns[0]}: theirs fall on a later statement."),
+             "left_in_transit": (f"Less: {W('{after}').lower()}", f"{Ns} not matched, dated close enough to "
+                                 f"the last {other_nouns[0]} that theirs fall on a later statement."),
              "left_unmatched": (f"Less: {nouns[1]} not matched", f"{Ns} no rule matched, dated within the "
                                 f"statements, and those kept out with cash."),
              "right_unmatched": (f"Add: {other_nouns[1]} not in the book",

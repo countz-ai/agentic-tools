@@ -99,12 +99,13 @@ closing-figure-plus-known-items, and the record states the reduced strength.
 
 The reconciliation statement is `resolve.py`'s `res.summary`, which the reconciling items
 tab shows (`WORKBOOK.md` § 6): the left items per books, less those in transit (deposits
-in transit, outstanding payments: not matched, and dated within the window of the
-statement's end), less those not matched, each difference a rule tolerated, plus the right
-items not in the book, to the right items per bank, every line net and gross. Copy it, and classify the items `res.exceptions` lists, with the
-cutoff statement (the first statement after the end) as the evidence for items in transit
-and the cash-application record and the bank's advices for the rest. Never net a line into
-another.
+in transit, outstanding payments: not matched, and dated close enough to the statement's
+end that their bank line falls after it, by `transit`), less those not matched, each
+difference a rule tolerated, plus the right items not in the book, to the right items per
+bank, every line net and gross. Copy it, and classify the items `res.exceptions` lists,
+with the cutoff statement (the first statement after the end) as the evidence for items in
+transit and the cash-application record and the bank's advices for the rest. Never net a
+line into another.
 
 Every unmatched item lands in a class — timing (deposits in transit, outstanding
 payments), items on one side not recorded on the other (fees, interest), errors (with the

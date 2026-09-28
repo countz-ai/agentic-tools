@@ -171,9 +171,9 @@ that matched items with `resolve.py`. They report the matching as reconciliation
 does, so a reader can verify it one item at a time.
 
 - `<token> Match summary` walks from all left items (every invoice, paid or not) to each
-  status, as a count and an amount: Matched, In transit (not matched and dated within the
-  window of the statement's end; Outstanding for payments), Unmatched, No cash. Each status line is the schedule filtered
-  on that status, and its words link to that status's rows. Then what each rule matched,
+  status, as a count and an amount: Matched, In transit (not matched, and dated close
+  enough to the statement's end that its bank line falls after it; Outstanding for
+  payments), Unmatched, No cash. Each status line is the schedule filtered on that status, and its words link to that status's rows. Then what each rule matched,
   and the right items matched and not in the book.
 - `<token> Match schedule` has one row per left item: its label, date, amount, status, the
   rule that matched it and its match group, what it matched to, the difference a rule
