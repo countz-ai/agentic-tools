@@ -270,11 +270,27 @@ records show, a month served in part included, annualized as it stands.
 - `recognized_run_rate`: the recurring revenue recognized in the S2 window, annualized.
 - `billed_spread`: each recurring billing spread evenly over the service period it
   covers, and the spread amounts falling in the S2 window annualized.
+- `contract_else_billed`: two legs, settled per customer (the A3 unit) at each date. A
+  customer with a contract in force that prices a fixed recurring amount or a committed
+  minimum, or one that L3 still carries past its end, is on the contract leg: its
+  contracts take the `contract` value, R1 and R2 govern its usage and overage, and no
+  invoice outside those contracts carries ARR for it. A customer with no such contract is
+  on the billed leg: its ARR is the sum of its invoice lines for recurring streams dated
+  in the S2 window, usage included, net of the credit notes against them. The sum is
+  taken as it stands, never scaled up for a customer that started buying inside the
+  window. A prepaid balance counts as it is drawn down in the window, never at its
+  purchase invoice (S6), and an invoice billed under a contract never counts on the
+  billed leg. A billed-leg customer churns when its window holds no invoice. A customer
+  moving between legs is neither churn nor new: the change in its ARR is expansion or
+  contraction. Every figure carries the leg that measured it (`contract` or `billed`),
+  and every ARR figure, bridge movement and retention measure is reported by leg as well
+  as in total.
 
 **S2 · Measurement window.** How a flow is annualized; it applies to a run-rate S1, to
 usage R1 and R2 count, and to S3, S4 and S5 wherever they take a recognized amount.
 - `point_in_time`: no window; the value in force at the date. Only a contract-based S1
-  with no usage counted takes it.
+  with no usage counted takes it: `contract_else_billed`, R1 `commit_plus_usage` and R2
+  `include` each need a window.
 - `month_x12`: the month ending at the date, times twelve.
 - `trailing_3_months`: the three months ending at the date, times four.
 - `trailing_12_months`: the twelve months ending at the date.
@@ -398,6 +414,21 @@ carried, and so the month it churns. Its end is dated by L2. `treatment`:
   and after it at every month end it is still billed or recognized for, as billing a
   whole month carries the month it ends in; then at the first `grace_months` month ends
   after the last of those.
+- `until_renewal`: the contract is carried at every month end on or before its end date.
+  Where the records show its renewal, booked before or after its end, it is also carried
+  at every month end after its end until the renewal's first month in ARR, however long
+  the gap, so the gap is neither churn nor reinstatement. Where they show none, it is
+  carried at the first `grace_months` month ends after its end, and then churns. A
+  renewal counts only once the records show it: at the latest month ends, a contract
+  whose renewal is not yet booked churns, and the months are restated when one is.
+- `while_paying`: the contract is carried at every month end on or before its end date,
+  and after it at every month end that falls in a service period the customer is still
+  invoiced for, at its last contract value as modified, never at a price only the
+  invoices show. The customer has not churned, and a renewal the records show takes over
+  from its first month in ARR as a continuation. Once no service period after the end
+  date is invoiced, the stream is carried at the first `grace_months` month ends after
+  the last invoiced period, and then churns. Unlike `continuation`, a month recognized
+  but not invoiced does not carry it.
 
 A contract carried past its end date is carried at its last value, as modified. A
 renewal that starts before the first month end the contract is no longer carried at is
@@ -408,7 +439,10 @@ date is flagged with the rule and the record that carry it.
 **L4 · Outlier and short-lived contracts.** `short_terminated`, a contract terminated
 within its first twelve months of service: `service_months_only` carries it at the
 monthly value of the months it served, never annualized beyond them; `annualize` (a
-rule breach) carries it at its annual value while in force. `document_threshold_pct`
+rule breach) carries it at its annual value while in force; `exclude` (a rule breach)
+carries it at no month end, those before its termination included: it never enters ARR,
+and is neither new nor churn. Measured on the records as they stand, so a month reported
+before the termination was recorded is restated. `document_threshold_pct`
 (the `outlier_threshold_pct` convention): a contract whose annualized value exceeds that share of total ARR at the first date it is
 in force enters ARR only with the signed order form or amendment that evidences it;
 without one it is withheld with its `D.`.
@@ -438,6 +472,9 @@ the date; `term_average` — total contracted value over the term divided by its
 **V2 · Discounts and free months.**
 - `net_current`: net of the discounts in force at the date; a free month is valued at
   zero while it runs.
+- `net_current_free_months_at_rate`: net of the discounts in force at the date, as
+  `net_current`, but a free month is valued at the net rate of the first paid month after
+  it, as a contract signed and not yet started is valued at its first paid month.
 - `net_term_average`: the term's total net value divided by its years, free months
   spread across it.
 - `list_price`: before discounts.

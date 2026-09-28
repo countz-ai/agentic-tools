@@ -130,18 +130,22 @@ PURPOSE_POSITIONS = {
 }
 
 # A convention is a choice no position decides. `fields` for a composite value; `needed`
-# names when it bears on any figure (None: always); where it does not, its value is `none`.
+# names when it bears on any figure (None: always), from the positions and the stated or
+# overridden decision values; where it does not, its value is `none`.
 CONVENTIONS = {
     "window": {
         "decision": "S2", "label": "Measurement window for flow-based ARR",
         "options": ["month_x12", "trailing_3_months", "trailing_12_months"],
         "default": "trailing_3_months",
-        "needed": lambda p: p.get("source") in ("recognized_run_rate", "billed_spread")
-        or p.get("recurrence") == "plus_usage_actual",
+        "needed": lambda p, s: p.get("source") in ("recognized_run_rate", "billed_spread")
+        or p.get("recurrence") == "plus_usage_actual"
+        or s.get("S1") in ("recognized_run_rate", "billed_spread", "contract_else_billed")
+        or s.get("R1") == "commit_plus_usage" or s.get("R2") == "include",
         "not_needed": "point_in_time",
         "why_not_needed": "a contract snapshot at the date needs no window",
         "needed_text": "when source is recognized_run_rate or billed_spread, or recurrence "
-                       "is plus_usage_actual",
+                       "is plus_usage_actual, or a decision counts a flow (S1 "
+                       "contract_else_billed, R1 commit_plus_usage, R2 include)",
     },
     "fx": {
         "decision": "V4", "label": "Currency translation rate",
@@ -204,7 +208,7 @@ def _conv(name):
 DECISIONS = [
     # Source
     {"id": "S1", "name": "ARR basis", "type": "policy", "by": ["source"],
-     "options": list(POLICIES["source"]["positions"]),
+     "options": list(POLICIES["source"]["positions"]) + ["contract_else_billed"],
      "derive": lambda p, c: p["source"]},
     {"id": "S2", "name": "Measurement window", "type": "convention", "by": [],
      "constrained_by": ["source", "recurrence"],
@@ -284,13 +288,15 @@ DECISIONS = [
                                  "last_billed_service_period"][_ix("source", p["source"])]}},
     {"id": "L3", "name": "Renewal gaps, holdover and grace periods", "type": "policy",
      "by": ["lifecycle"],
-     "fields": {"treatment": ["grace_window", "continuation"], "grace_months": "int"},
+     "fields": {"treatment": ["grace_window", "continuation", "until_renewal",
+                              "while_paying"],
+                "grace_months": "int"},
      "derive": lambda p, c: {
          "treatment": "continuation" if p["lifecycle"] == "signed_assumed" else "grace_window",
          "grace_months": 3 if p["lifecycle"] == "grace" else 0}},
     {"id": "L4", "name": "Outlier and short-lived contracts", "type": "rule", "by": [],
      "constrained_by": ["source"],
-     "fields": {"short_terminated": ["service_months_only", "annualize"],
+     "fields": {"short_terminated": ["service_months_only", "annualize", "exclude"],
                 "document_threshold_pct": "number"},
      "derive": lambda p, c: {"short_terminated": "service_months_only",
                              "document_threshold_pct": c["outlier_threshold_pct"]}},
@@ -315,7 +321,8 @@ DECISIONS = [
          "billing_only_step_ups": "require_contract_evidence"
          if p["source"] in ("all_agree", "contract") else "as_billed"}},
     {"id": "V2", "name": "Discounts and free months", "type": "policy", "by": ["value"],
-     "options": ["net_current", "net_term_average", "list_price"],
+     "options": ["net_current", "net_current_free_months_at_rate", "net_term_average",
+                 "list_price"],
      "derive": _by("value", ["net_current", "net_current", "net_term_average", "list_price"])},
     {"id": "V3", "name": "Credits, refunds and SLA credits", "type": "policy", "by": ["value"],
      "options": ["net_all_credits", "net_recurring_credits", "before_credits"],
@@ -630,7 +637,9 @@ def resolve(doc: dict) -> tuple[dict, list[str], list[str], list[str]]:
 
     # 4. Conventions: unset ones take their default; ones no figure needs are `none`.
     for k, spec in CONVENTIONS.items():
-        needed = spec["needed"] is None or (all(positions.values()) and spec["needed"](positions))
+        needed = spec["needed"] is None or (
+            all(positions.values())
+            and spec["needed"](positions, {i: e["value"] for i, e in stated.items()}))
         if spec["needed"] is not None and all(positions.values()) and not needed:
             convs[k] = {"value": spec["not_needed"], "set_by": "not_needed",
                         "why": spec["why_not_needed"]}
