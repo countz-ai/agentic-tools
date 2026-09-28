@@ -21,8 +21,6 @@ since an amount cell carries no symbol. A count column is written with `count()`
 `FMT_COUNT`, a format no money column uses, so a reader of the stored file (the deck
 builder scaling money columns) tells a count from an amount by its format, not its header.
 A recipe's own status words take a style with `register_status("matched", "tied")`.
-
-Run with no arguments to self-check: builds one tab with every helper and exits 0.
 """
 from __future__ import annotations
 
@@ -291,70 +289,3 @@ def finish(ws, table_last_row, ledger=False, header_row=4, freeze="B4"):
     ws.oddFooter.left.text = "Confidential · Countz"           # WORKBOOK_STYLE.md § 7
     ws.oddFooter.center.text = "&A"
     ws.oddFooter.right.text = "Page &P of &N"
-
-
-def _selfcheck() -> int:
-    """One tab through every helper; the styles register on the workbook and the sheet
-    carries the § 9 settings."""
-    import io
-    from openpyxl import Workbook, load_workbook
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "k1 Kit"
-    band(ws, "k1 · the kit builds a tab", "Fixture · FY2026 · USD", "Every helper ran once.")
-    header(ws, 4, ["id", "description", "amount", "status", "invoices", "euro"],
-           ["id", "description", "amount", "status", "count", "amount"],
-           currency={"euro": "eur"})
-    ident(ws.cell(row=5, column=2), "F.k1.total")
-    text(ws.cell(row=5, column=3), "A wrapped description long enough to need a second line "
-                                   "inside a forty-two wide column.")
-    amount(ws.cell(row=5, column=4), 1234567.89)
-    status(ws.cell(row=5, column=5), "pass")
-    count(ws.cell(row=5, column=6), 1204)
-    amount(ws.cell(row=5, column=7), 5000.0)
-    register_status("matched", "tied")
-    status(ws.cell(row=6, column=5), "matched")
-    try:
-        register_status("matched", "break")
-        clash = False
-    except ValueError:
-        clash = True
-    section(ws, 7, "Notes")
-    import datetime as _dt
-    last = table(ws, 9, [("id", "id"), ("item", "text"), ("balance", "amount", "eur"),
-                         ("lines", "count"), ("rate", "fx_rate"), ("as of", "date"),
-                         ("result", "status")],
-                 [["X.k1.a", "First item", 1204.4, 3, 1.0679, _dt.date(2025, 9, 30), "pass"],
-                  {"id": "X.k1.b", "item": "Second", "balance": -50.0, "lines": 1,
-                   "rate": None, "as of": None, "result": "fail"}], primary=False)
-    try:
-        table(ws, 20, [("x", "money")], [])
-        bad_kind = False
-    except ValueError:
-        bad_kind = True
-    finish(ws, 5)
-    buf = io.BytesIO()
-    wb.save(buf)
-    buf.seek(0)
-    back = load_workbook(buf)
-    sheet = back["k1 Kit"]
-    ok = (sheet.freeze_panes == "B4" and sheet.print_title_rows == "$1:$3"
-          and sheet["B1"].font.name == FONT
-          and sheet["B4"].fill.fgColor.rgb.endswith(BAND)
-          and sheet["D5"].number_format == FMT_AMOUNT
-          and sheet["F5"].number_format == FMT_COUNT and FMT_COUNT != FMT_AMOUNT
-          and sheet["G4"].value == "euro (€)" and sheet["D4"].value == "amount"
-          and sheet["E6"].font.color.rgb.endswith(TIED_T) and clash
-          and FMT_DATE == "mmm d, yyyy"
-          and sheet.row_dimensions[5].height is not None
-          and last == 11 and bad_kind and sheet["D9"].value == "balance (€)"
-          and sheet["D10"].number_format == FMT_AMOUNT and sheet["E10"].number_format == FMT_COUNT
-          and sheet["F10"].number_format == FMT_FX and sheet["G10"].number_format == FMT_DATE
-          and sheet["H11"].font.color.rgb.endswith(BREAK_T)
-          and sheet["B11"].border.bottom.style is not None)
-    print("wbkit: ok" if ok else "wbkit: self-check FAILED")
-    return 0 if ok else 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(_selfcheck())

@@ -47,20 +47,29 @@ names its rule.
 
 Match adjacent records, never across them. An invoice is settled by a payment through
 cash application, and the payment reaches the bank inside a deposit: reconcile invoices to
-the cash-application record, and the book's deposits to the statements, one call each.
+the cash-application record, and the book's deposits to the statements, one call each,
+then trace each invoice end to end with `chain()`, which reports where each one stops.
 Where the data room has no cash-application record, invoices matched straight to bank
 lines mostly stay unmatched (parts, lump sums, deposits of several customers); report
 their payment as not established from the records, never inferred.
 
 Your part is the mapping and the rules. Each side is a stream of `id`, `date`, `value`,
-with `entity`, `ref`, `text` and `batch` wherever the source carries them: `ref` a
-transaction, cheque or invoice number either side may carry, `text` a bank description,
-`batch` the key the lines of one deposit share. One direction per call: receipts, or
-payments. Measure the window on the data (the days from the book's date to the bank's that
-pairs of a unique amount show) and pass it to `rules(window=...)`; pass `same_entity=True`
-where both sides name the same account or party. Add a `Rule` with a named `difference`
-only for what a record says the bank keeps or converts: a processor's fee on its
-settlement report, a bank's conversion on its advice. State each choice as an election,
+with `entity`, `ref`, `text` and `batch` wherever the source carries them: `ref` a number
+both sides carry for the same thing (a cheque number on the book and on the statement),
+`text` a bank description, `batch` the key the lines of one deposit share. An id is
+unique: where the source's key repeats (a deposit id on each of its lines, a payment id on
+each invoice it pays), build the id from the key and the row, and map the key to `batch`
+or `ref` by what it means. One flow per call: receipts with their refunds, reversals and
+returned items, or payments with theirs. Reconcile each bank account in its own call.
+Measure the window before choosing it: match once by reference at any date, or on amounts
+that occur once on each side, and read the days from the book's date to the bank's on those
+pairs; pass the few days most pairs fall in as `window`, the longest as `wide`, and, where
+items take longer to reach the bank than `window` (cheques paid out), that time as
+`transit=`. Pass `same_entity=True` where both sides name the same account or party. Add a
+`Rule` with a named `difference` only for what a record says the bank keeps or converts: a
+processor's fee on its settlement report, a bank's conversion on its advice; scope it to
+the records it applies to with a column set only on those (the currency on a foreign
+receipt and on the statement line that converted it). State each choice as an election,
 with the measurement behind it.
 
 Call `resolve()` once, over the whole population: never filter a stream first or hold
@@ -89,10 +98,10 @@ closing-figure-plus-known-items, and the record states the reduced strength.
 ## 4. Classify the unmatched
 
 The reconciliation statement is `resolve.py`'s `res.summary`, which the reconciling items
-tab shows (`WORKBOOK.md` § 6): the left items per books, less those dated after the
-statement's end (deposits in transit, outstanding payments), less those not matched, each
-difference a rule tolerated, plus the right items not in the book, to the right items per
-bank, every line gross. Copy it, and classify the items `res.exceptions` lists, with the
+tab shows (`WORKBOOK.md` § 6): the left items per books, less those in transit (deposits
+in transit, outstanding payments: not matched, and dated within the window of the
+statement's end), less those not matched, each difference a rule tolerated, plus the right
+items not in the book, to the right items per bank, every line net and gross. Copy it, and classify the items `res.exceptions` lists, with the
 cutoff statement (the first statement after the end) as the evidence for items in transit
 and the cash-application record and the bank's advices for the rest. Never net a line into
 another.

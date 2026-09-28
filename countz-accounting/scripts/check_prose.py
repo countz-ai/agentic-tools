@@ -29,7 +29,6 @@ Skipped: day-count ranges ("31-60 days", "90+ days") — bucket labels, not stat
 Usage:
     check_prose.py <tab.xlsx|file.md> [more targets...] [--run-dir DIR] [--allow FILE]...
 --run-dir defaults to the nearest ancestor of the first target containing workpapers/.
-    check_prose.py --self-check
 Exit 0 clean, 1 if any number is unbacked, 2 on a usage error.
 """
 from __future__ import annotations
@@ -172,45 +171,9 @@ def scan(targets, admitted):
     return total, unbacked
 
 
-def _selfcheck() -> int:
-    import tempfile
-    bad = []
-    with tempfile.TemporaryDirectory() as td:
-        rd = pathlib.Path(td)
-        (rd / "workpapers").mkdir()
-        (rd / "workpapers" / "figures-t.yaml").write_text(
-            "- id: F.a\n  value: 44.6\n- id: F.b\n  value: 6312400.55\n"
-            "- id: F.c\n  value: -1204.4\n- id: F.d\n  value: 5000000\n"
-            "- id: F.e\n  value: 0.174\n- id: F.f\n  value: -2100000\n", encoding="utf-8")
-        admitted = admitted_values(rd, [])
-        cases = [
-            ("The metric is 44.6 days; $6.3M is unapplied.", 0),
-            ("The metric is 44.6 days; $7.1M is unapplied.", 1),
-            ("A legacy $6.3m and $6,312,401 are the same figure.", 0),
-            ("The euro balance is €5,000,000, or EUR 5.0M, or 5,000,000 EUR.", 0),
-            ("Credits were ($1,204), or $1,204.", 0),       # the magnitude: sign unchecked
-            ("Revenue fell ($2.1M), a variance of $2.1M.", 0),
-            ("Share is 17.4%; -17.4% is too.", 0),
-            ("Share is 18.4%.", 1),
-            ("Aging buckets 31-60 days and 90+ days.", 0),
-        ]
-        for text, want in cases:
-            f = rd / "t.md"
-            f.write_text(text + "\n", encoding="utf-8")
-            _, ub = scan([f], admitted)
-            if len(ub) != want:
-                bad.append(f"{text!r}: {len(ub)} unbacked, want {want} ({ub})")
-    for b in bad:
-        print(f"check_prose: {b}")
-    print("check_prose: ok" if not bad else "check_prose: self-check FAILED")
-    return 0 if not bad else 1
-
-
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    if sys.argv[1:] == ["--self-check"]:
-        return _selfcheck()
     ap.add_argument("targets", nargs="+", type=pathlib.Path)
     ap.add_argument("--run-dir", type=pathlib.Path)
     ap.add_argument("--allow", action="append", type=pathlib.Path, default=[])

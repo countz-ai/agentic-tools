@@ -13,8 +13,9 @@ workbook and records their figures in the check's ledger:
   the rule and match group, what it matched to, the difference a rule tolerated, and why
   an unmatched item is unmatched. Sorted by status in the summary's order; the AutoFilter
   sits on its header.
-- **`<token> Reconciling items`**: the reconciliation, left total to right total, footing;
-  then every unmatched item of both sides with its age at the statement's end.
+- **`<token> Reconciling items`**: the reconciliation, left total to right total, footing,
+  each line net and gross (its positive and negative items apart); then every unmatched
+  item of both sides with its age at the statement's end.
 - **`<token> Match rules`**: the rules in the order they ran, each rule's criteria and
   what it matched.
 
@@ -34,10 +35,8 @@ The tabs follow the Exec Summary, in that order (WORKBOOK.md § 2).
 optionally `date` and `entity`: a value of 0 (open, void, credited) reads No cash, any
 other Unmatched, each with its reason. `left_label` and `right_label` are DataFrames of
 `id`, `label`, the words a reviewer finds an item by. The nouns default to invoices and
-bank lines; `after_word` names a left item dated after the statement's end (In transit for
-receipts, Outstanding for payments).
-
-Run with no arguments to self-check.
+bank lines; `after_word` names a left item `resolve()` found in transit, dated within the
+window of the statement's end (In transit for receipts, Outstanding for payments).
 """
 from __future__ import annotations
 
@@ -66,7 +65,8 @@ TOP = {"alignment": Alignment(horizontal="right", vertical="top")}
 
 # status -> its style and what it means ({n}/{ns}: the left noun, {o}/{os}: the right one)
 LEFT = [("Matched", "tied", "Matched by the rule the schedule names, to the {os} listed."),
-        ("{after}", "review", "Dated after the last {o}: its {o} would be on a later statement."),
+        ("{after}", "review", "Dated within the window of the last {o}: its {o} would be on a later "
+                              "statement."),
         ("Unmatched", "break", "No rule matched it; the Reason column says why (no candidate, or "
                                "more than one). Clear it with the records behind it."),
         ("No cash", "note", "No cash is recorded against it{reasons}, so there is nothing to find.")]
@@ -130,7 +130,7 @@ def match_tabs(wb, res, left: pl.DataFrame, right: pl.DataFrame, *, check: str, 
     for r, lr in zip(it.filter(pl.col("side") == "left").sort("id").iter_rows(named=True),
                      left.with_columns(pl.col("id").cast(pl.Utf8)).sort("id").iter_rows(named=True)):
         e = ex.get(("left", r["id"]))
-        st = "Matched" if r["status"] == "matched" else W("{after}") if e and e["after_end"] else "Unmatched"
+        st = "Matched" if r["status"] == "matched" else W("{after}") if e and e["in_transit"] else "Unmatched"
         rows.append(dict(id=r["id"], label=llab.get(r["id"], lr.get("entity")), date=_day(lr["date"]),
                          amount=float(lr["value"]), status=st, rule=r["pass"], group=r["group"],
                          to="; ".join(line(x) for x in (r["matched_to"] or "").split(";") if x) or None,
@@ -292,35 +292,39 @@ def match_tabs(wb, res, left: pl.DataFrame, right: pl.DataFrame, *, check: str, 
     # ---- the reconciling items tab
     ws4 = wb.create_sheet(names["reconciling"], 2)
     band(ws4, f"{token}{RECON_MARK}: {nouns[1]} per books to {other_nouns[1]} per bank", subtitle,
-         f"The {nouns[1]} walked to the {other_nouns[1]}: every item not matched, gross, and each "
-         f"difference a rule tolerated. The lines foot.")
-    header(ws4, 4, ["id", "Line", "Items", AMOUNT_HEADER, "What it holds"], ["id", "description", "count", "amount", "note"])
-    kept = [x for x in rows if x["rule"] is None and x["reason"] and x["reason"].startswith("kept out")]
-    kept_n, kept_a = len(kept), round(sum(x["amount"] for x in kept), decimals)
+         f"The {nouns[1]} walked to the {other_nouns[1]}: every item not matched, and each difference "
+         f"a rule tolerated, net and gross. The lines foot.")
+    header(ws4, 4, ["id", "Line", "Items", AMOUNT_HEADER, "Positive", "Negative", "What it holds"],
+           ["id", "description", "count", "amount", "amount", "amount", "note"])
+    kept = [x["amount"] for x in rows if x["rule"] is None and x["reason"] and x["reason"].startswith("kept out")]
+    kept_n, kept_a = len(kept), round(sum(kept), decimals)
+    kept_p, kept_m = round(sum(v for v in kept if v > 0), decimals), round(sum(v for v in kept if v < 0), decimals)
     words = {"left_total": (f"{Ns} per books", f"Every {nouns[0]} in the matching, and those kept out of it."),
-             "left_after_end": (f"Less: {W('{after}').lower()}", f"{Ns} dated after the last {other_nouns[0]}."),
+             "left_in_transit": (f"Less: {W('{after}').lower()}", f"{Ns} not matched, dated within the "
+                                 f"window of the last {other_nouns[0]}: theirs fall on a later statement."),
              "left_unmatched": (f"Less: {nouns[1]} not matched", f"{Ns} no rule matched, dated within the "
                                 f"statements, and those kept out with cash."),
              "right_unmatched": (f"Add: {other_nouns[1]} not in the book",
                                  f"{Os} no rule matched to a {nouns[0]}.")}
     r_ = 4
-    for key_, n_, v_ in res.summary.iter_rows():
+    for key_, n_, v_, p_, m_ in res.summary.iter_rows():
         if key_ == "right_total":
             continue
         label_, why_ = words.get(key_, (f"Difference: {key_.split(':', 1)[-1]}",
                                         "What the rule of that name tolerated between the two sides."))
         if key_ == "left_total":                  # the items kept out with cash: in the total,
-            n_, v_ = n_ + kept_n, v_ + kept_a     # and out again as not matched
-        elif key_ == "left_unmatched":
-            n_, v_ = n_ + kept_n, v_ - kept_a
+            n_, v_, p_, m_ = n_ + kept_n, v_ + kept_a, p_ + kept_p, m_ + kept_m      # and out again
+        elif key_ == "left_unmatched":            # as not matched
+            n_, v_, p_, m_ = n_ + kept_n, v_ - kept_a, p_ - kept_m, m_ - kept_p
         fid = fig(f"recon.{key_.replace(':', '.').replace(' ', '_')}", label_, round(v_, decimals), currency,
                   f"{label_}, from scripts/resolve.py `summary`", inputs, population)
         r_ += 1
-        cells(ws4, r_, [("id", fid), ("text", label_), ("count", n_), ("amount", round(v_, decimals)), ("text", why_)])
+        cells(ws4, r_, [("id", fid), ("text", label_), ("count", n_), ("amount", round(v_, decimals)),
+                        ("amount", round(p_, decimals)), ("amount", round(m_, decimals)), ("text", why_)])
     rt = res.summary.filter(pl.col("line") == "right_total").row(0)
     r_ += 1
-    cells(ws4, r_, [("id", None), ("text", f"{Os} per bank"), ("count", rt[1]), ("amount", round(rt[2], decimals))],
-          "Total")
+    cells(ws4, r_, [("id", None), ("text", f"{Os} per bank"), ("count", rt[1]), ("amount", round(rt[2], decimals)),
+                    ("amount", round(rt[3], decimals)), ("amount", round(rt[4], decimals))], "Total")
     last4 = r_
     r_ += 2
     section(ws4, r_, "The items not matched")
@@ -352,77 +356,3 @@ def match_tabs(wb, res, left: pl.DataFrame, right: pl.DataFrame, *, check: str, 
                         ("amount", round(b["difference"], decimals))])
     finish(ws3, r_)
     return {**names, "figures": figs}
-
-
-def _selfcheck() -> int:
-    import tempfile
-    import zipfile
-
-    from openpyxl import Workbook, load_workbook
-
-    import check_workbook
-    import link_workbook
-    from figures import Ledger
-    from resolve import resolve, rules
-    bad = []
-    D = dt.date(2024, 3, 1)
-    left = pl.DataFrame([("i1", "c1", D, 100.37), ("i2", "c1", D, 250.13), ("i3", "c2", D, 75.25),
-                         ("i4", "c3", D + dt.timedelta(days=9), 81.10),
-                         ("i5", "c4", D + dt.timedelta(days=40), 12.34)],
-                        orient="row", schema=["id", "entity", "date", "value"])
-    right = pl.DataFrame([("d1", "A", D, 350.50), ("d2", "A", D, 75.25),
-                          ("d3", "A", D + dt.timedelta(days=9), 81.10),
-                          ("d4", "B", D + dt.timedelta(days=20), 9.99)],
-                         orient="row", schema=["id", "entity", "date", "value"])
-    res = resolve(left, right, rules(window=(0, 2)))
-    with tempfile.TemporaryDirectory() as tmp:
-        run = pathlib.Path(tmp)
-        (run / "workpapers").mkdir()
-        L = Ledger(run, "m1", fresh=True)
-        L.cite({"id": "E.m1.left", "kind": "span", "file": "l.xlsx", "source": "l",
-                "file_role": "system_export", "sheet": "S", "header_at": "A1", "rows": "2:6",
-                "columns": [], "filter": "none - full sheet consumed", "row_count": 5,
-                "control_total": {"column": "v", "value": 519.19}})
-        L.population("P.m1.left", "left items", 6, 6, citations=["E.m1.left"])
-        L.population("P.m1.right", "right items", 4, 4, citations=["E.m1.left"])
-        wb = Workbook()
-        wb.active.title = "m1 Reconciliation"
-        out = match_tabs(wb, res, left, right, check="m1", token="m1", ledger=L,
-                         subtitle="Fixture · March 2024 · USD", inputs=[("left", "E.m1.left")],
-                         population="P.m1.left", right_population="P.m1.right",
-                         others=pl.DataFrame({"id": ["i9"], "value": [0.0], "reason": ["open"]}),
-                         left_label=pl.DataFrame({"id": ["i1"], "label": ["Customer One"]}))
-        L.write()
-        path = run / "tab.xlsx"
-        wb.save(path)
-        wbb = load_workbook(path)
-        if wbb.sheetnames[:4] != [out["summary"], out["schedule"], out["reconciling"], out["rules"]]:
-            bad.append(f"the four tabs lead the file: {wbb.sheetnames}")
-        sch = wbb[out["schedule"]]
-        states = [sch.cell(r, 6).value for r in range(5, 11)]
-        if states != ["Matched"] * 4 + ["In transit", "No cash"]:
-            bad.append(f"the schedule is sorted by status: {states}")
-        with zipfile.ZipFile(path) as z:
-            if fails := check_workbook.audit_match(z, assembled=False):
-                bad.append(f"the match gate refuses the builder's own tabs: {fails[:3]}")
-            if design := [f for f in check_workbook.audit_design(z) if out["summary"] in f or out["schedule"] in f]:
-                bad.append(f"the design gate refuses the tabs: {design[:3]}")
-        ws = wbb[out["summary"]]
-        ws["D6"].value = ws["D6"].value + 1                    # a tampered line is refused
-        wbb.save(path)
-        with zipfile.ZipFile(path) as z:
-            if not check_workbook.audit_match(z, assembled=False):
-                bad.append("a summary line that is not the filter passes the gate")
-        wbl = load_workbook(path)
-        targets = link_workbook.match_targets(wbl)
-        if targets.get((out["summary"], "C6")) != (out["schedule"], "B5:K8") or \
-                targets.get((out["summary"], "C7")) != (out["schedule"], "B9:K9"):
-            bad.append(f"each line links to its rows: {targets}")
-    for b in bad:
-        print("FAIL", b)
-    print("match_tabs.py self-check:", "FAIL" if bad else "ok")
-    return 1 if bad else 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(_selfcheck())

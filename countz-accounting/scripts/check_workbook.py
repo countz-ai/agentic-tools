@@ -106,8 +106,8 @@ GATE 6 — the match tabs (reference/WORKBOOK.md § 6, scripts/match_tabs.py), o
 workbook that holds them. Every line of a match summary is its schedule filtered on the
 line's status: the same count of rows and the same amount, to the cent; the opening line
 and the total are the whole schedule; the schedule holds each item once, in one block per
-status; the reconciling items foot; and in an assembled workbook each line's words link
-to its block.
+status; the reconciling items foot, and each line's positive and negative items add to
+it; and in an assembled workbook each line's words link to its block.
 
 The id grammar and the home rule mirror link_workbook.py — a change here changes both.
 
@@ -1033,6 +1033,10 @@ def audit_match(z: zipfile.ZipFile, assembled: bool | None = None) -> list[str]:
             row = rrows.get(r)
             if not row:
                 break
+            if isinstance(row.get("F"), (int, float)) and isinstance(row.get("G"), (int, float)) and \
+                    abs(float(row["F"]) + float(row["G"]) - float(row.get("E", 0.0))) > 0.005:
+                fails.append(f"{rec}!E{r}: its positive and negative items add to "
+                             f"{float(row['F']) + float(row['G']):,.2f}, the line reads {float(row.get('E', 0.0)):,.2f}")
             if str(row.get("C", "")).endswith("per bank"):
                 if abs(body - float(row.get("E", 0.0))) > 0.005:
                     fails.append(f"{rec}!E{r}: the lines above sum to {body:,.2f}, the total "

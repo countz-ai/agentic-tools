@@ -241,7 +241,7 @@ This section is the one statement of how ARR, its movements and its retention ar
 computed from a policy's values. A recipe says where the figures land (its cube, its
 bridge, its tabs) and which decisions each step turns on; it never says how a
 decision's value becomes a number. That is here, for every decision and every option,
-and `arr_policy.py selftest` fails when an option in the catalog has no rule below. An
+and the plugin's own tests fail when an option in the catalog has no rule below. An
 instruction refines these rules for one company's records (§ Instructions); a question
 neither reaches is settled per § Applying the policy, step 5.
 

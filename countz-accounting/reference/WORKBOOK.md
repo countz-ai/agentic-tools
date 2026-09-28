@@ -171,8 +171,8 @@ that matched items with `resolve.py`. They report the matching as reconciliation
 does, so a reader can verify it one item at a time.
 
 - `<token> Match summary` walks from all left items (every invoice, paid or not) to each
-  status, as a count and an amount: Matched, In transit (dated after the statement's end;
-  Outstanding for payments), Unmatched, No cash. Each status line is the schedule filtered
+  status, as a count and an amount: Matched, In transit (not matched and dated within the
+  window of the statement's end; Outstanding for payments), Unmatched, No cash. Each status line is the schedule filtered
   on that status, and its words link to that status's rows. Then what each rule matched,
   and the right items matched and not in the book.
 - `<token> Match schedule` has one row per left item: its label, date, amount, status, the
@@ -181,10 +181,11 @@ does, so a reader can verify it one item at a time.
   is sorted by status in the summary's order, so each status is one block of rows, and its
   AutoFilter sits on the header.
 - `<token> Reconciling items` (`<token> Recon items` where the name would pass 31
-  characters) is the reconciliation, each line gross and each a figure: the left items per
-  books; less those dated after the statement's end; less those not matched; each
-  difference a rule tolerated; plus the right items not in the book; the right items per
-  bank. Then every item not matched, with its age at the statement's end.
+  characters) is the reconciliation, each line a figure, net and gross (its positive and
+  negative items apart, adding to the net): the left items per books; less those in
+  transit; less those not matched; each difference a rule tolerated; plus the right items
+  not in the book; the right items per bank. Then every item not matched, with its age at
+  the statement's end.
 - `<token> Match rules` (`<token> Rules` where the name would pass 31 characters) lists the
   rules in the order they ran, each with its criteria and what it matched.
 
@@ -260,10 +261,9 @@ from wbkit import *
 
 and never carries a copy of any of it: the module is the one place the kit is written,
 and `check_workbook.py` GATE 4 verifies the stored workbook against the same values. Each
-helper's contract is its docstring and signature in the module (`python3
-${CLAUDE_PLUGIN_ROOT}/scripts/wbkit.py` self-checks it); the rules they implement are §
-3 to § 5 above. `finish(ws, table_last_row, ledger=False)` sets the per-sheet settings
-of the style's § 9 — the primary table's rules, row heights, the `B4` freeze, gridlines,
+helper's contract is its docstring and signature in the module; the rules they implement
+are § 3 to § 5 above. `finish(ws, table_last_row, ledger=False)` sets the per-sheet
+settings of the style's § 9 — the primary table's rules, row heights, the `B4` freeze, gridlines,
 tab color, the filter, print setup and the § 7 footer — after the last row is written.
 
 ## 8. Before the tab leaves staging

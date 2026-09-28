@@ -994,22 +994,15 @@ def check(root: pathlib.Path) -> list[str]:
                     bad.append(f"{rel(cp)}: {f.name} fixture exited {r.returncode}, want "
                                f"{want} - {(r.stdout or r.stderr).strip()[:80]}")
 
-    # 8e. Shipped workpaper units must parse, and when the plugin ships a units
-    #     self-test it must pass. The units are the computation the deliverable rests
-    #     on; a syntax error or a broken formula in shipped code is otherwise invisible
-    #     until a paid run executes it.
+    # 8e. Shipped workpaper units must parse. The units are the computation the
+    #     deliverable rests on; a syntax error in shipped code is otherwise invisible
+    #     until a paid run executes it. Their tests, like every script's, live outside
+    #     the plugin (8z).
     for b in sorted(root.glob("goals/*/units/*.py")):
         try:
             compile(b.read_text(), str(b), "exec")
         except SyntaxError as exc:
             bad.append(f"{rel(b)}: syntax error at line {exc.lineno}")
-    st = root / "scripts" / "units-selftest.py"
-    if st.is_file():
-        import subprocess
-        r = subprocess.run([sys.executable, str(st)], capture_output=True, text=True)
-        if r.returncode != 0:
-            tail = " | ".join((r.stdout + r.stderr).strip().splitlines()[-3:])
-            bad.append(f"{rel(st)}: units self-test failed (exit {r.returncode}): {tail}")
 
     # 8f. preview.py names each surfaceable artifact exactly once per content version:
     #     a fresh run dir must SHOW the plan, the room inventory, the rendered datasets
@@ -2273,18 +2266,12 @@ def check(root: pathlib.Path) -> list[str]:
     #     constants and WORKBOOK.md § 7's helpers, imported by every tab script. Measured
     #     2026-09-22 on one revenue run: WORKBOOK.md told every tab script to start from
     #     the kit "verbatim", and eighteen worker scripts carried a typed copy each - the
-    #     largest class of generated code in the run. The module must self-check in the
-    #     plugin's own environment, no other shipped script may carry the palette with a
-    #     NamedStyle (a second copy drifts from the gate), and the two documents must send
-    #     the reader to the module rather than to a code block.
+    #     largest class of generated code in the run. The module's test passes (8z), no
+    #     other shipped script may carry the palette with a NamedStyle (a second copy
+    #     drifts from the gate), and the two documents must send the reader to the module
+    #     rather than to a code block.
     wk = root / "scripts" / "wbkit.py"
     if wk.is_file():
-        import subprocess
-        r = subprocess.run(["uv", "run", "--project", str(root), "python3", str(wk)],
-                           capture_output=True, text=True)
-        if r.returncode != 0:
-            tail = " | ".join((r.stdout + r.stderr).strip().splitlines()[-3:])
-            bad.append(f"{rel(wk)}: self-check failed (exit {r.returncode}): {tail}")
         for b in sorted(root.glob("scripts/*.py")):
             if b == wk:
                 continue
@@ -2298,26 +2285,37 @@ def check(root: pathlib.Path) -> list[str]:
                 bad.append(f"{rel(df)}: does not name scripts/wbkit.py - a tab script "
                            f"reading it would type the kit again")
 
-    # 8z. The shared modules a step imports carry their own self-checks, and each must
-    #     pass in the plugin's own environment: style.py (currencies, US number and date
-    #     forms, the token grammar the gates read with), figures.py (units per currency,
-    #     cross-currency ties refused), periods.py (fiscal calendars, windows, time zones),
-    #     step_record.py, check_prose.py's gate cases, cache.py (the cache's bookkeeping:
-    #     refusals, stated totals, the exact re-check), and the shared helpers a worker
-    #     computes with instead of retyping them (agents/worker.md § Shared modules).
-    for name, extra in (("style.py", ()), ("figures.py", ()), ("periods.py", ()),
-                        ("step_record.py", ()), ("check_prose.py", ("--self-check",)),
-                        ("rework.py", ()), ("items.py", ()),
-                        ("matching.py", ()), ("resolve.py", ()), ("match_tabs.py", ()),
-                        ("cache.py", ())):
-        mod = root / "scripts" / name
-        if mod.is_file():
-            import subprocess
-            r = subprocess.run(["uv", "run", "--project", str(root), "python3", str(mod), *extra],
-                               capture_output=True, text=True)
-            if r.returncode != 0:
-                tail = " | ".join((r.stdout + r.stderr).strip().splitlines()[-3:])
-                bad.append(f"{rel(mod)}: self-check failed (exit {r.returncode}): {tail}")
+    # 8z. A script's tests live outside the plugin, in tests/<plugin>/test_<script>.py,
+    #     so they never ship; each runs in the plugin's own environment and must pass, and
+    #     a shipped script that carries a self-check of its own is refused. These modules
+    #     must have one: style.py (currencies, US number and date forms, the token grammar
+    #     the gates read with), figures.py (units per currency, cross-currency ties
+    #     refused), periods.py (fiscal calendars, windows, time zones), step_record.py,
+    #     check_prose.py's gate cases, cache.py (the cache's bookkeeping: refusals, stated
+    #     totals, the exact re-check), wbkit.py (8w), arr_policy.py (8y), and the shared
+    #     helpers a worker computes with instead of retyping them (agents/worker.md
+    #     § Shared modules).
+    tests = root.parent / "tests" / root.name
+    for name in ("style.py", "figures.py", "periods.py", "step_record.py", "check_prose.py",
+                 "rework.py", "items.py", "matching.py", "resolve.py", "match_tabs.py",
+                 "cache.py", "wbkit.py", "arr_policy.py"):
+        if (root / "scripts" / name).is_file() and not (tests / f"test_{name}").is_file():
+            bad.append(f"{rel(root / 'scripts' / name)}: has no test at {rel(tests / f'test_{name}')}")
+    for t in sorted(tests.glob("test_*.py")):
+        if not (root / "scripts" / t.name.removeprefix("test_")).is_file():
+            bad.append(f"{rel(t)}: tests scripts/{t.name.removeprefix('test_')}, which the plugin "
+                       f"does not ship")
+            continue
+        import subprocess
+        r = subprocess.run(["uv", "run", "--project", str(root), "python3", str(t)],
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            tail = " | ".join((r.stdout + r.stderr).strip().splitlines()[-3:])
+            bad.append(f"{rel(t)}: failed (exit {r.returncode}): {tail}")
+    for b in sorted(root.glob("scripts/*.py")):
+        if re.search(r"^def (_?self_?check|selftest)\(|self-check", b.read_text(), re.M):
+            bad.append(f"{rel(b)}: carries a self-check - it belongs in {rel(tests)}/test_{b.name}, "
+                       f"outside the plugin")
 
     # 8x. The read and the citation are one query: a table the extract step's own
     #     script landed through scripts/cache.py, read back by evidence.py select,
@@ -2485,15 +2483,9 @@ def check(root: pathlib.Path) -> list[str]:
     # 8y. The ARR policy catalog (reference/ARR_POLICY.md) has one home,
     #     scripts/arr_policy.py: 31 decisions, every derivation defined at every position
     #     under every purpose, and every derived value one of the decision's own options.
-    #     A catalog edit that breaks a derivation fails here, not in a user's run.
+    #     A catalog edit that breaks a derivation fails its test (8z), not a user's run.
     ap_script = root / "scripts" / "arr_policy.py"
     if ap_script.is_file():
-        import subprocess
-        r = subprocess.run([sys.executable, str(ap_script), "selftest"],
-                           capture_output=True, text=True)
-        if r.returncode != 0:
-            bad.append(f"{rel(ap_script)}: selftest failed - "
-                       f"{(r.stdout or r.stderr).strip().splitlines()[-1]}")
         for skill in ("create-arr-policy", "extract-arr-policy"):
             if not (root / "skills" / skill / "SKILL.md").is_file():
                 bad.append(f"{rel(ap_script)}: the ARR policy ships without skills/{skill}")

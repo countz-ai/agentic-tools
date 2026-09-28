@@ -9,37 +9,58 @@ the other's one candidate under the rule. What no rule matches is an exception, 
 person to clear. Every match names its rule.
 
     import sys; sys.path.insert(0, "<${CLAUDE_PLUGIN_ROOT}>/scripts")   # the token expanded
-    from resolve import Rule, resolve, rules
+    from resolve import Rule, chain, resolve, rules
 
-    res = resolve(book, bank, rules(window=(0, 3), same_entity=True))
+    res = resolve(book, bank, rules(window=(0, 3), same_entity=True), transit=3)
     res.items       # one row per item of both streams (check_assignment() accepts it)
     res.matches     # one row per match: its rule, type, both sides' ids and totals, difference
-    res.exceptions  # every unmatched item, with its reason and its age at the statement's end
-    res.summary     # the reconciliation, left total to right total; it foots
+    res.exceptions  # every unmatched item: its reason, its age at the statement's end, and
+                    # whether it is in transit
+    res.summary     # the reconciliation, left total to right total, net and gross; it foots
     res.by_rule     # what each rule matched
+    chain(r1, r2, r3)   # each left item of r1 traced through r2 and r3 (r1's right items are
+                        # r2's left items, by id): what it reaches, and by which rules
 
 **Using it.**
 
-1. Map each population whole, one direction per call: receipts, or payments, never both.
-   Each stream is a polars DataFrame of `id` (unique text, no `;`), `date` (a Date,
-   Datetime or ISO text; null where the record has none) and `value` (same currency and
-   sign on both sides, no finer than `decimals`), with any other columns a rule compares:
-   `entity` (a customer, a payee, an account), `ref` (a transaction, cheque or invoice
-   number), `text` (a bank description), `batch` (the lines of one deposit), `slip`.
-2. Choose the rules. `rules()` gives the defaults below; add a `Rule` for what the records
-   name that they do not (a processor's fee, a bank's conversion). Measure `window` on the
-   data: the days from the left date to the right date that the matches show.
+1. Map each population whole, one flow per call: what came in (receipts, with the
+   refunds, reversals and returned items that undo them), or what went out (payments, with
+   theirs), never both. Each stream is a polars DataFrame of `id` (unique text, no `;`),
+   `date` (a Date, Datetime or ISO text; null where the record has none) and `value` (same
+   currency and sign convention on both sides, no finer than `decimals`), with any other
+   columns a rule compares: `entity` (a customer, a payee, an account), `ref` (a cheque,
+   deposit or invoice number the other side carries too), `text` (a bank description),
+   `batch` (the lines of one deposit), `slip`. Where the source's own key repeats (a deposit id on
+   each of its lines, a payment id on each invoice it pays), build the id from the file and
+   the row, or from the key and a second column; the key itself is `batch` when it groups
+   one deposit's lines, and `ref` only when the other side's `ref` numbers the same thing.
+2. Choose the rules. `rules()` gives the defaults below; add a `Rule` for what a record
+   names that the other side does not (a processor's fee, a bank's conversion). Measure
+   the window before choosing it: match once by reference at any date (`[Rule("ref",
+   ("ref",), None), Rule("quoted", ("quote",), None)]`, or on amounts that occur once on
+   each side), and read the days from the left date to the right date on those pairs: `window` the few days most pairs fall in, `wide` the longest a pair
+   takes. Pass `transit=` the days an item takes to reach the bank where that is longer
+   than `window` (a cheque paid out is presented weeks after it is written).
 3. Read each item's `status`: `matched` names its rule (`pass`), its group and what it
    matched to; `unmatched` states why (no candidate, or the count of candidates a rule
    found). The exceptions are yours to clear with the records the engine cannot read.
-4. `res.summary` is the reconciliation: the left total, less the left items not matched,
-   plus the right items not matched, plus each named difference, is the right total.
-5. Show the result with `scripts/match_tabs.py`.
+4. `res.summary` is the reconciliation: the left total, less the left items in transit and
+   those not matched, plus each named difference, plus the right items not matched, is the
+   right total. Each line shows its net and its gross, positive and negative apart.
+5. Records that settle in steps (invoice, cash application, receipt, bank line) are
+   matched one pair at a time, one call each, and `chain()` traces them end to end.
+6. Show the result with `scripts/match_tabs.py`.
 
 **A rule** compares the open items of both sides:
 - `on`: columns that must be equal, compared as keys (case, spaces, punctuation and
-  leading zeros dropped). `quote` is special: the right item's `text` quotes the left
-  item's `id` or `ref`.
+  leading zeros dropped). `ref` is a number both sides carry for the same thing (a cheque
+  number on the book and on the bank); a number only one side has goes in `text`, or stays
+  out. `quote` is special: the right item's `text` quotes the left item's `id` or `ref`.
+  A rule that does not compare `ref` never pairs two items whose references both exist
+  and differ: an amount never overrides a reference. An item whose column is empty is not
+  a candidate under a rule that compares that column, so a column set only on the records
+  a rule applies to scopes the rule to them (the currency of a foreign receipt, and the
+  currency the statement says it converted, for a rule that tolerates a conversion).
 - `days`: (lo, hi), the right date less the left date, inclusive; None, dates not
   compared. An undated item is matched only by a rule that does not compare dates.
 - `group_left`, `group_right`: first sum the open items sharing these columns into one (a
@@ -48,28 +69,31 @@ person to clear. Every match names its rule.
   a (lo, hi) range, negative where the right side carries less; the difference is
   reported under `difference`.
 A pair matches when it meets the rule and neither side has another candidate under it.
-An item with two candidates or more is left for the next rule.
+An item with two candidates or more is left for the next rule. An unmatched left item is
+in transit when its date, plus `transit` days, reaches past the right side's last date: its
+right item would be on a later statement. `transit` is how long the flow's items take to
+reach the bank (a receipt a few days, a cheque paid out weeks); by default the end of the
+narrowest window a rule compares dates over.
 
 **The default rules**, `rules(window, wide, same_entity)`, in order, after NetSuite's:
-reference (same `ref` and amount, any date); reference, totals (the items sharing a `ref`
-on each side, totals equal); quoted (the right text quotes the left `id` or `ref`, same
-amount, any date); amount and date (same amount within `window`); deposit lines (one left
-item, the lines of one right `batch`); day's items (a left `entity`'s items of one day, one
-right item); day's items, deposit lines (both at once); amount, wide (same amount within
-`wide`). `same_entity` adds `entity` to
-every rule, where both sides name the same party or account.
-
-Run with no arguments to self-check.
+reference (same `ref` and amount); reference, totals (the items sharing a `ref` on each
+side, totals equal); quoted (the right text quotes the left `id` or `ref`, same amount),
+these three from the start of `window` to the end of `wide`, since a reference two records
+share can be reused (a cheque returned and banked again quotes its invoice as the first
+banking did); amount and date (same amount within `window`); deposit lines (one left item,
+the lines of one right `batch`); day's items (a left `entity`'s items of one day, one right
+item); day's items, deposit lines (both at once); amount, wide (same amount within
+`wide`); then reference and quoted again at any date, for what no dated rule could pair (an
+undated item, a receipt booked weeks after the bank credited it). `same_entity` adds
+`entity` to every rule, where both sides name the same party or account.
 """
 from __future__ import annotations
 
-import datetime as dt
-import sys
 from dataclasses import dataclass, field
 
 import polars as pl
 
-__all__ = ["Rule", "Resolution", "resolve", "rules"]
+__all__ = ["Rule", "Resolution", "chain", "resolve", "rules"]
 
 
 @dataclass(frozen=True)
@@ -110,15 +134,18 @@ class Rule:
 def rules(window=(0, 2), wide=(0, 89), same_entity=False) -> list[Rule]:
     """The default rule set (module docstring)."""
     e = ("entity",) if same_entity else ()
-    return [Rule("reference", e + ("ref",), None),
-            Rule("reference, totals", e + ("ref",), None, ("ref",), ("ref",)),
-            Rule("quoted", e + ("quote",), None),
+    ref = (window[0], wide[1])
+    return [Rule("reference", e + ("ref",), ref),
+            Rule("reference, totals", e + ("ref",), ref, ("ref",), ("ref",)),
+            Rule("quoted", e + ("quote",), ref),
             Rule("amount and date", e, tuple(window)),
             Rule("deposit lines", e, tuple(window), group_right=("batch",)),
             Rule("day's items", e, tuple(window), group_left=("entity", "date")),
             Rule("day's items, deposit lines", e, tuple(window), group_left=("entity", "date"),
                  group_right=("batch",)),
-            Rule("amount, wide", e, tuple(wide))]
+            Rule("amount, wide", e, tuple(wide)),
+            Rule("reference, any date", e + ("ref",), None),
+            Rule("quoted, any date", e + ("quote",), None)]
 
 
 @dataclass
@@ -172,8 +199,7 @@ def _stream(df: pl.DataFrame, name: str, scale: int, used: set[str]) -> pl.DataF
         if c not in out.columns:
             out = out.with_columns(pl.lit(None, pl.Utf8).alias(c))
     quote = (pl.concat_list(_key(pl.col("id")), _key(pl.col("ref"))) if name == "left" else
-             pl.concat_list(pl.col("text").str.extract_all(r"[A-Za-z0-9-]*\d[A-Za-z0-9-]*")
-                            .list.eval(_key(pl.element())), _key(pl.col("ref"))))
+             pl.col("text").str.extract_all(r"[A-Za-z0-9-]*\d[A-Za-z0-9-]*").list.eval(_key(pl.element())))
     return out.with_columns(quote=quote.list.eval(pl.element().filter(pl.element().str.len_chars() >= 4))
                             .list.unique()).sort("id")
 
@@ -183,7 +209,7 @@ def _group(S: pl.DataFrame, by: tuple[str, ...], on: tuple[str, ...]) -> pl.Data
     column summed into one: its ids, total, date span and the rule's keys."""
     by = tuple("day" if c == "date" else c for c in by)
     keyed = [k for k in on if k != "quote"]
-    keys = {f"k_{k}": _key(pl.col(k)) for k in keyed}
+    keys = {f"k_{k}": _key(pl.col(k)) for k in keyed} | {"refkey": _key(pl.col("ref"))}
     one = S.select(g="id", ids=pl.concat_list("id"), c="c", lo="day", hi="day", quote="quote", **keys)
     if not by:
         return one
@@ -215,6 +241,9 @@ def _pairs(L: pl.DataFrame, R: pl.DataFrame, rule: Rule, scale: int) -> pl.DataF
         p = p.with_columns(c_r=pl.col("c"))
     if rule.days is not None:
         p = p.filter(pl.col("hi_r") >= pl.col("lo") + rule.days[0], pl.col("lo_r") <= pl.col("hi") + rule.days[1])
+    if "ref" not in rule.on:                         # an amount never overrides a reference
+        p = p.filter(pl.col("refkey").is_null() | pl.col("refkey_r").is_null()
+                     | (pl.col("refkey") == pl.col("refkey_r")))
     d = pl.col("c_r") - pl.col("c")
     way, size = d * pl.col("c").sign(), pl.col("c").abs()      # in the stream's direction
     p = p.filter((way >= size * rule.percent[0] + round(rule.tolerance[0] * scale))
@@ -223,10 +252,12 @@ def _pairs(L: pl.DataFrame, R: pl.DataFrame, rule: Rule, scale: int) -> pl.DataF
 
 
 def resolve(left: pl.DataFrame, right: pl.DataFrame, rule_set: list[Rule] | None = None, *,
-            decimals: int = 2) -> Resolution:
+            decimals: int = 2, transit: int | None = None) -> Resolution:
     """Match `left` to `right` by `rule_set` (default `rules()`), in order (module docstring)."""
     if int(decimals) != decimals or not 0 <= decimals <= 6:
         raise ValueError("decimals is a whole number of minor-unit places, 0 to 6")
+    if transit is not None and (int(transit) != transit or transit < 0):
+        raise ValueError("transit is a whole number of days, 0 or more")
     scale = 10 ** int(decimals)
     rule_set = rules() if rule_set is None else list(rule_set)
     for r in rule_set:
@@ -250,10 +281,12 @@ def resolve(left: pl.DataFrame, right: pl.DataFrame, rule_set: list[Rule] | None
             matches.append((rule.name, ids_l, ids_r, c_l, c_r, d, rule.difference if d else None))
             open_L -= set(ids_l)
             open_R -= set(ids_r)
-    return _report(L, R, rule_set, matches, why, open_L, open_R, scale)
+    if transit is None:
+        transit = max(0, min((r.days[1] for r in rule_set if r.days is not None), default=0))
+    return _report(L, R, rule_set, matches, why, open_L, open_R, scale, transit)
 
 
-def _report(L, R, rule_set, matches, why, open_L, open_R, s) -> Resolution:
+def _report(L, R, rule_set, matches, why, open_L, open_R, s, transit) -> Resolution:
     kind = lambda a, b: f"{'1' if len(a) == 1 else 'n'}:{'1' if len(b) == 1 else 'n'}"  # noqa: E731
     mt = pl.DataFrame([(k, rn, kind(a, b), ";".join(a), ";".join(b), cl / s, cr / s, d / s, dn)
                        for k, (rn, a, b, cl, cr, d, dn) in enumerate(matches, start=1)], orient="row",
@@ -277,21 +310,23 @@ def _report(L, R, rule_set, matches, why, open_L, open_R, s) -> Resolution:
     ex = pl.concat([
         S.filter(pl.col("id").is_in(list(open_))).select(
             side=pl.lit(side), id="id", date=pl.col("day").cast(pl.Date), amount=pl.col("c") / s, c="c",
-            entity="entity", after_end=(pl.col("day") > pl.lit(last, pl.Int32)).fill_null(False),
+            entity="entity", in_transit=(pl.col("day") + transit > pl.lit(last, pl.Int32)).fill_null(False)
+            & pl.lit(side == "left"),
             age=pl.lit(last, pl.Int32) - pl.col("day"))
         for side, S, open_ in (("left", L, open_L), ("right", R, open_R))])
     ex = ex.join(items.select("side", "id", "reason"), on=["side", "id"]).sort("side", "date", "id", nulls_last=True)
     un_l, un_r = ex.filter(pl.col("side") == "left"), ex.filter(pl.col("side") == "right")
-    after, before = un_l.filter("after_end"), un_l.filter(~pl.col("after_end"))
-    lines = [("left_total", L.height, L["c"].sum()), ("left_after_end", after.height, -after["c"].sum()),
-             ("left_unmatched", before.height, -before["c"].sum())]
-    lines += [(f"difference:{n}", g.height, round(g["difference"].sum() * s)) for (n,), g in
+    transit_, other = un_l.filter("in_transit"), un_l.filter(~pl.col("in_transit"))
+    lines = [("left_total", L["c"]), ("left_in_transit", -transit_["c"]), ("left_unmatched", -other["c"])]
+    lines += [(f"difference:{n}", (g["difference"] * s).round().cast(pl.Int64)) for (n,), g in
               mt.filter(pl.col("difference") != 0).group_by("difference_name", maintain_order=True)]
-    lines += [("right_unmatched", un_r.height, un_r["c"].sum()), ("right_total", R.height, R["c"].sum())]
-    off = sum(v for _, _, v in lines[:-1]) - lines[-1][2]
+    lines += [("right_unmatched", un_r["c"]), ("right_total", R["c"])]
+    off = sum(v.sum() for _, v in lines[:-1]) - lines[-1][1].sum()
     assert off == 0, f"the reconciliation does not foot by {off}"
-    summary = pl.DataFrame([(k, n, v / s) for k, n, v in lines], orient="row",
-                           schema={"line": pl.Utf8, "items": pl.Int64, "amount": pl.Float64})
+    summary = pl.DataFrame([(k, v.len(), v.sum() / s, v.filter(v > 0).sum() / s, v.filter(v < 0).sum() / s)
+                            for k, v in lines], orient="row",
+                           schema={"line": pl.Utf8, "items": pl.Int64, "amount": pl.Float64,
+                                   "plus": pl.Float64, "minus": pl.Float64})
     ex = ex.drop("c")
     by_rule = (pl.DataFrame({"rule": [r.name for r in rule_set], "criteria": [r.criteria for r in rule_set]})
                .join(mt.group_by("rule").agg(matches=pl.len(),
@@ -304,78 +339,34 @@ def _report(L, R, rule_set, matches, why, open_L, open_R, s) -> Resolution:
     return Resolution(items.sort("side", "id"), mt, ex, summary, by_rule, list(rule_set))
 
 
-# ---------------------------------------------------------------------------- self-check
-def _selfcheck() -> int:
-    bad: list[str] = []
-
-    def expect(cond, what):
-        if not cond:
-            bad.append(what)
-    D = dt.date(2024, 3, 1)
-    cols = ("id", "date", "value", "entity", "ref", "text", "batch")
-    frame = lambda rows: pl.DataFrame([tuple(r) + (None,) * (len(cols) - len(r)) for r in rows], orient="row",  # noqa: E731
-                                      schema={c: pl.Date if c == "date" else pl.Float64 if c == "value"
-                                              else pl.Utf8 for c in cols})
-    day = lambda n: D + dt.timedelta(days=n)  # noqa: E731
-    book = frame([("b1", day(0), 100.37, "OPER", "1001"),          # its cheque number on the bank
-                  ("b2", day(0), 250.13, "OPER"),                  # same amount, a day later
-                  ("b3", day(1), 75.25, "OPER"), ("b4", day(1), 75.25, "OPER"),   # twins
-                  ("b5", day(2), 40.00, "OPER"), ("b6", day(2), 60.01, "OPER"),   # one slip
-                  ("b7", day(3), 500.00, "OPER"),                  # credited on two lines
-                  ("b8", day(4), 1000.00, "MERCH"),                # net of a fee
-                  ("b9", day(30), 99.99, "OPER"),                  # after the statement
-                  ("b10", None, 12.34, "OPER")])                   # undated
-    bank = frame([("x1", day(5), 100.37, "OPER", None, "CHECK 1001"),
-                  ("x2", day(1), 250.13, "OPER"),
-                  ("x3", day(1), 75.25, "OPER"), ("x4", day(2), 75.25, "OPER"),
-                  ("x5", day(3), 100.01, "OPER"),
-                  ("x6", day(4), 200.00, "OPER", None, None, "D7"), ("x7", day(4), 300.00, "OPER", None, None, "D7"),
-                  ("x8", day(5), 971.00, "MERCH"),
-                  ("x9", day(9), -35.00, "OPER", None, "SERVICE CHARGE")])
-    fee = Rule("card fee", ("entity",), (0, 3), percent=(-0.035, -0.015), difference="card fee")
-    rs = rules(window=(0, 2), same_entity=True) + [fee]
-    res = resolve(book, bank, rs)
-    it = {(r["side"], r["id"]): r for r in res.items.iter_rows(named=True)}
-    expect(it[("left", "b1")]["pass"] == "quoted" and it[("left", "b1")]["matched_to"] == "x1",
-           f"a number the bank quotes matches whatever the dates: {it[('left', 'b1')]}")
-    expect(it[("left", "b2")]["pass"] == "amount and date", "an amount the only one within the window matches")
-    expect(it[("left", "b3")]["status"] == it[("left", "b4")]["status"] == "unmatched"
-           and "candidates" in (it[("left", "b3")]["reason"] or ""), "twins are left for a person, with the count")
-    expect(it[("left", "b5")]["pass"] == "day's items" and it[("left", "b5")]["type"] == "n:1",
-           f"a day's items against one line, n:1: {it[('left', 'b5')]}")
-    expect(it[("left", "b7")]["pass"] == "deposit lines" and it[("left", "b7")]["type"] == "1:n",
-           f"a deposit's lines against one item, 1:n: {it[('left', 'b7')]}")
-    expect(it[("left", "b8")]["pass"] == "card fee" and it[("left", "b8")]["difference"] == -29.0,
-           f"a tolerated difference is matched and named: {it[('left', 'b8')]}")
-    expect(it[("left", "b10")]["status"] == "unmatched" and it[("right", "x9")]["status"] == "unmatched",
-           "what no rule reaches stays open")
-    walk = dict((k, v) for k, _, v in res.summary.iter_rows())
-    expect(walk["left_after_end"] == -99.99 and walk["difference:card fee"] == -29.0
-           and abs(walk["right_unmatched"] - (75.25 * 2 - 35.00)) < 1e-9, f"the reconciliation's lines: {walk}")
-    expect(res.by_rule.filter(pl.col("rule") == "quoted")["matches"][0] == 1, "each rule's count")
-    for a, b in ((book.reverse(), bank.reverse()), (book.sample(fraction=1, shuffle=True, seed=3), bank)):
-        expect(resolve(a, b, rs).items.equals(res.items, null_equal=True), "row order does not matter")
-    for bad_left, what in ((book.with_columns(date=pl.lit("03/04/2024")), "a date not ISO"),
-                           (book.with_columns(value=pl.lit(1.005)), "a value finer than cents"),
-                           (book.with_columns(id=pl.lit("x")), "repeated ids")):
-        try:
-            resolve(bad_left, bank)
-            bad.append(f"did not refuse {what}")
-        except ValueError:
-            pass
-    try:
-        from matching import check_assignment
-        check_assignment(book, bank, res.items, left_id="id", right_id="id", amount="value", tol=None)
-    except ImportError:
-        pass
-    except Exception as e:  # noqa: BLE001
-        bad.append(f"check_assignment refused the output: {e}")
-    for b in bad:
-        print("FAIL", b)
-    print("resolve.py self-check:", "FAIL" if bad else "ok")
-    return 1 if bad else 0
-
-
-if __name__ == "__main__":
-    sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent))
-    sys.exit(_selfcheck())
+def chain(*results: Resolution) -> pl.DataFrame:
+    """Each left item of the first call traced through the calls after it, call k's right
+    ids being call k+1's left ids. One row per item: `status` traced (every step matched),
+    partly traced (the step it `stopped` at matched some of what reached it) or open, the
+    `reason` of the first item left at that step, the `rules` of each step, and the last
+    call's right ids it `reaches`."""
+    if not results:
+        raise ValueError("chain() takes one resolution or more")
+    front = results[0].items.filter(pl.col("side") == "left").select(start="id", id="id")
+    out = front.select(id="start")
+    for k, r in enumerate(results, start=1):
+        step = front.join(r.items.filter(pl.col("side") == "left"), on="id", how="left").with_columns(
+            ok=(pl.col("status") == "matched").fill_null(False),
+            reason=pl.col("reason").fill_null(pl.lit(f"not among call {k}'s left items")))
+        out = out.join(step.group_by("start").agg(
+            **{f"all{k}": pl.col("ok").all(), f"any{k}": pl.col("ok").any(),
+               f"why{k}": pl.col("reason").filter(~pl.col("ok")).sort().first(),
+               f"rules{k}": pl.col("pass").drop_nulls().unique().sort().str.join(", ")}).rename({"start": "id"}),
+                       on="id", how="left")
+        front = (step.filter("ok").select("start", id=pl.col("matched_to").str.split(";"))
+                 .explode("id", empty_as_null=False).unique())
+    n = range(1, len(results) + 1)
+    stop = lambda c: pl.coalesce(pl.when(~pl.col(f"all{k}").fill_null(False)).then(c(k)) for k in n)  # noqa: E731
+    reached = front.group_by("start").agg(reaches=pl.col("id").sort().str.join(";")).rename({"start": "id"})
+    return (out.join(reached, on="id", how="left").select(
+        "id", status=pl.when(stop(lambda k: pl.lit(k)).is_null()).then(pl.lit("traced"))
+        .when(stop(lambda k: pl.col(f"any{k}"))).then(pl.lit("partly traced")).otherwise(pl.lit("open")),
+        stopped=stop(lambda k: pl.lit(k)), reason=stop(lambda k: pl.col(f"why{k}")),
+        rules=pl.concat_str([pl.when(pl.col(f"rules{k}") != "").then(pl.col(f"rules{k}")) for k in n],
+                            separator=" > ", ignore_nulls=True),
+        reaches="reaches").sort("id"))
