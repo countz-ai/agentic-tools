@@ -44,9 +44,9 @@ Every decision has one of three types:
   breach the deliverable states.
 - **Convention (6).** No position decides it: the measurement window (S2), currency
   translation (V4), bridge classes (A1), acquired ARR (A2), the customer unit (A3) and
-  the retention formula (A6). Each carries a default. Two further parameters sit beside
-  them: the months after signing a new stream enters ARR (L1) and the document
-  threshold for outlier contracts (L4). A convention no figure needs takes the value `none` and is not asked: the window
+  the retention formula (A6). Each carries a default. Three further parameters sit beside
+  them: the event a new stream enters ARR from and the months after it (L1), and the
+  document threshold for outlier contracts (L4). A convention no figure needs takes the value `none` and is not asked: the window
   is `point_in_time` while ARR is a contract snapshot.
 
 An **override** is a decision the company settles differently from what its positions
@@ -79,8 +79,8 @@ policies:
   value: {position: net_current_step, set_by: purpose}
 conventions:
   window: {value: point_in_time, set_by: not_needed, why: a contract snapshot at the date needs no window}
-  fx: {value: prior_year_end_rate, set_by: default}
-  # ... modification_classes, acquired, customer_unit, retention, signing_lag_months, outlier_threshold_pct
+  fx: {value: closing_spot_rate, set_by: default}
+  # ... modification_classes, acquired, customer_unit, retention, entry_event, signing_lag_months, outlier_threshold_pct
 decisions:
   S1: {value: contract, basis: derived}
   R6: {value: include, basis: override, derived: include_term_contracted,
@@ -270,21 +270,27 @@ records show, a month served in part included, annualized as it stands.
 - `recognized_run_rate`: the recurring revenue recognized in the S2 window, annualized.
 - `billed_spread`: each recurring billing spread evenly over the service period it
   covers, and the spread amounts falling in the S2 window annualized.
-- `contract_else_billed`: two legs, settled per customer (the A3 unit) at each date. A
-  customer with a contract in force that prices a fixed recurring amount or a committed
-  minimum, or one that L3 still carries past its end, is on the contract leg: its
-  contracts take the `contract` value, R1 and R2 govern its usage and overage, and no
-  invoice outside those contracts carries ARR for it. A customer with no such contract is
-  on the billed leg: its ARR is the sum of its invoice lines for recurring streams dated
-  in the S2 window, usage included, net of the credit notes against them. The sum is
-  taken as it stands, never scaled up for a customer that started buying inside the
-  window. A prepaid balance counts as it is drawn down in the window, never at its
-  purchase invoice (S6), and an invoice billed under a contract never counts on the
-  billed leg. A billed-leg customer churns when its window holds no invoice. A customer
-  moving between legs is neither churn nor new: the change in its ARR is expansion or
-  contraction. Every figure carries the leg that measured it (`contract` or `billed`),
-  and every ARR figure, bridge movement and retention measure is reported by leg as well
-  as in total.
+- `contract_else_billed`: two legs, settled per customer (the A3 unit) and product at each
+  date. A product the customer holds under a contract in force that prices it at a fixed
+  recurring amount or a committed minimum, or under a contract L3 still carries past its
+  end, is on the contract leg: the contract takes the `contract` value, R1 and R2 govern
+  its usage and overage, and no invoice for that product outside the contract carries ARR
+  for the customer. A product the customer holds under no such contract, bought with no
+  contract or under an uncommitted contract (one that states neither a fixed recurring
+  price nor a committed minimum), is on the billed leg: its ARR is the sum of the
+  customer's invoice lines for it dated in the S2 window, usage included, net of the
+  credit notes against them. The sum is taken as it stands: never scaled up for a
+  customer or product that started inside the window, and not withheld where the records
+  reach back fewer months than the window. A prepaid balance counts as it is drawn down in
+  the window, never at its purchase invoice (S6), and an invoice billed under a
+  fixed-price or committed contract never counts on the billed leg. A product on the
+  billed leg churns when its window holds no invoice for it. The customer's ARR is the sum
+  of its products on both legs. A product moving between legs is neither churn nor new:
+  the change in its ARR is expansion or contraction, and a bridge by leg shows the amount
+  moved as a transfer between legs that nets to zero in total. Every figure carries the
+  leg that measured it (`contract` or `billed`), and every ARR figure, bridge movement and
+  retention measure is reported by leg as well as in total; a customer holding ARR on
+  both legs counts as a logo in each leg and once in the total.
 
 **S2 · Measurement window.** How a flow is annualized; it applies to a run-rate S1, to
 usage R1 and R2 count, and to S3, S4 and S5 wherever they take a recognized amount.
@@ -375,8 +381,11 @@ that month end. It leaves as L2, L3, L5 and L6 date it.
 customer's first contract for a product; a renewal, extension or modification of a
 stream already in ARR enters nothing, and its value changes per § Modifications. A new
 stream enters ARR in the latest of these months:
-- the signing month plus `signing_lag_months`: at `0` the signing month itself, at `1`
-  the month after, at `6` the signing month plus six. The lag lets a trial or
+- the entry month plus `signing_lag_months`. The entry month is the month of the event
+  the `entry_event` convention names: `signed`, when the contract is signed, or
+  `booked`, when the order is recorded as booked in the company's records (a booking
+  can follow the signature by days, and fall in the next month). At `0` the entry month
+  itself, at `1` the month after, at `6` the entry month plus six. The lag lets a trial or
   cancellation period pass before the stream counts; a contract cancelled before its
   entry month never enters ARR, and is neither new nor churn;
 - its service start month, under `exclude_report_separately`, where a signed contract
@@ -386,8 +395,8 @@ stream enters ARR in the latest of these months:
 - the month its refund window or break clause lapses, where R7 `refund_window` is
   `count_after_window`.
 
-Where the records carry no signing date for a contract, its service start date stands
-in for it, and the row records that it did.
+Where the records carry no date for the `entry_event`, the other event's date stands in
+for it, then the service start date, and the row records which did.
 
 **L2 · Churn timing, and which termination record wins.** `churn_at`: `at_notice` — the
 stream leaves in the month a non-renewal or termination notice is received, though it
@@ -395,12 +404,17 @@ is still served; `effective_date` — it leaves at the effective end.
 `conflicting_records`, where two records date a contract's end differently, names the
 one that governs; the other is recorded beside it:
 - `earliest_end`: the earliest end any record shows.
-- `modification_register`: the modification register's, including an early termination
-  or an extension it records.
-- `last_recognized_month`: the last month revenue is recognized on the contract.
-- `last_billed_service_period`: the end of the last service period billed.
+- `contract_as_amended`: the contract and every amendment to it (an extension, an early
+  termination, a change order), wherever the data room holds them: signed documents, an
+  amendment or modification log, CRM contract records. The run identifies those sources
+  in its own data room. Where they disagree with each other, the latest-dated amendment
+  governs; a date only a CRM or billing record shows, with no contract document behind
+  it, is recorded beside the contract's.
 
-Where the named record is silent on a contract, the end is a pending question.
+Where no record dates a contract's end, the end is a pending question. A stream measured
+from revenue or billing rather than a contract (a run-rate S1, the billed leg of
+`contract_else_billed`) has no end date to settle: it leaves ARR when its window holds
+none.
 
 **L3 · Renewal gaps, holdover and grace periods.** The last month end a contract is
 carried, and so the month it churns. Its end is dated by L2. `treatment`:
@@ -445,7 +459,7 @@ and is neither new nor churn. Measured on the records as they stand, so a month 
 before the termination was recorded is restated. `document_threshold_pct`
 (the `outlier_threshold_pct` convention): a contract whose annualized value exceeds that share of total ARR at the first date it is
 in force enters ARR only with the signed order form or amendment that evidences it;
-without one it is withheld with its `D.`.
+without one it is withheld with its `D.`. At `none`, no contract is held to this test.
 
 **L5 · Stub, co-term and month-to-month contracts.**
 - `exclude`: none of them carries ARR.
@@ -535,8 +549,12 @@ constant contracts, which V4 decides (under a rate held for the year it arises o
 the year's turn); closing ARR. Every movement is classified from the two months'
 values, and one the values do not settle is an exception at its amount.
 
-**A1 · Mid-term modifications: bridge classes.** How expansion splits into price uplift,
-upsell and cross-sell, and contraction into price concession and downsell.
+**A1 · Mid-term modifications: bridge classes.** Whether expansion and contraction are
+split into fixed classes.
+- `expansion_contraction`: no split. A same-customer increase is expansion and a
+  decrease is contraction, which is all net revenue retention needs. Any finer
+  analysis of why a customer's ARR moved is the recipe's, built on the dimensions the
+  data room carries, never on labels fixed in the policy.
 - `register_type`: the class the modification register gives the change; a change with
   no register row is classed by `price_vs_quantity`.
 - `price_vs_quantity`: the same product and quantity at another unit price is price

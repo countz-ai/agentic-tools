@@ -21,6 +21,10 @@ person to clear. Every match names its rule.
     chain(r1, r2, r3)   # each left item of r1 traced through r2 and r3 (r1's right items are
                         # r2's left items, by id): what it reaches, and by which rules
 
+    res = from_assignment(book, bank, assignment, [Pass("cheque", "same cheque number and "
+                          "amount"), ...], transit=3)   # a match built with polars joins, as
+                                                        # the same Resolution
+
 **Using it.**
 
 1. Map each population whole, one flow per call: what came in (receipts, with the
@@ -50,6 +54,14 @@ person to clear. Every match names its rule.
 5. Records that settle in steps (invoice, cash application, receipt, bank line) are
    matched one pair at a time, one call each, and `chain()` traces them end to end.
 6. Show the result with `scripts/match_tabs.py`.
+
+**A match built elsewhere** (polars joins, one per pass, where the rules above cannot say
+what pairs two records) becomes the same Resolution through `from_assignment()`: the two
+streams as above, the assignment `matching.py`'s `check_assignment()` accepts (it is checked
+by it here), and every pass the assignment names as a `Pass`, in the order the passes ran,
+its criteria in words and the difference it tolerates, named, where its groups differ. An
+excluded item is unmatched, its reason the pass that set it aside and why, and never in
+transit. `transit` is measured as for `resolve()`, and stated.
 
 **A rule** compares the open items of both sides:
 - `on`: columns that must be equal, compared as keys (case, spaces, punctuation and
@@ -89,11 +101,16 @@ undated item, a receipt booked weeks after the bank credited it). `same_entity` 
 """
 from __future__ import annotations
 
+import pathlib
+import sys
 from dataclasses import dataclass, field
 
 import polars as pl
 
-__all__ = ["Rule", "Resolution", "chain", "resolve", "rules"]
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from matching import check_assignment  # noqa: E402
+
+__all__ = ["Pass", "Rule", "Resolution", "chain", "from_assignment", "resolve", "rules"]
 
 
 @dataclass(frozen=True)
@@ -148,6 +165,16 @@ def rules(window=(0, 2), wide=(0, 89), same_entity=False) -> list[Rule]:
             Rule("quoted, any date", e + ("quote",), None)]
 
 
+@dataclass(frozen=True)
+class Pass:
+    """A pass of a match built outside `resolve()`, for `from_assignment()`: its name as
+    the assignment's `pass` column spells it, its criteria in words, and the difference it
+    tolerates, named, where its groups' two sides differ."""
+    name: str
+    criteria: str
+    difference: str | None = None
+
+
 @dataclass
 class Resolution:
     items: pl.DataFrame
@@ -155,7 +182,8 @@ class Resolution:
     exceptions: pl.DataFrame
     summary: pl.DataFrame
     by_rule: pl.DataFrame
-    rules: list[Rule] = field(default_factory=list)
+    rules: list[Rule | Pass] = field(default_factory=list)
+    engine: str = "resolve"           # "resolve", or "assignment" from from_assignment()
 
 
 def _key(e: pl.Expr) -> pl.Expr:
@@ -286,7 +314,53 @@ def resolve(left: pl.DataFrame, right: pl.DataFrame, rule_set: list[Rule] | None
     return _report(L, R, rule_set, matches, why, open_L, open_R, scale, transit)
 
 
-def _report(L, R, rule_set, matches, why, open_L, open_R, s, transit) -> Resolution:
+def from_assignment(left: pl.DataFrame, right: pl.DataFrame, assignment: pl.DataFrame,
+                    passes: list[Pass], *, transit: int, decimals: int = 2) -> Resolution:
+    """A match built outside `resolve()` as its Resolution (module docstring): `left` and
+    `right` the streams, `assignment` one row per item of both (side, id, status, group,
+    pass, reason), `passes` every pass it names, in the order they ran."""
+    if int(decimals) != decimals or not 0 <= decimals <= 6:
+        raise ValueError("decimals is a whole number of minor-unit places, 0 to 6")
+    if int(transit) != transit or transit < 0:
+        raise ValueError("transit is a whole number of days, 0 or more")
+    scale = 10 ** int(decimals)
+    order = {p.name: k for k, p in enumerate(passes)}
+    if len(order) != len(passes):
+        raise ValueError("passes: each pass is named once")
+    L, R = _stream(left, "left", scale, set()), _stream(right, "right", scale, set())
+    A = check_assignment(left, right, assignment, left_id="id", right_id="id", amount="value", tol=None)
+    if extra := sorted(set(A["pass"].drop_nulls()) - set(order)):
+        raise ValueError(f"the assignment names pass(es) {extra} that `passes` does not")
+    c = {(side, i): v for side, S in (("left", L), ("right", R)) for i, v in S.select("id", "c").iter_rows()}
+    matches = []
+    for (g,), grp in A.filter(pl.col("status") == "matched").group_by("group"):
+        ids_l = sorted(grp.filter(pl.col("side") == "left")["id"])
+        ids_r = sorted(grp.filter(pl.col("side") == "right")["id"])
+        if not ids_l or not ids_r:
+            raise ValueError(f"group {g}: a match holds items of both sides")
+        p = passes[order[grp["pass"][0]]]
+        c_l, c_r = sum(c["left", i] for i in ids_l), sum(c["right", i] for i in ids_r)
+        if c_r != c_l and not p.difference:
+            raise ValueError(f"group {g}: its sides differ by {(c_r - c_l) / scale:.{decimals}f} and pass "
+                             f"{p.name!r} names no difference")
+        matches.append((p.name, ids_l, ids_r, c_l, c_r, c_r - c_l, p.difference if c_r != c_l else None))
+    matches.sort(key=lambda m: (order[m[0]], m[1][0]))
+    why, held = {}, set()
+    for side, i, st, p, reason in A.filter(pl.col("status") != "matched").select(
+            "side", "id", "status", "pass", "reason").iter_rows():
+        if st == "excluded":
+            why["L" if side == "left" else "R", i] = f"excluded by {p}: {reason}"
+            if side == "left":
+                held.add(i)
+        else:
+            why["L" if side == "left" else "R", i] = reason or "no candidate under any pass"
+    open_L = set(L["id"]) - {i for m in matches for i in m[1]}
+    open_R = set(R["id"]) - {i for m in matches for i in m[2]}
+    return _report(L, R, list(passes), matches, why, open_L, open_R, scale, int(transit), held, "assignment")
+
+
+def _report(L, R, rule_set, matches, why, open_L, open_R, s, transit, held=frozenset(),
+            engine="resolve") -> Resolution:
     kind = lambda a, b: f"{'1' if len(a) == 1 else 'n'}:{'1' if len(b) == 1 else 'n'}"  # noqa: E731
     mt = pl.DataFrame([(k, rn, kind(a, b), ";".join(a), ";".join(b), cl / s, cr / s, d / s, dn)
                        for k, (rn, a, b, cl, cr, d, dn) in enumerate(matches, start=1)], orient="row",
@@ -311,7 +385,7 @@ def _report(L, R, rule_set, matches, why, open_L, open_R, s, transit) -> Resolut
         S.filter(pl.col("id").is_in(list(open_))).select(
             side=pl.lit(side), id="id", date=pl.col("day").cast(pl.Date), amount=pl.col("c") / s, c="c",
             entity="entity", in_transit=(pl.col("day") + transit > pl.lit(last, pl.Int32)).fill_null(False)
-            & pl.lit(side == "left"),
+            & pl.lit(side == "left") & ~pl.col("id").is_in(list(held)),
             age=pl.lit(last, pl.Int32) - pl.col("day"))
         for side, S, open_ in (("left", L, open_L), ("right", R, open_R))])
     ex = ex.join(items.select("side", "id", "reason"), on=["side", "id"]).sort("side", "date", "id", nulls_last=True)
@@ -336,7 +410,7 @@ def _report(L, R, rule_set, matches, why, open_L, open_R, s, transit) -> Resolut
                                              right_amount=pl.col("right_amount").sum(),
                                              difference=pl.col("difference").sum()),
                      on="rule", how="left", maintain_order="left").fill_null(0))
-    return Resolution(items.sort("side", "id"), mt, ex, summary, by_rule, list(rule_set))
+    return Resolution(items.sort("side", "id"), mt, ex, summary, by_rule, list(rule_set), engine)
 
 
 def chain(*results: Resolution) -> pl.DataFrame:

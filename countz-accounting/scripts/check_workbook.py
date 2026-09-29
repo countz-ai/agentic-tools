@@ -2,7 +2,7 @@
 """Refuse a workbook whose figures are invisible, whose ids do not resolve, or whose
 figure rows a reader cannot re-perform from.
 
-Six gates over the stored file, all parsed from the XML rather than through a library so
+Seven gates over the stored file, all parsed from the XML rather than through a library so
 the check sees what is actually stored, not what a loader reconstructs.
 
 GATE 1 — cached values. An .xlsx cell stores two things: the formula (`<f>`) and the last
@@ -108,6 +108,14 @@ line's status: the same count of rows and the same amount, to the cent; the open
 and the total are the whole schedule; the schedule holds each item once, in one block per
 status; the reconciling items foot, and each line's positive and negative items add to
 it; and in an assembled workbook each line's words link to its block.
+
+GATE 7 — every reconciliation shows its matching (check-recon § 5), with `--run-dir`. The
+tab file of a `recon` check holds a whole set of match tabs — summary, schedule,
+reconciling items, rules — whether it matched with `resolve()` or with joins read back
+through `from_assignment()`, so the reader finds the schedule on every reconciliation, not
+on some. The one reconciliation without them has a side with no item grain, and its check
+tab says so on a line opening `No item grain:`. At the seal, every `recon` check with a
+tab in the workbook is held to the same.
 
 The id grammar and the home rule mirror link_workbook.py — a change here changes both.
 
@@ -804,17 +812,9 @@ def lead_families(run: dict) -> list[str] | None:
     return fm_list(fm.get("lead")) or fm_list(fm.get("headline"))
 
 
-def wanted_order(run_dir: pathlib.Path, tabs: list[str], pairs=()) -> tuple[list[str] | None, list[str], list[str]]:
-    """(the tab order the run wants, the lead families, failures). The order is None
-    when the run cannot say — no run.json, no checks, a recipe not readable here."""
-    try:
-        run = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None, [], []
-    checks = [c for c in run.get("checks") or [] if c.get("id")]
-    lead = lead_families(run)
-    if not checks or lead is None:
-        return None, lead or [], []
+def tab_owners(checks: list[dict], tabs: list[str]) -> tuple[dict[str, str], list[str]]:
+    """({check tab: the rostered check it belongs to}, failures). A tab belongs to the check
+    whose id its name opens with, or else to the one check of the family its token names."""
     roster = [c["id"] for c in checks]
     family = {c["id"]: (c.get("params") or {}).get("family") for c in checks}
     per_family: dict[str, int] = {}
@@ -836,6 +836,23 @@ def wanted_order(run_dir: pathlib.Path, tabs: list[str], pairs=()) -> tuple[list
                          f"with the roster token, `<token> <Title>` (WORKBOOK.md § 2)")
             continue
         owner[tab] = hit
+    return owner, fails
+
+
+def wanted_order(run_dir: pathlib.Path, tabs: list[str], pairs=()) -> tuple[list[str] | None, list[str], list[str]]:
+    """(the tab order the run wants, the lead families, failures). The order is None
+    when the run cannot say — no run.json, no checks, a recipe not readable here."""
+    try:
+        run = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None, [], []
+    checks = [c for c in run.get("checks") or [] if c.get("id")]
+    lead = lead_families(run)
+    if not checks or lead is None:
+        return None, lead or [], []
+    roster = [c["id"] for c in checks]
+    family = {c["id"]: (c.get("params") or {}).get("family") for c in checks}
+    owner, fails = tab_owners(checks, tabs)
     check_tabs = sorted(owner, key=lambda tab: roster.index(owner[tab]))
     # a check's match tabs follow the Exec Summary, summary then schedule, in roster order
     matched = {t for p in pairs for t in p}
@@ -1046,6 +1063,52 @@ def audit_match(z: zipfile.ZipFile, assembled: bool | None = None) -> list[str]:
     return fails
 
 
+# GATE 7 — every reconciliation shows its matching (check-recon § 5). The one without match
+# tabs has a side with no item grain, and its check tab says so on a line opening with this.
+NO_GRAIN_MARK = "No item grain:"
+
+
+def audit_recon(z: zipfile.ZipFile, stem: str, run_dir: pathlib.Path | None) -> list[str]:
+    """GATE 7, with the run's roster. The tab file of a `recon` check (`<check>.xlsx`) holds
+    a whole set of match tabs — summary, schedule, reconciling items, rules — however the
+    items were matched, or states `No item grain:`; at the seal, so does every `recon`
+    check that has a tab in the workbook."""
+    if run_dir is None:
+        return []
+    try:
+        run = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    checks = [c for c in run.get("checks") or [] if c.get("id")]
+    recon = [c["id"] for c in checks if c.get("kind") == "recon"]
+    if not recon:
+        return []
+    shared = shared_strings(z)
+    texts = {tab: sheet_cells(z.read(part).decode("utf-8", "replace"), shared)[0]
+             for part, tab in sheet_order(z)}
+    pairs, _ = match_pairs(texts)
+    whole = [p for p in pairs if len(p) == 4]
+
+    def states(tabs) -> bool:
+        return any(str(v).strip().startswith(NO_GRAIN_MARK) for t in tabs for v in texts[t].values())
+    why = ("write them with scripts/match_tabs.py from resolve() or, for a match built with "
+           "joins, from_assignment(); where a side has no item grain, the check tab says so on "
+           f"a line opening `{NO_GRAIN_MARK}` (check-recon § 5)")
+    if EXEC not in texts:
+        if stem in recon and not whole and not states(texts):
+            return [f"{stem}: a reconciliation with no " +
+                    ("whole set of " if pairs else "") + f"match tabs — {why}"]
+        return []
+    owner, _ = tab_owners(checks, list(texts))
+    fails = []
+    for cid in recon:
+        mine = [t for t, o in owner.items() if o == cid]
+        if mine and not any(owner.get(p[0]) == cid for p in whole) and not states(mine):
+            fails.append(f"{cid}: a reconciliation whose tabs ({', '.join(mine)}) carry no whole "
+                         f"set of match tabs — {why}")
+    return fails
+
+
 def audit(path: pathlib.Path, declared: set[str] | None = None,
           ledger_fails: list[str] | None = None,
           run_dir: pathlib.Path | None = None) -> dict:
@@ -1074,6 +1137,7 @@ def audit(path: pathlib.Path, declared: set[str] | None = None,
         rep["design"] = audit_design(z)
         rep["order"] = audit_order(z, run_dir)
         rep["match"] = audit_match(z)
+        rep["recon"] = audit_recon(z, path.stem, run_dir)
     if ledger_fails:
         rep["links"]["link_failures"] = list(ledger_fails) + rep["links"]["link_failures"]
     return rep
@@ -1127,7 +1191,9 @@ def main() -> int:
     design_fails = rep.get("design", [])
     order_fails = rep.get("order", [])
     match_fails = rep.get("match", [])
-    bad = bool(rep["uncached"] or link_fails or design_fails or order_fails or match_fails)
+    recon_fails = rep.get("recon", [])
+    bad = bool(rep["uncached"] or link_fails or design_fails or order_fails or match_fails
+               or recon_fails)
 
     if a.json:
         print(json.dumps(rep, indent=2))
@@ -1205,6 +1271,13 @@ def main() -> int:
             print(f"    … and {len(match_fails) - a.max_report} more")
         print("\n  Fix: write both tabs with scripts/match_tabs.py, and never edit one apart")
         print("  from the other; run link_workbook.py after assembly.")
+    if recon_fails:
+        print(f"{a.workbook.name}: {len(recon_fails)} reconciliation(s) with no match tabs — "
+              f"the reader cannot see what each item matched.\n")
+        for f in recon_fails[:a.max_report]:
+            print(f"    {f}")
+        if len(recon_fails) > a.max_report:
+            print(f"    … and {len(recon_fails) - a.max_report} more")
     return 1 if bad else 0
 
 

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """The match tabs of an item-level reconciliation, as reconciliation software reports it.
 
-A check that matches items with `resolve.py` (check-recon § 3) shows the reviewer every
-left item once, beside what it matched and by which rule, so each match can be verified
-line by line. `match_tabs()` writes four tabs from the engine's result into the check's tab
-workbook and records their figures in the check's ledger:
+A reconciliation (check-recon § 3) shows the reviewer every left item once, beside what it
+matched and by which rule, so each match can be verified line by line, whether it matched
+with `resolve.py`'s `resolve()` or with polars joins read back through its
+`from_assignment()`. `match_tabs()` writes four tabs from that Resolution into the check's
+tab workbook and records their figures in the check's ledger:
 
 - **`<token> Match summary`**: the left items by status (Matched, In transit, Unmatched,
   No cash), each line the schedule filtered on its status; then what each rule matched,
@@ -30,7 +31,8 @@ The tabs follow the Exec Summary, in that order (WORKBOOK.md § 2).
                        population="P.recon_inv_bank.book", others=unpaid,
                        left_label=customer, right_label=bank_line)
 
-`left` and `right` are the streams as passed to `resolve()`, and `res` what it returned.
+`left` and `right` are the streams as passed to `resolve()` or `from_assignment()`, and
+`res` what it returned.
 `others` holds the left items kept out of the streams, as `id`, `value`, `reason` and
 optionally `date` and `entity`: a value of 0 (open, void, credited) reads No cash, any
 other Unmatched, each with its reason. `left_label` and `right_label` are DataFrames of
@@ -117,6 +119,8 @@ def match_tabs(wb, res, left: pl.DataFrame, right: pl.DataFrame, *, check: str, 
             register_status(W(w), kind)
     Ns, Os = nouns[1][:1].upper() + nouns[1][1:], other_nouns[1][:1].upper() + other_nouns[1][1:]
     llab, rlab = _labels(left_label), _labels(right_label)
+    src = "scripts/resolve.py" if res.engine == "resolve" else \
+        f"scripts/resolve.py from_assignment() over the passes of checks/{check}.md"
     rows_R = {r["id"]: r for r in right.with_columns(pl.col("id").cast(pl.Utf8)).iter_rows(named=True)}
     it = res.items
     ex = {(r["side"], r["id"]): r for r in res.exceptions.iter_rows(named=True)}
@@ -243,9 +247,9 @@ def match_tabs(wb, res, left: pl.DataFrame, right: pl.DataFrame, *, check: str, 
         n, a = len(mine), round(sum(rv[i] for i in mine), decimals)
         slug = W(w).lower().replace(" ", "_")
         fig(f"right.{slug}.count", f"{Os}, {W(w)}, count", n, "count",
-            f"count of the {other_nouns[1]} scripts/resolve.py reports {st}", right_inputs or inputs, right_population)
+            f"count of the {other_nouns[1]} {src} reports {st}", right_inputs or inputs, right_population)
         fid = fig(f"right.{slug}.amount", f"{Os}, {W(w)}, amount", a, currency,
-                  f"sum of the {other_nouns[1]} scripts/resolve.py reports {st}", right_inputs or inputs, right_population)
+                  f"sum of the {other_nouns[1]} {src} reports {st}", right_inputs or inputs, right_population)
         figs[("right", W(w), "amount")] = fid
         r_ += 1
         cells(ws, r_, [("id", fid), ("text", W(w)), ("count", n), ("amount", a),
@@ -261,7 +265,10 @@ def match_tabs(wb, res, left: pl.DataFrame, right: pl.DataFrame, *, check: str, 
             f"Open {names['schedule']} and filter {STATUS_HEADER} on a line's words; count the rows and "
             f"sum {AMOUNT_HEADER}.",
             f"The matches come from scripts/resolve.py run on the two streams with the rules on "
-            f"{names['rules']}, in that order (checks/{check}.md)."), start=1):
+            f"{names['rules']}, in that order (checks/{check}.md)." if res.engine == "resolve" else
+            f"The matches come from the passes on {names['rules']}, run in that order on the two "
+            f"streams as checks/{check}.md records them, each item accounted for once by "
+            f"scripts/matching.py."), start=1):
         r_ += 1
         text(ws.cell(r_, 2), f"{k}. {step}")
     finish(ws, last_primary)
@@ -318,7 +325,7 @@ def match_tabs(wb, res, left: pl.DataFrame, right: pl.DataFrame, *, check: str, 
         elif key_ == "left_unmatched":            # as not matched
             n_, v_, p_, m_ = n_ + kept_n, v_ - kept_a, p_ - kept_m, m_ - kept_p
         fid = fig(f"recon.{key_.replace(':', '.').replace(' ', '_')}", label_, round(v_, decimals), currency,
-                  f"{label_}, from scripts/resolve.py `summary`", inputs, population)
+                  f"{label_}, the `summary` of {src}", inputs, population)
         r_ += 1
         cells(ws4, r_, [("id", fid), ("text", label_), ("count", n_), ("amount", round(v_, decimals)),
                         ("amount", round(p_, decimals)), ("amount", round(m_, decimals)), ("text", why_)])
@@ -346,7 +353,8 @@ def match_tabs(wb, res, left: pl.DataFrame, right: pl.DataFrame, *, check: str, 
     ws3 = wb.create_sheet(names["rules"], 3)
     band(ws3, f"{token}{RULES_MARK}: the rules, in the order they ran", subtitle,
          f"Each rule compared what the rules before it left open; a pair matched only where each was "
-         f"the other's one candidate.")
+         f"the other's one candidate." if res.engine == "resolve" else
+         f"Each pass compared what the passes before it left open, as checks/{check}.md records it.")
     header(ws3, 4, ["id", "Rule", "Criteria", "Matches", Ns, Os, "Difference"],
            ["id", "description", "note", "count", "count", "count", "amount"])
     r_ = 4

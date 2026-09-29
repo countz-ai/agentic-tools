@@ -77,8 +77,12 @@ items out of it (undated items included); an item left out is a counterpart no r
 could see.
 
 Elsewhere, match with polars joins, one per pass — by reference, then amount-and-date,
-then looser keys, each pass recorded. Either way, check the assignment with
-`${CLAUDE_PLUGIN_ROOT}/scripts/matching.py`'s `check_assignment()` before writing it.
+then looser keys, each pass recorded — over streams mapped as above, and read the
+assignment back with `resolve.py`'s `from_assignment()`: each pass a `Pass`, its criteria
+in words and, where its groups' sides differ, the difference it tolerates, named; `transit=`
+measured as above. It checks the assignment with
+`${CLAUDE_PLUGIN_ROOT}/scripts/matching.py`'s `check_assignment()` and returns the same
+Resolution `resolve()` does, so everything below reads one `res` whichever way you matched.
 
 Read the result the way a preparer reads auto-match output. Each match names its rule
 and its match group; each unmatched item states why: no candidate, or the number of
@@ -93,11 +97,13 @@ total per side. The population accounting must close: matched plus unmatched per
 equals that side's citation `row_count` and `control_total`.
 
 Where a side has no item grain, say so; the reconciliation degrades to
-closing-figure-plus-known-items, and the record states the reduced strength.
+closing-figure-plus-known-items, and the record states the reduced strength. The check
+tab says it too, on a Notes line opening `No item grain:` that names the side and what its
+source holds instead: it is the one reconciliation without match tabs (§ 5).
 
 ## 4. Classify the unmatched
 
-The reconciliation statement is `resolve.py`'s `res.summary`, which the reconciling items
+The reconciliation statement is `res.summary`, which the reconciling items
 tab shows (`WORKBOOK.md` § 6): the left items per books, less those in transit (deposits
 in transit, outstanding payments: not matched, and dated close enough to the statement's
 end that their bank line falls after it, by `transit`), less those not matched, each
@@ -132,13 +138,16 @@ Files:
 - `checks/<check>.md` — the definition, the sides, the match summary by pass, the items
   with their evidence, the elections where any, and the statement.
 - `checks/<check>-matches.csv` — the match table of § 3, with its manifest block.
-- `out/tabs/<check>.xlsx` — your tabs. Wherever § 3 matched with `resolve.py`, the
-  file opens with the match tabs, written by `${CLAUDE_PLUGIN_ROOT}/scripts/match_tabs.py`
-  from the engine's result and never by hand: the match summary, the schedule (one row per
-  left item, the ones kept out of the streams included as `others`: an invoice with no
-  cash, with its reason), the reconciling items and the rules (`WORKBOOK.md` § 6). Then
-  your check tab, blocks per `WORKBOOK.md` § 4, with the reconciliation statement as the
-  primary table and the item schedules.
+- `out/tabs/<check>.xlsx` — your tabs. The file opens with the match tabs, one set per
+  `res` of § 3, written by `${CLAUDE_PLUGIN_ROOT}/scripts/match_tabs.py` from it and never
+  by hand, whether it came from `resolve()` or `from_assignment()`: the match summary, the
+  schedule (one row per left item, the ones kept out of the streams included as `others`:
+  an invoice with no cash, with its reason), the reconciling items and the rules
+  (`WORKBOOK.md` § 6). Then your check tab, blocks per `WORKBOOK.md` § 4, with the
+  reconciliation statement as the primary table and the item schedules. Every
+  reconciliation carries the match tabs, so the reader finds the schedule on each one;
+  `check_workbook.py` GATE 7 refuses a file without them unless the check tab states
+  `No item grain:` (§ 3).
 
 Close `checks/<check>.md` with the answer: whether the difference is fully explained,
 and how the items stand — matched by rule, cleared by you with evidence, or open.

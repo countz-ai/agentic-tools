@@ -90,9 +90,10 @@ Where one fits:
   item of both populations exactly once.
 - `resolve.py` — `resolve()`: two streams of transactions matched by ordered rules, as
   reconciliation software does; every match names its rule, every other item is an
-  exception with its reason.
+  exception with its reason. `from_assignment()`: a match built with joins, as the same
+  result.
 - `match_tabs.py` — `match_tabs()`: the match summary, schedule, reconciling items and
-  rules of a check that matched items with `resolve()` (`WORKBOOK.md` § 6).
+  rules of a reconciliation, from `resolve()` or `from_assignment()` (`WORKBOOK.md` § 6).
 - `items.py` — item tables and their manifest (`EVIDENCE.md` § 5).
 - `rework.py` — `snapshot()` before a fix pass, `diff_ledger()` after, to state what moved.
 

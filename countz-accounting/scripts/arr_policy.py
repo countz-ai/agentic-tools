@@ -151,12 +151,12 @@ CONVENTIONS = {
         "decision": "V4", "label": "Currency translation rate",
         "options": ["prior_year_end_rate", "start_of_year_rate", "contract_signing_rate",
                     "period_average_rate", "closing_spot_rate"],
-        "default": "prior_year_end_rate", "needed": None,
+        "default": "closing_spot_rate", "needed": None,
     },
     "modification_classes": {
         "decision": "A1", "label": "Bridge classes for mid-term modifications",
-        "options": ["register_type", "price_vs_quantity"],
-        "default": "register_type", "needed": None,
+        "options": ["expansion_contraction", "register_type", "price_vs_quantity"],
+        "default": "expansion_contraction", "needed": None,
     },
     "acquired": {
         "decision": "A2", "label": "Acquired ARR: entry and organic window",
@@ -177,12 +177,17 @@ CONVENTIONS = {
         "default": {"basis": "point_to_point_arr", "grain": "customer",
                     "grr_cap": "per_customer"}, "needed": None,
     },
+    "entry_event": {
+        "decision": "L1", "label": "The event whose month a new stream enters ARR from",
+        "options": ["signed", "booked"], "default": "signed", "needed": None,
+    },
     "signing_lag_months": {
-        "decision": "L1", "label": "Months after the signing month a new stream enters ARR",
+        "decision": "L1", "label": "Months after the entry month a new stream enters ARR",
         "options": "int", "default": 0, "needed": None,
     },
     "outlier_threshold_pct": {
-        "decision": "L4", "label": "Contract size, % of ARR, that needs document support",
+        "decision": "L4", "label": "Contract size, % of ARR, that needs document support "
+                                   "(none: no such test)",
         "options": "number", "default": 5, "needed": None,
     },
 }
@@ -279,13 +284,11 @@ DECISIONS = [
     {"id": "L2", "name": "Churn timing, and which termination record wins", "type": "policy",
      "by": ["lifecycle"], "constrained_by": ["source"],
      "fields": {"churn_at": ["at_notice", "effective_date"],
-                "conflicting_records": ["earliest_end", "modification_register",
-                                        "last_recognized_month", "last_billed_service_period"]},
+                "conflicting_records": ["earliest_end", "contract_as_amended"]},
      "derive": lambda p, c: {
          "churn_at": "at_notice" if p["lifecycle"] == "live_paying" else "effective_date",
-         "conflicting_records": ["earliest_end", "modification_register",
-                                 "last_recognized_month",
-                                 "last_billed_service_period"][_ix("source", p["source"])]}},
+         "conflicting_records": "earliest_end" if p["source"] == "all_agree"
+         else "contract_as_amended"}},
     {"id": "L3", "name": "Renewal gaps, holdover and grace periods", "type": "policy",
      "by": ["lifecycle"],
      "fields": {"treatment": ["grace_window", "continuation", "until_renewal",
@@ -450,8 +453,10 @@ def _valid_value(d_or_opts, value) -> str | None:
     opts = spec["options"] if isinstance(spec, dict) else spec
     if opts == "int":
         return None if isinstance(value, int) and not isinstance(value, bool) else "expects a whole number"
-    if opts == "number":
-        return None if isinstance(value, (int, float)) and not isinstance(value, bool) else "expects a number"
+    if opts == "number":  # `none` switches a numeric test off
+        return None if value == "none" or (isinstance(value, (int, float))
+                                           and not isinstance(value, bool)) \
+            else "expects a number, or none"
     if value not in opts:
         return f"`{value}` is not one of: {', '.join(map(str, opts))}"
     return None

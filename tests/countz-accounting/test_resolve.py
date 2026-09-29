@@ -15,7 +15,7 @@ import polars as pl
 # The plugin under test: <repo>/countz-accounting/scripts, from <repo>/tests/countz-accounting.
 SCRIPTS = pathlib.Path(__file__).resolve().parents[2] / "countz-accounting" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
-from resolve import Rule, chain, resolve, rules  # noqa: E402
+from resolve import Pass, Rule, chain, from_assignment, resolve, rules  # noqa: E402
 
 
 def main() -> int:
@@ -134,6 +134,54 @@ def main() -> int:
         pass
     except Exception as e:  # noqa: BLE001
         bad.append(f"check_assignment refused the output: {e}")
+
+    # a match built with joins reads back as the same Resolution
+    lb = frame([("k1", day(0), 100.0), ("k2", day(0), 40.0), ("k3", day(1), 60.0), ("k4", day(2), 97.0),
+                ("k5", day(1), 5.0), ("k6", day(9), 30.0), ("k7", day(9), 12.0)])
+    rb = frame([("y1", day(1), 100.0), ("y2", day(2), 100.0), ("y3", day(3), 95.0), ("y4", day(4), 7.0),
+                ("y5", day(4), 0.5)])
+    asg = pl.DataFrame([("left", "k1", "matched", 1, "cheque", None), ("right", "y1", "matched", 1, "cheque", None),
+                        ("left", "k2", "matched", 2, "slip", None), ("left", "k3", "matched", 2, "slip", None),
+                        ("right", "y2", "matched", 2, "slip", None),
+                        ("left", "k4", "matched", 3, "fee", None), ("right", "y3", "matched", 3, "fee", None),
+                        ("left", "k5", "unmatched", None, None, None), ("left", "k6", "unmatched", None, None, None),
+                        ("left", "k7", "excluded", None, "void", "voided in the book"),
+                        ("right", "y4", "unmatched", None, None, "interest credited"),
+                        ("right", "y5", "excluded", None, "void", "bank error, reversed")],
+                       orient="row", schema=["side", "id", "status", "group", "pass", "reason"])
+    ps = [Pass("cheque", "same cheque number and amount"), Pass("slip", "one deposit slip's lines"),
+          Pass("fee", "amount within 3%, the processor's fee", "processor fee"), Pass("void", "voided items")]
+    fa = from_assignment(lb, rb, asg, ps, transit=2)
+    it = {(r["side"], r["id"]): r for r in fa.items.iter_rows(named=True)}
+    expect(fa.engine == "assignment" and res.engine == "resolve", "each Resolution names its engine")
+    expect(it["left", "k2"]["matched_to"] == "y2" and it["left", "k2"]["pass"] == "slip"
+           and it["right", "y2"]["matched_to"] == "k2;k3" and it["left", "k2"]["type"] == "n:1",
+           f"a group's items match what the group holds: {it['left', 'k2']}")
+    expect(it["left", "k4"]["difference"] == -2.0, f"a tolerated difference, right less left: {it['left', 'k4']}")
+    expect(it["left", "k7"]["reason"] == "excluded by void: voided in the book"
+           and it["left", "k5"]["reason"] == "no candidate under any pass"
+           and it["right", "y4"]["reason"] == "interest credited", "an unmatched item states why")
+    tr = dict(fa.exceptions.filter(pl.col("side") == "left").select("id", "in_transit").iter_rows())
+    expect(tr == {"k5": False, "k6": True, "k7": False}, f"in transit by transit=, never an excluded item: {tr}")
+    walk = {r["line"]: r["amount"] for r in fa.summary.iter_rows(named=True)}
+    expect(walk == {"left_total": 344.0, "left_in_transit": -30.0, "left_unmatched": -17.0,
+                    "difference:processor fee": -2.0, "right_unmatched": 7.5, "right_total": 302.5},
+           f"the reconciliation, named difference and all: {walk}")
+    expect(fa.by_rule["rule"].to_list() == ["cheque", "slip", "fee", "void"]
+           and fa.by_rule["matches"].to_list() == [1, 1, 1, 0]
+           and fa.by_rule["criteria"][2] == "amount within 3%, the processor's fee", "the passes, in order")
+    for kw, what in (({"passes": ps[:3]}, "a pass not among `passes`"),
+                     ({"passes": [Pass("fee", "amount within 3%")] + ps[:2] + ps[3:]}, "a difference with no name"),
+                     ({"passes": ps + ps[:1]}, "a pass named twice"),
+                     ({"assignment": asg.filter(pl.col("id") != "y5")}, "an item not accounted for"),
+                     ({"assignment": asg.with_columns(group=pl.when(pl.col("id") == "y1").then(9)
+                                                      .otherwise(pl.col("group")))}, "a one-sided group"),
+                     ({"transit": -1}, "a negative transit")):
+        try:
+            from_assignment(**{"left": lb, "right": rb, "assignment": asg, "passes": ps, "transit": 2, **kw})
+            bad.append(f"from_assignment did not refuse {what}")
+        except ValueError:
+            pass
     for b in bad:
         print("FAIL", b)
     print("resolve.py self-check:", "FAIL" if bad else "ok")

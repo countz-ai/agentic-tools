@@ -16,7 +16,7 @@ what goes where.
 
 ### Tab order
 - Exec Summary
-- The match tabs — for each check that matched items (check-recon § 3), in roster
+- The match tabs — for each reconciliation (check-recon § 3), in roster
   order: its match summary, its match schedule, its reconciling items, its match
   rules (§ 6)
 - The lead tabs — the recipe's `lead:` list (`RECIPE_FORMAT.md` § The document);
@@ -166,9 +166,12 @@ is Coverage), not the list of open items (Open Items), and not the background of
 - A check that did not run, or ran degraded, appears here only where it limits the
   answer. The full list is on Basis of Preparation.
 
-**The match tabs** — written by `scripts/match_tabs.py`, never by hand, for every check
-that matched items with `resolve.py`. They report the matching as reconciliation software
-does, so a reader can verify it one item at a time.
+**The match tabs** — written by `scripts/match_tabs.py`, never by hand, for every
+reconciliation, whether it matched with `resolve.py`'s `resolve()` or with joins read back
+through its `from_assignment()`. They report the matching as reconciliation software
+does, so a reader can verify it one item at a time, and every reconciliation carries them:
+`check_workbook.py` GATE 7 refuses a `recon` check's tabs without them, unless its check
+tab states `No item grain:` (check-recon § 3).
 
 - `<token> Match summary` walks from all left items (every invoice, paid or not) to each
   status, as a count and an amount: Matched, In transit (not matched, and dated close

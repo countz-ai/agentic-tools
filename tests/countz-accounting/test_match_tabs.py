@@ -19,6 +19,7 @@ from match_tabs import match_tabs  # noqa: E402
 
 
 def main() -> int:
+    import json
     import tempfile
     import zipfile
 
@@ -27,7 +28,7 @@ def main() -> int:
     import check_workbook
     import link_workbook
     from figures import Ledger
-    from resolve import resolve, rules
+    from resolve import Pass, from_assignment, resolve, rules
     bad = []
     D = dt.date(2024, 3, 1)
     left = pl.DataFrame([("i1", "c1", D, 100.37), ("i2", "c1", D, 250.13), ("i3", "c2", D, 75.25),
@@ -88,6 +89,64 @@ def main() -> int:
         if targets.get((out["summary"], "C6")) != (out["schedule"], "B5:K8") or \
                 targets.get((out["summary"], "C7")) != (out["schedule"], "B9:K9"):
             bad.append(f"each line links to its rows: {targets}")
+
+        # a match built with joins gets the same tabs, and they say where it came from
+        asg = res.items.select("side", "id", "status", "group", "pass", reason=pl.lit(None, pl.Utf8))
+        fa = from_assignment(left, right, asg, [Pass(r, "as resolve() ran it") for r in res.by_rule["rule"]],
+                             transit=2)
+        L2 = Ledger(run, "m2", fresh=True)
+        L2.population("P.m2.left", "left items", 5, 5, citations=["E.m1.left"])
+        wb2 = Workbook()
+        wb2.active.title = "m2 Reconciliation"
+        out2 = match_tabs(wb2, fa, left, right, check="m2", token="m2", ledger=L2,
+                          subtitle="Fixture · March 2024 · USD", inputs=[("left", "E.m1.left")],
+                          population="P.m2.left")
+        wb2.save(run / "src.xlsx")
+        with zipfile.ZipFile(run / "src.xlsx") as z:
+            if fails := check_workbook.audit_match(z, assembled=False):
+                bad.append(f"the match gate refuses tabs from from_assignment(): {fails[:3]}")
+        said = " ".join(str(c.value) for row in load_workbook(run / "src.xlsx")[out2["summary"]].iter_rows()
+                        for c in row if c.value)
+        if "the passes on m2 Match rules" not in said or "resolve.py run on" in said:
+            bad.append("the summary's To reperform names the passes of a join-built match")
+
+        # GATE 7: every reconciliation carries its match tabs
+        (run / "run.json").write_text(json.dumps({"checks": [
+            {"id": "m1", "kind": "recon"}, {"id": "m2", "kind": "recon"}, {"id": "t1", "kind": "tieout"}]}))
+
+        def gate7(name, sheets, notes=None, drop=()):
+            w = load_workbook(run / "src.xlsx")
+            for t in [t for t in w.sheetnames if t not in sheets] + list(drop):
+                del w[t]
+            if notes:
+                w[w.sheetnames[-1]]["B20"] = notes
+            w.save(run / f"{name}.xlsx")
+            return check_workbook.audit(run / f"{name}.xlsx", run_dir=run)["recon"]
+        every = load_workbook(run / "src.xlsx").sheetnames
+        for name, sheets, notes, drop, refused, what in (
+                ("m2", every, None, (), False, "a reconciliation with its match tabs"),
+                ("m2", ["m2 Reconciliation"], None, (), True, "a reconciliation with no match tabs"),
+                ("m2", every, None, (out2["reconciling"], out2["rules"]), True, "a reconciliation with half a set"),
+                ("m2", ["m2 Reconciliation"], "No item grain: the statement holds its closing balance alone.",
+                 (), False, "a reconciliation that states a side with no item grain"),
+                ("t1", ["m2 Reconciliation"], None, (), False, "a tie-out, which matches nothing")):
+            if bool(gate7(name, sheets, notes, drop)) != refused:
+                bad.append(f"GATE 7 {'passes' if refused else 'refuses'} {what}")
+        with zipfile.ZipFile(run / "src.xlsx") as z:
+            if check_workbook.audit_recon(z, "m2", None):
+                bad.append("GATE 7 holds a tab gated without the run's roster")
+        seal = load_workbook(run / "src.xlsx")
+        seal.create_sheet("Exec Summary", 0)
+        seal.save(run / "workbook.xlsx")
+        with zipfile.ZipFile(run / "workbook.xlsx") as z:
+            if check_workbook.audit_recon(z, "workbook", run):
+                bad.append("GATE 7 refuses a sealed reconciliation with its match tabs")
+        for t in (out2["summary"], out2["schedule"], out2["reconciling"], out2["rules"]):
+            del seal[t]
+        seal.save(run / "workbook.xlsx")
+        with zipfile.ZipFile(run / "workbook.xlsx") as z:
+            if [f.split(":")[0] for f in check_workbook.audit_recon(z, "workbook", run)] != ["m2"]:
+                bad.append("GATE 7 passes a sealed reconciliation whose match tabs were dropped")
     for b in bad:
         print("FAIL", b)
     print("match_tabs.py self-check:", "FAIL" if bad else "ok")
