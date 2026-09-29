@@ -49,12 +49,12 @@ __all__ = [
 ]
 
 # --- WORKBOOK_STYLE.md § 9 ------------------------------------------------------------
-BAND, ACCENT, MARKER, TINT = "005C53", "0F756D", "2A9D90", "E1F0ED"
-INK, SLATE, HAIRLINE, MIST, WHITE = "1C2A2A", "566665", "D3DAD8", "F1F5F4", "FFFFFF"
+BAND, ACCENT, MARKER, TINT = "0A5F6A", "0A5F6A", "16203A", "E6EFF0"
+INK, SLATE, HAIRLINE, MIST, WHITE = "1C2130", "5E616A", "D8D8D9", "EDEBE3", "FFFFFF"
 INPUT = "1F4FA3"
-BREAK_T, BREAK_F = "B42318", "FBEAE7"
-REVIEW_T, REVIEW_F = "9A5B00", "FFF3D1"
-TIED_T, TIED_F = "1E7B3C", "E5F3E8"
+BREAK_T, BREAK_F = "A33A2E", "EDEBE3"
+REVIEW_T, REVIEW_F = "8A5A00", "EDEBE3"
+TIED_T, TIED_F = "0A5F6A", "EDEBE3"
 
 FONT = "Arial"
 
@@ -173,10 +173,14 @@ def section(ws, row, text_):
 
 def ident(cell, id_):
     cell.value, cell.style = id_, S["Body"]     # style first: it resets number_format
+    if isinstance(id_, str):
+        cell.data_type = "s"                    # an id opening with `=` is not a formula
     cell.number_format = FMT_TEXT
 
 
 def text(cell, v, style="Body"):
+    if v is not None and not isinstance(v, str):
+        v = str(v)                              # a string cell stores a number as blank
     cell.value, cell.style = v, S[style]
     cell.data_type = "s"                        # a label opening with `=` is not a formula
     cell.number_format = FMT_TEXT

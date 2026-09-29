@@ -45,7 +45,8 @@ the deck is tested over a workbook the plugin itself would seal. Then:
  14. money is the book's currency (scripts/style.py): a EUR book reads `€8.4M` and
      `(€ in thousands)` and passes; a typed `€1,234,567` is refused, not skipped;
  16. on a run that declares its periods (a September year end), a schedule's period
-     columns are the plan's and a missing one is named.
+     columns are the plan's and a missing one is named; a check whose periods
+     scripts/periods.py refuses is named, not dropped.
 
 Run by check-plugin.py (8q) as `uv run --project <plugin> python3 tests/countz-accounting/report-selftest.py`
 from the repository root; it lives outside the plugin so it never ships.
@@ -238,7 +239,7 @@ def make_run(rd: pathlib.Path, cur: str = "USD", q6_params: dict | None = None) 
     text(ws.cell(row=9, column=7), "")
     grid(ws, 8, 9, 2, 7)
     finish(ws, 5)
-    ws.sheet_properties.tabColor = "9A5B00"
+    ws.sheet_properties.tabColor = "8A5A00"
 
     ws = wb.create_sheet("Sources")
     band(ws, "Sources", f"Acme Corp · {len(figures)} figure rows")
@@ -750,6 +751,18 @@ def main() -> int:
         if r.returncode != 0 or g.returncode != 1 or "`FY2024`" not in g.stdout:
             fails.append(f"16: a walk without the plan's FY2024 column must be refused, named (build "
                          f"{r.returncode}, gate {g.returncode}): {(g.stdout + g.stderr).strip()[:300]}")
+        #     A check whose periods scripts/periods.py refuses (here a non-IANA zone) is
+        #     named by the gate.
+        rj = json.loads((rd_p / "run.json").read_text(encoding="utf-8"))
+        rj["checks"][1]["params"]["timezone"] = "Mars/Olympus_Mons"
+        (rd_p / "run.json").write_text(json.dumps(rj), encoding="utf-8")
+        spec_p.write_text(GOOD_SPEC, encoding="utf-8")
+        r, g = run(build_p), run(gate_p)
+        if r.returncode != 0 or g.returncode != 1 or "check `q6_bridge`" not in g.stdout \
+                or "Mars/Olympus_Mons" not in g.stdout:
+            fails.append(f"16: a check whose periods periods.py refuses must be named by the gate "
+                         f"(build {r.returncode}, gate {g.returncode}): "
+                         f"{(g.stdout + g.stderr).strip()[:300]}")
         # 6. a fragment where a sentence belongs: a text block with no full stop
         spec.write_text(GOOD_SPEC.replace(
             '- text: "Every rostered check is listed with what it examined and what it did not."',

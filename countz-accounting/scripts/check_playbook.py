@@ -81,7 +81,11 @@ PARAMS = {
 FAMILY_STEP_MAX = 4
 
 SCHEMA = "countz-accounting/playbook@1"
-SLUG = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
+SLUG = re.compile(r"[a-z0-9][a-z0-9_-]*")
+# A step id is the check id its files are named by (`checks/<check>-<table>.csv`,
+# `workpapers/figures-<check>.yaml`). `-` separates check and table, so a check id takes
+# none (e.g. `a5` + `bridge-items` would read as `a5-bridge` + `items`).
+CHECK_ID = re.compile(r"[a-z0-9][a-z0-9_]*")
 # A playbook is run again, over another company and another period, so its title names the
 # work alone. A period in it — `FY2023`, `2023-09-30`, `September 2023` — dates the file.
 PERIOD_TOKEN = re.compile(
@@ -128,6 +132,14 @@ def check_params(kind: str, params, *, after: list | None = None,
                              or not all(isinstance(e, str) and e.strip() for e in ents)):
         bad.append(f"`params.entities` must be a non-empty list of entity ids, got "
                    f"{ents!r}")
+    # Validated at plan time: scripts/periods.py would otherwise stop the step at its
+    # first timezone-aware column.
+    tz = params.get("timezone")
+    if tz is not None:
+        try:
+            periods._zone(tz, "`params.timezone`")
+        except ValueError as exc:
+            bad.append(str(exc))
     sr = params.get("split_reason")
     if sr is not None and (not isinstance(sr, str) or not sr.strip()):
         bad.append(f"`params.split_reason` must be the measured fact that split the "
@@ -159,7 +171,7 @@ def check_params(kind: str, params, *, after: list | None = None,
             bad.append("an `extract` step reads no cache; `params.reads` belongs on the "
                        "steps that read what it writes")
         elif not isinstance(reads, list) or not reads \
-                or not all(isinstance(r, str) and SLUG.match(r) for r in reads):
+                or not all(isinstance(r, str) and SLUG.fullmatch(r) for r in reads):
             bad.append(f"`params.reads` must be a non-empty list of cache file ids (slugs), "
                        f"got {reads!r}")
         elif not params.get("cache_from"):
@@ -173,7 +185,7 @@ def check_params(kind: str, params, *, after: list | None = None,
                        f"never another step")
             continue
         refs = val if isinstance(val, list) else [val]
-        if not refs or not all(isinstance(r, str) and SLUG.match(r) for r in refs):
+        if not refs or not all(isinstance(r, str) and SLUG.fullmatch(r) for r in refs):
             bad.append(f"`params.{key}` must be a check id slug or a list of them, "
                        f"got {val!r}")
             continue
@@ -251,7 +263,7 @@ def check_files(kind: str, params: dict) -> list[str]:
             bad.append(f"{at} is not an object")
             continue
         fid = f.get("id")
-        if not isinstance(fid, str) or not SLUG.match(fid):
+        if not isinstance(fid, str) or not SLUG.fullmatch(fid):
             bad.append(f"{at} has no valid `id` (a slug), got {fid!r}")
         elif fid in seen:
             bad.append(f"{at} repeats id `{fid}`")
@@ -304,7 +316,7 @@ def validate(path: pathlib.Path, skills_dir: pathlib.Path | None) -> list[str]:
     if doc.get("schema") != SCHEMA:
         bad.append(f"{path}: schema is {doc.get('schema')!r}, expected {SCHEMA!r}")
     name = doc.get("name")
-    if not name or not SLUG.match(str(name)):
+    if not name or not SLUG.fullmatch(str(name)):
         bad.append(f"{path}: `name` must be a lowercase slug, got {name!r}")
     elif path.stem != name:
         bad.append(f"{path}: file is named {path.stem!r} but declares name {name!r} - "
@@ -326,7 +338,7 @@ def validate(path: pathlib.Path, skills_dir: pathlib.Path | None) -> list[str]:
         srcs = []
     for s in srcs:
         slot = (s or {}).get("slot") if isinstance(s, dict) else None
-        if not slot or not SLUG.match(str(slot)):
+        if not slot or not SLUG.fullmatch(str(slot)):
             bad.append(f"{path}: source entry {s!r} has no valid `slot`")
             continue
         if slot in slots:
@@ -347,8 +359,9 @@ def validate(path: pathlib.Path, skills_dir: pathlib.Path | None) -> list[str]:
             bad.append(f"{path}: step entry {st!r} is not an object")
             continue
         sid = st.get("id")
-        if not sid or not SLUG.match(str(sid)):
-            bad.append(f"{path}: step entry has no valid `id`: {st!r}")
+        if not sid or not CHECK_ID.fullmatch(str(sid)):
+            bad.append(f"{path}: step entry has no valid `id` ([a-z0-9][a-z0-9_]*, no `-`: "
+                       f"the step id names the check's files): {st!r}")
             continue
         if sid in ids:
             bad.append(f"{path}: step id `{sid}` is declared twice")

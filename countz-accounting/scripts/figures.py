@@ -26,10 +26,14 @@ Every step that mints a figure imports this rather than writing its own `fig()`:
     L.sub("Net revenue retention was {F.a5.nrr.fy2025} in FY2025.")   # "... was 104.2% ..."
 
 **One rule per field, the same in every check.** `fig()` refuses what the gates refuse
-later: an id outside the grammar or minted twice in one pass, a unit outside `UNITS`, an
-empty `inputs` or a role-less input, a zero, null or NaN value with no `zero_basis`, a
-`measured_zero` with no population. Money is stored to its currency's minor unit, a count
-as an integer, a percentage or rate as a fraction (0.174 is 17.4%).
+later, and records nothing when it refuses: an id outside the grammar or minted twice in one pass, a unit outside `UNITS`, an empty `inputs`
+or a role-less input, a zero, null or NaN value with no `zero_basis`, a `measured_zero`
+with no population or over an empty one, an infinite value, an `extra` field that would
+overwrite one of the entry's own, and a value (in `extra`, an exclusion, ...) YAML cannot
+write as plain data (numpy scalars are converted). A population's exclusions are each
+named with a count, and the counts add up to `total_n - included_n`. Money is stored to
+its currency's minor unit, a count as an integer, a percentage or rate as a fraction
+(0.174 is 17.4%).
 
 **Units.** A money unit is a currency code from `scripts/style.py` (`usd`, `eur`, `gbp`,
 `jpy`, `kwd`, ...): the unit names the currency, stored at its minor units (JPY 0, USD 2,
@@ -41,8 +45,9 @@ caller's arithmetic, with the rate among the figure's inputs.
 
 **Stated scale.** A passthrough (`disposition="as_stated"`) of a source that presents in
 thousands takes `stated_scale="thousands"`: the value passed is the number AS STATED, the
-value stored is in units, and the conversion is appended to the `expression` so the
-reader re-performs it. A sign flip is written in the expression (`x * -1`).
+value stored is in units (multiplied out exactly, e.g. 1.001 thousand is 1,001), and the
+conversion is appended to the `expression` so the reader re-performs it. A sign flip is
+written in the expression (`x * -1`).
 
 **Every reference resolves when the ledger is written, not at the report.** `write()`
 reads every id the run's `workpapers/*.yaml` declare (as `check_workbook.py --run-dir`
@@ -51,12 +56,17 @@ when an input, a population, a citation or an `F.`/`P.`/`E.` id in an `expressio
 not resolve — including a range (`E.x.fy2023..fy2025`), a wildcard (`E.x.memos_*`) or a
 bare stem (`E.a4.memos`). Cite each id whole; a family written with placeholders
 (`F.a4.arr.<dimension>.<column>`, the form `link_workbook.py` links) resolves when at
-least one declared id belongs to it.
+least one declared id belongs to it. `*` right after an id is multiplication when an
+operand follows it (`F.a*2`, `F.a*F.b`, `F.a*(1+x)`), a wildcard otherwise (`E.x.memos_*`).
+It also refuses an input whose kind contradicts its citation (a `room_file` input citing a
+`run_artifact` read, a `check_output` citing a room read), a `measured_zero` over a `P.`
+whose `included_n` is 0, and a tie whose side has moved since the tie was classified.
 
 **Inputs.** `room(role, "E.x")`, `check_output(role, "E.x")`, `figure(role, "F.x")`,
 `declared(role, "params.tolerance")`, or a `(role, id)` tuple: an `F.` id is a figure, an
-`E.` id a room file (a check output when its citation is `file_role: run_artifact`), and
-anything else a declared field.
+`E.` id a room file (a check output when its citation, in this ledger or another check's,
+is `file_role: run_artifact`; one cited nowhere yet is classified when the ledger is
+written), and anything else a declared field.
 
 **Ties** (check-tie SKILL § 4). `tie(id, label, a, b, tolerance=, pct_tolerance=)` reads
 the two sides' figures, mints the difference figure `a - b` (default id: the tie's id with
@@ -68,8 +78,10 @@ one, that one decides; given neither, the difference must be below half the disp
 (`DISPLAY_HALF`: half a whole currency unit, half a count, `0.05%`, `0.05` of a day, a
 quantity or a multiple, `0.00005` of a rate or an FX rate). A tolerance the user did not declare is never passed. The
 result is `pass` or `fail` with each test's limit and measure; `warn` (an explained
-difference) is the worker's call after resolution. `tie_table(L.ties)` is the Markdown
-schedule for `checks/<check>.md`.
+difference) is the worker's call after resolution. The record is kept on the difference
+figure (`tie:`), so a resumed ledger's `L.ties` holds the ties of earlier passes too.
+`tie_table(L.ties)` is the Markdown schedule for `checks/<check>.md`, each limit shown at
+its own precision.
 
 **Prose.** `fmt(value, unit)` writes DOCTRINE.md § Number conventions through
 `scripts/style.py`: `$9,438,108`, `($1,204)` for a negative, `€5,000,000`, `17.4%`,
@@ -77,7 +89,10 @@ schedule for `checks/<check>.md`.
 `style="deck"` scales money (`$9.4M`, `$81K`, `$1.2B`, REPORT.md § 4), `style="cell"`
 shows its minor units; `None` reads *unable to establish*. `L.sub(template)`
 (or `load(RUN).sub(...)`) replaces each `{F.id}` or `{F.id:deck}` with the formatted
-figure, so a sentence never types a number. `md_table(headers, rows, units)` writes a
+figure, so a sentence never types a number; it refuses a `{`, id and `}` it cannot
+substitute (an unknown style, a space inside the braces). `load()`'s readers refuse an id
+the run's ledgers state with different values (EVIDENCE.md § 0) until the disagreement is
+resolved. `md_table(headers, rows, units)` writes a
 Markdown table whose numeric cells go through `fmt`.
 
 Requires pyyaml — run as
@@ -86,6 +101,7 @@ Requires pyyaml — run as
 from __future__ import annotations
 
 import copy
+import datetime as dt
 import decimal
 import math
 import pathlib
@@ -128,8 +144,17 @@ ID_TOKEN = check_workbook.ID_TOKEN
 # An id written as a set it cannot resolve to: a range (`E.x.fy2023..fy2025`) or a
 # wildcard (`E.x.memos_*`). A family written with placeholders (`F.a4.arr.<dimension>`)
 # is the convention link_workbook.py links, and resolves when the family has a member.
-NOT_WHOLE = re.compile(r"\b[A-Z]{1,2}\.[A-Za-z0-9_-][A-Za-z0-9_.-]*?(?:\.\.|\*)")
+NOT_WHOLE = re.compile(r"\b[A-Z]{1,2}\.[A-Za-z0-9_-][A-Za-z0-9_.-]*?"
+                       r"(?:\.\.|[_.-]\*|\*(?!\s*(?:[\d(.-]|[A-Z]{1,2}\.)))")
 TEMPLATE = re.compile(r"\{([A-Z]{1,2}\.[A-Za-z0-9_.-]*[A-Za-z0-9])(?::(prose|deck|cell))?\}")
+# Any `{<id>...}`, well formed or not: one left after TEMPLATE substitution is refused.
+TEMPLATE_ANY = re.compile(r"\{\s*[A-Z]{1,2}\.[^{}]*\}")
+# A ledger's name: the check id (no `-`: check_playbook.CHECK_ID), or `profile-<source>`.
+LEDGER_NAME = re.compile(r"[a-z0-9][a-z0-9_]*|profile-[a-z0-9][a-z0-9_-]*")
+FIG_FIELDS = frozenset({"id", "label", "value", "unit", "expression", "inputs", "population",
+                        "zero_basis", "caveats", "disposition", "stated_scale", "stated_value",
+                        "tie"})
+POP_FIELDS = frozenset({"id", "label", "total_n", "included_n", "exclusions", "citations"})
 
 
 # --- inputs --------------------------------------------------------------------------------
@@ -168,6 +193,28 @@ def _num(v):
         raise ValueError(f"a figure value is a number, not {type(v).__name__} {v!r}")
 
 
+def _plain(x, where: str):
+    """`x` as the plain data YAML writes (dicts, lists, str, int, float, bool, None, dates):
+    numpy and polars scalars and Decimals converted, tuples as lists; anything else, or a
+    non-finite number, refused naming `where`."""
+    if x is None or isinstance(x, (str, bool, int, dt.date)):
+        return x
+    if isinstance(x, float):
+        if not math.isfinite(x):
+            raise ValueError(f"{where}: {x!r} is not a finite number")
+        return x
+    if isinstance(x, dict):
+        return {str(k): _plain(v, f"{where}.{k}") for k, v in x.items()}
+    if isinstance(x, (list, tuple)):
+        return [_plain(v, f"{where}[{i}]") for i, v in enumerate(x)]
+    if isinstance(x, decimal.Decimal):
+        return _plain(float(x), where)
+    if hasattr(x, "item") and not hasattr(x, "__len__"):   # numpy / polars scalar
+        return _plain(x.item(), where)
+    raise ValueError(f"{where}: {type(x).__name__} {x!r} is not plain data (a number, text, "
+                     f"a date, a list or a mapping)")
+
+
 def _trim(s: str) -> str:
     """`4.2500` -> `4.25`, `12.50` -> `12.5`, `3.00` -> `3`."""
     return s.rstrip("0").rstrip(".") if "." in s else s
@@ -183,15 +230,19 @@ def fmt(value, unit: str, style: str = "prose", precision: int | None = None) ->
     if unit not in UNITS:
         raise ValueError(f"unit {unit!r}: a currency code (scripts/style.py) or one of "
                          f"{', '.join(OTHER_UNITS)}")
+    if style not in ("prose", "deck", "cell"):
+        raise ValueError(f"style {style!r}: prose, deck or cell")
     v = _num(value)
     if v is None or (isinstance(v, float) and math.isnan(v)):
         return UNABLE
-    if style not in ("prose", "deck", "cell"):
-        raise ValueError(f"style {style!r}: prose, deck or cell")
+    if isinstance(v, float) and math.isinf(v):
+        raise ValueError(f"{v!r} is not a figure: a division by zero is not_applicable, "
+                         f"value None")
     if unit in MONEY_UNITS:
         return style_money(v, unit, style)
     neg = v < 0
-    a = abs(v)
+    # A count keeps an int whole (no float rounding past 2**53); every other unit is a float.
+    a = abs(v) if unit == "count" and isinstance(v, int) else abs(float(v))
     if unit == "pct":
         p = round(a * 100, 1)
         s = f"{p:.0f}%" if p.is_integer() else f"{p:.1f}%"
@@ -201,7 +252,7 @@ def fmt(value, unit: str, style: str = "prose", precision: int | None = None) ->
         s = _trim(f"{p:.6f}") + "%"
         neg = neg and p != 0
     elif unit == "count":
-        s = f"{a:,.0f}"
+        s = f"{a:,}" if isinstance(a, int) else f"{a:,.0f}"
         neg = neg and round(a) != 0
     elif unit == "fx_rate":
         d = 4 if precision is None else precision
@@ -235,7 +286,7 @@ def md_table(headers, rows, units, style_: str = "prose") -> str:
     for u in units:
         if u is not None and str(u).lower() not in UNITS:
             raise ValueError(f"unit {u!r} is not a figures unit")
-    esc = lambda s: str(s).replace("|", "\\|").replace("\n", " ")  # noqa: E731
+    esc = lambda s: str(s).replace("|", "\\|").replace("\r\n", " ").replace("\n", " ").replace("\r", " ")  # noqa: E731
     out = ["| " + " | ".join(esc(h) for h in headers) + " |",
            "|" + "|".join("---:" if u else "---" for u in units) + "|"]
     for i, r in enumerate(rows, 1):
@@ -255,7 +306,12 @@ def _sub(template: str, lookup) -> str:
         if f is None:
             raise KeyError(f"{fid}: no figure with this id in the run's ledgers")
         return fmt(f.get("value"), f.get("unit"), style)
-    return TEMPLATE.sub(one, template)
+    out = TEMPLATE.sub(one, template)
+    left = TEMPLATE_ANY.search(out)
+    if left:
+        raise ValueError(f"{left.group(0)!r} is no figure reference this substitutes - "
+                         f"`{{F.id}}` or `{{F.id:deck}}` (prose, deck or cell), no spaces")
+    return out
 
 
 # --- the run's figures ---------------------------------------------------------------------
@@ -266,8 +322,37 @@ def _yaml_load(path: pathlib.Path):
     return doc or []
 
 
+def _statement(e: dict):
+    """What an entry states, to compare two ledgers' copies of one id."""
+    if str(e.get("id", "")).startswith("P."):
+        return ("population", e.get("total_n"), e.get("included_n"))
+    return (e.get("value"), e.get("unit"))
+
+
 class FigureSet(dict):
-    """Every `F.`/`P.` entry in the run's figures ledgers, by id."""
+    """Every `F.`/`P.` entry in the run's figures ledgers, by id. An id two ledgers state
+    differently is in `conflicts` (id -> [(ledger, statement), ...]), and reading it
+    raises: a disagreement is a finding (EVIDENCE.md § 0)."""
+
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        self.conflicts: dict[str, list] = {}
+        self.origin: dict[str, str] = {}
+
+    def _agreed(self, fid: str) -> None:
+        if fid in self.conflicts:
+            said = "; ".join(f"{n} states {v!r}" for n, v in self.conflicts[fid])
+            raise ValueError(f"{fid}: the run's ledgers disagree ({said}) - a disagreement "
+                             f"is a finding (EVIDENCE.md § 0); resolve it before stating it")
+
+    def __getitem__(self, fid: str):
+        self._agreed(fid)
+        return super().__getitem__(fid)
+
+    def get(self, fid: str, default=None):
+        if fid in self:
+            self._agreed(fid)
+        return super().get(fid, default)
 
     def value(self, fid: str):
         return self[fid].get("value")
@@ -279,40 +364,59 @@ class FigureSet(dict):
         return _sub(template, self.get)
 
 
-def load(run_dir, checks=None) -> FigureSet:
-    """The figures ledgers of `checks` (all of them when None) as one FigureSet."""
+def load(run_dir, checks=None, *, exclude=()) -> FigureSet:
+    """The figures ledgers of `checks` (all of them when None, less the file names in
+    `exclude`) as one FigureSet."""
     wp = pathlib.Path(run_dir) / "workpapers"
     out = FigureSet()
     names = sorted(wp.glob("figures-*.yaml")) if checks is None else \
         [wp / f"figures-{c}.yaml" for c in ([checks] if isinstance(checks, str) else checks)]
     for f in names:
+        if f.name in exclude:
+            continue
         if not f.is_file():
             raise FileNotFoundError(f"{f}: no such ledger")
         doc = _yaml_load(f)
         if not isinstance(doc, list):
             raise ValueError(f"{f.name}: the ledger is not a YAML list (EVIDENCE.md § 0)")
         for e in doc:
-            if isinstance(e, dict) and isinstance(e.get("id"), str):
-                out.setdefault(e["id"], e)
+            if not (isinstance(e, dict) and isinstance(e.get("id"), str)):
+                continue
+            fid = e["id"]
+            if fid not in out:
+                dict.__setitem__(out, fid, e)
+                out.origin[fid] = f.name
+            elif _statement(e) != _statement(dict.__getitem__(out, fid)):
+                out.conflicts.setdefault(
+                    fid, [(out.origin[fid], _statement(dict.__getitem__(out, fid)))]
+                ).append((f.name, _statement(e)))
     return out
+
+
+def _limit(v, test: str, unit: str) -> str:
+    """A tie test's limit or measure at its own precision, e.g. a 0.05% limit reads 0.05%
+    where the unit's display rounding would show 0.1%."""
+    if v is None:
+        return "n/a"
+    if test == "pct_tolerance" or unit in ("pct", "rate"):
+        return _trim(f"{v * 100:,.8f}") + "%"
+    if unit in MONEY_UNITS:
+        return fmt(v, unit, "cell")
+    return _trim(f"{v:,.10f}") + {"ratio": "x", "days": " days"}.get(unit, "")
 
 
 def tie_table(ties) -> str:
     """The tie schedule as a Markdown table, for `checks/<check>.md`."""
+    esc = lambda s: str(s).replace("|", "\\|").replace("\n", " ")  # noqa: E731
     lines = ["| tie | side A | side B | difference | test | status |",
              "|---|---|---|---|---|---|"]
-    def bound(v, test, u):                 # a tolerance keeps its own precision: 0.01%
-        if test != "pct_tolerance":
-            return fmt(v, u, "cell")
-        return "n/a" if v is None else f"{v * 100:.4g}%"
-
     for t in ties:
         u = t["unit"]
         tests = "; ".join(
-            f"{x['test']} {bound(x['measured'], x['test'], u)} "
-            f"{'<=' if x['passed'] else '>'} {bound(x['limit'], x['test'], u)}"
+            f"{x['test']} {_limit(x['measured'], x['test'], u)} "
+            f"{'<=' if x['passed'] else '>'} {_limit(x['limit'], x['test'], u)}"
             for x in t["tests"])
-        lines.append(f"| {t['id']} {t['label']} | {t['side_a']['figure_id']} "
+        lines.append(f"| {t['id']} {esc(t['label'])} | {t['side_a']['figure_id']} "
                      f"{fmt(t['side_a']['value'], u, 'cell')} | {t['side_b']['figure_id']} "
                      f"{fmt(t['side_b']['value'], u, 'cell')} | {t['difference_figure']} "
                      f"{fmt(t['difference'], u, 'cell')} | {tests} | {t['status']} |")
@@ -325,10 +429,15 @@ class Ledger:
 
     `resume=True` (the default) starts from what the two files hold, so a step split
     across scripts keeps adding to one ledger; an id this pass mints again replaces the
-    stored entry. `fresh=True` starts empty: a fix re-run that rebuilds every figure
-    drops the ids it no longer mints."""
+    stored entry, and the ties of earlier passes come back in `ties`. `fresh=True` starts
+    empty: a fix re-run that rebuilds every figure drops the ids it no longer mints, and an
+    id it does not mint again never resolves, not even to the entry still on disk.
+    `check` is the check id (no `-`) or `profile-<source>`."""
 
     def __init__(self, run_dir, check: str, *, fresh: bool = False):
+        if not isinstance(check, str) or not LEDGER_NAME.fullmatch(check):
+            raise ValueError(f"check {check!r}: the check id ([a-z0-9][a-z0-9_]*, no `-`) or "
+                             f"`profile-<source>` - it names the ledger files")
         self.run_dir = pathlib.Path(run_dir).resolve()
         self.check = check
         wp = self.run_dir / "workpapers"
@@ -338,7 +447,10 @@ class Ledger:
         self.citations: dict[str, dict] = {}
         self.minted: set[str] = set()
         self.ties: list[dict] = []
+        self._tied: set[str] = set()
+        self._pending: dict[str, list[int]] = {}   # fid -> inputs classified at write()
         self._run: FigureSet | None = None
+        self._run_cits: dict[str, dict] | None = None
         if not fresh:
             for path, into in ((self.figures_path, self.entries),
                                (self.evidence_path, self.citations)):
@@ -348,54 +460,82 @@ class Ledger:
                         raise ValueError(f"{path}: the ledger is not a YAML list "
                                          f"(EVIDENCE.md § 0) - pass fresh=True to rebuild it")
                     for e in doc:
+                        if not isinstance(e, dict) or not isinstance(e.get("id"), str):
+                            raise ValueError(f"{path}: entry {e!r} is no `- id:` mapping "
+                                             f"(EVIDENCE.md § 0) - pass fresh=True to rebuild it")
                         into[e["id"]] = e
+            self.ties = [copy.deepcopy(e["tie"]) for e in self.entries.values()
+                         if isinstance(e.get("tie"), dict)]
 
     # -- minting ---------------------------------------------------------------------------
-    def _mint(self, eid: str, prefix: str) -> None:
+    def _check_id(self, eid: str, prefix: str) -> None:
+        """Refuse an id outside the grammar or minted already in this pass; records
+        nothing."""
         if not isinstance(eid, str) or not LEDGER_ID.fullmatch(eid) or not eid.startswith(prefix):
             raise ValueError(f"id {eid!r}: `{prefix}` then dot-joined segments of "
                              f"[A-Za-z0-9_-]; a period is its slug (`fy2025`, "
                              f"`ltm_2026-07`), never its label (EVIDENCE.md § 0)")
         if eid in self.minted:
             raise ValueError(f"{eid} is minted twice in this pass - one entry per figure")
-        self.minted.add(eid)
 
     def cite(self, *entries: dict) -> list[str]:
         """Add citation entries (from `evidence.select` / `span`, or a cell or passage)."""
-        ids = []
-        for e in entries:
-            if isinstance(e, list):
-                ids += self.cite(*e)
-                continue
-            self._mint(e.get("id"), "E.")
-            self.citations[e["id"]] = copy.deepcopy(e)
-            ids.append(e["id"])
-        return ids
+        flat: list[dict] = []
+
+        def walk(xs):
+            for e in xs:
+                if isinstance(e, list):
+                    walk(e)
+                elif not isinstance(e, dict):
+                    raise ValueError(f"citation {e!r} is not a mapping")
+                else:
+                    flat.append(e)
+        walk(entries)
+        seen: set[str] = set()
+        for e in flat:
+            self._check_id(e.get("id"), "E.")
+            if e["id"] in seen:
+                raise ValueError(f"{e['id']} is cited twice in this call")
+            seen.add(e["id"])
+        plain = [_plain(e, e["id"]) for e in flat]
+        for e in plain:
+            self.minted.add(e["id"])
+            self.citations[e["id"]] = e
+        self._run_cits = None
+        return [e["id"] for e in plain]
 
     def population(self, pid: str, label: str, total_n: int, included_n: int,
                    exclusions=(), citations=(), **extra) -> str:
         """A `P.` entry. `exclusions` is `[{"what": ..., "n": ...}, ...]`, one per named
-        exclusion, required when `included_n < total_n`."""
-        self._mint(pid, "P.")
+        exclusion, required when `included_n < total_n`; their counts add up to
+        `total_n - included_n`."""
+        self._check_id(pid, "P.")
         total_n, included_n = _count(total_n, "total_n"), _count(included_n, "included_n")
-        exclusions = [dict(x) for x in exclusions]
+        if isinstance(exclusions, (str, dict)) or isinstance(citations, (str, dict)):
+            raise ValueError(f"{pid}: `exclusions` and `citations` are lists")
+        exclusions = [_plain(x, f"{pid}.exclusions") for x in exclusions]
         _check_population(pid, total_n, included_n, exclusions)
+        if clash := sorted(POP_FIELDS & set(extra)):
+            raise ValueError(f"{pid}: {clash} are the entry's own fields, not extras")
         e = {"id": pid, "label": _label(pid, label), "total_n": total_n,
              "included_n": included_n, "exclusions": exclusions,
-             "citations": list(citations)}
-        e.update(copy.deepcopy(extra))
+             "citations": _plain(list(citations), f"{pid}.citations")}
+        e.update(_plain(extra, pid))
+        self.minted.add(pid)
         self.entries[pid] = e
         return pid
 
     def fig(self, fid: str, label: str, value, unit: str, expression: str, inputs,
             *, population=None, disposition: str = "measured", zero_basis: str | None = None,
             caveats=(), stated_scale: str | None = None, **extra) -> str:
-        """One `F.` entry, checked field by field; returns the id.
+        """One `F.` entry, checked field by field; returns the id. A refused call records
+        nothing.
 
         `stated_scale` (an `as_stated` figure only): `value` is the number as the source
-        states it; the stored value is multiplied out of the scale, with the conversion
-        appended to `expression`."""
-        self._mint(fid, "F.")
+        states it; the stored value is multiplied out of the scale exactly, with the
+        conversion appended to `expression`."""
+        self._check_id(fid, "F.")
+        label = _label(fid, label)
         if unit not in UNITS:
             raise ValueError(f"{fid}: unit {unit!r} - a currency code (scripts/style.py) "
                              f"or one of {', '.join(OTHER_UNITS)}")
@@ -416,8 +556,11 @@ class Ledger:
                     raise ValueError(f"{fid}: a {unit} is not stated at a scale")
                 n = int(style.SCALES[stated_scale])
                 conversion.append(f"x {n:,} (stated in {stated_scale})")
-                if v is not None:
-                    v = float(v) * n
+                if v is not None and not (isinstance(v, float) and not math.isfinite(v)):
+                    # in Decimal, e.g. 1.001 thousand is 1,001 (a float product gives
+                    # 1000.9999999999999)
+                    v = v * n if isinstance(v, int) else \
+                        float(decimal.Decimal(repr(float(v))) * n)
         if isinstance(v, float) and math.isinf(v):
             raise ValueError(f"{fid}: value is infinite - a division by zero is "
                              f"`not_applicable`, value None")
@@ -429,7 +572,7 @@ class Ledger:
             elif unit == "count":
                 if float(v) != round(float(v)):
                     raise ValueError(f"{fid}: a count of {v} is not a whole number")
-                v = int(round(v))
+                v = int(v) if isinstance(v, int) else int(round(v))
             else:
                 v = round(float(v), 10)
         if not isinstance(expression, str) or not expression.strip():
@@ -442,7 +585,14 @@ class Ledger:
                              f"with placeholders (`F.x.<period>`)")
         if conversion:
             expression = f"{expression.strip()} {' '.join(conversion)}"
-        ins = [self._input(fid, i) for i in (inputs or [])]
+        if isinstance(inputs, (str, dict)):
+            raise ValueError(f"{fid}: `inputs` is a list of inputs, not one {type(inputs).__name__}")
+        ins, pending = [], []
+        for k, i in enumerate(inputs or []):
+            one, later = self._input(fid, i)
+            ins.append(one)
+            if later:
+                pending.append(k)
         if not ins:
             raise ValueError(f"{fid}: `inputs` is never empty (EVIDENCE.md § 3)")
         pop = _population_ref(fid, population)
@@ -457,34 +607,51 @@ class Ledger:
                 if pop is None:
                     raise ValueError(f"{fid}: `measured_zero` requires the population it "
                                      f"was measured over (`population=`)")
-                if "included_n" in pop and not pop["included_n"] > 0:
+                n = pop.get("included_n") if "ref" not in pop else \
+                    (self._population(pop["ref"]) or {}).get("included_n", 1)
+                if not n > 0:
                     raise ValueError(f"{fid}: `measured_zero` over an empty population is "
                                      f"not_measured")
         elif zero_basis is not None:
             raise ValueError(f"{fid}: `zero_basis` belongs on a zero, null or blank value; "
                              f"this one is {v}")
+        if isinstance(caveats, str):
+            raise ValueError(f"{fid}: `caveats` is a list of ids, not one string")
+        caveats = list(caveats)
         for c in caveats:
             if not LEDGER_ID.fullmatch(str(c)):
                 raise ValueError(f"{fid}: caveat {c!r} is not an id")
-        e = {"id": fid, "label": _label(fid, label), "value": v, "unit": unit,
-             "expression": expression.strip(), "inputs": ins, "population": pop,
-             "zero_basis": zero_basis, "caveats": list(caveats), "disposition": disposition}
+        if clash := sorted(FIG_FIELDS & set(extra)):
+            raise ValueError(f"{fid}: {clash} are the entry's own fields, not extras")
+        e = {"id": fid, "label": label, "value": v, "unit": unit,
+             "expression": expression.strip(), "inputs": _plain(ins, f"{fid}.inputs"),
+             "population": _plain(pop, f"{fid}.population"), "zero_basis": zero_basis,
+             "caveats": [str(c) for c in caveats], "disposition": disposition}
         if stated_scale is not None:
             e["stated_scale"] = stated_scale
         if conversion:
             e["stated_value"] = _num(value)
-        e.update(copy.deepcopy(extra))
+        e.update(_plain(extra, fid))
+        self.minted.add(fid)
         self.entries[fid] = e
+        if pending:
+            self._pending[fid] = pending
+        else:
+            self._pending.pop(fid, None)
         return fid
 
-    def _input(self, fid: str, i) -> dict:
+    def _input(self, fid: str, i) -> tuple[dict, bool]:
+        """One input as its dict, and whether its kind waits for write() (an `E.` id given
+        as a tuple and cited nowhere yet)."""
+        later = False
         if isinstance(i, (tuple, list)) and len(i) == 2:
             role, ref = i
             if str(ref).startswith("F."):
                 i = figure(role, ref)
             elif str(ref).startswith("E."):
-                c = self.citations.get(ref) or {}
-                i = (check_output if c.get("file_role") == "run_artifact" else room)(role, ref)
+                c = self._citation(ref)
+                later = c is None
+                i = (check_output if (c or {}).get("file_role") == "run_artifact" else room)(role, ref)
             else:
                 i = declared(role, ref)
         if not isinstance(i, dict):
@@ -496,20 +663,25 @@ class Ledger:
         if st not in SOURCE_KEY:
             raise ValueError(f"{fid}: input source_type {st!r} - one of "
                              f"{', '.join(SOURCE_KEY)}")
-        if not i.get(SOURCE_KEY[st]):
+        ref = i.get(SOURCE_KEY[st])
+        if not ref:
             raise ValueError(f"{fid}: a `{st}` input carries `{SOURCE_KEY[st]}`")
-        return i
+        want = {"figure": "F.", "room_file": "E.", "check_output": "E."}.get(st)
+        if want and not str(ref).startswith(want):
+            raise ValueError(f"{fid}: a `{st}` input cites a `{want}` id, not {ref!r}")
+        return i, later
 
     # -- ties ------------------------------------------------------------------------------
     def tie(self, tid: str, label: str, a: str, b: str, *, tolerance=None,
             pct_tolerance=None, diff_id: str | None = None, diff_label: str | None = None,
             population=None, tolerance_field: str = "params.tolerance",
             pct_tolerance_field: str = "params.pct_tolerance") -> dict:
-        """Tie figure `a` to figure `b` (the reference side). Mints the difference figure
-        and returns the tie record; appended to `self.ties`."""
+        """Tie figure `a` to figure `b` (the reference side). Mints the difference figure,
+        which keeps the tie record (`tie:`), and returns the record; appended to
+        `self.ties` (replacing an earlier pass's record of the same tie)."""
         if not isinstance(tid, str) or not LEDGER_ID.fullmatch(tid) or not tid.startswith("T."):
             raise ValueError(f"tie id {tid!r}: `T.` then dot-joined segments (EVIDENCE.md § 0)")
-        if any(t["id"] == tid for t in self.ties):
+        if tid in self._tied:
             raise ValueError(f"{tid} is tied twice in this pass")
         tol = _bound(tid, "tolerance", tolerance)
         ptol = _bound(tid, "pct_tolerance", pct_tolerance)
@@ -572,15 +744,38 @@ class Ledger:
                "declared": [f for f, x in ((tolerance_field, tol),
                                            (pct_tolerance_field, ptol)) if x is not None],
                "tests": tests, "status": status}
-        self.ties.append(rec)
+        self.entries[did]["tie"] = copy.deepcopy(rec)
+        self._tied.add(tid)
+        self.ties = [t for t in self.ties if t.get("id") != tid] + [rec]
         return rec
 
     # -- reading ---------------------------------------------------------------------------
     def run_figures(self) -> FigureSet:
+        """The run's other checks' figures. This check's own on-disk ledger is excluded:
+        this pass replaces it."""
         if self._run is None:
-            self._run = load(self.run_dir) if (self.run_dir / "workpapers").is_dir() \
-                else FigureSet()
+            self._run = load(self.run_dir, exclude=(self.figures_path.name,)) \
+                if (self.run_dir / "workpapers").is_dir() else FigureSet()
         return self._run
+
+    def _population(self, pid: str) -> dict | None:
+        return self.entries.get(pid) or dict.get(self.run_figures(), pid)
+
+    def _citation(self, eid: str) -> dict | None:
+        """A citation from this ledger, else from the run's other evidence ledgers."""
+        if eid in self.citations:
+            return self.citations[eid]
+        if self._run_cits is None:
+            self._run_cits = {}
+            wp = self.run_dir / "workpapers"
+            for f in sorted(wp.glob("evidence-*.yaml")) if wp.is_dir() else ():
+                if f.name == self.evidence_path.name:
+                    continue
+                doc = _yaml_load(f)
+                for e in doc if isinstance(doc, list) else ():
+                    if isinstance(e, dict) and isinstance(e.get("id"), str):
+                        self._run_cits.setdefault(e["id"], e)
+        return self._run_cits.get(eid)
 
     def get(self, fid: str) -> dict | None:
         """A figure from this ledger, else from the run's other ledgers."""
@@ -596,8 +791,27 @@ class Ledger:
         return _sub(template, self.get)
 
     # -- writing ---------------------------------------------------------------------------
+    def _classify(self) -> None:
+        """Settle each `E.` input given as a tuple and cited nowhere when it was minted."""
+        for fid, ks in list(self._pending.items()):
+            ins = self.entries.get(fid, {}).get("inputs") or []
+            left = []
+            for k in ks:
+                c = self._citation(ins[k].get("citation_id")) if k < len(ins) else None
+                if c is None:
+                    left.append(k)                 # still cited nowhere: a dead end below
+                else:
+                    ins[k]["source_type"] = "check_output" \
+                        if c.get("file_role") == "run_artifact" else "room_file"
+            if left:
+                self._pending[fid] = left
+            else:
+                self._pending.pop(fid)
+
     def dead_ends(self) -> list[str]:
-        """Every reference in this ledger that no ledger of the run declares."""
+        """Every reference in this ledger that no ledger of the run declares, every input
+        whose kind contradicts its citation, every `measured_zero` over an empty `P.`, and
+        every tie whose side has moved since it was classified."""
         # What the run's OTHER ledgers declare, read as check_workbook.py reads them, plus
         # what this ledger holds: its own files are about to be replaced, so an id they
         # declared on disk and this pass no longer mints resolves nothing.
@@ -622,12 +836,26 @@ class Ledger:
             if not eid.startswith("F."):
                 continue
             for i in e.get("inputs") or ():
-                ref = i.get(SOURCE_KEY.get(i.get("source_type"), ""), "")
-                if i.get("source_type") != "declared":
-                    need(ref, f"{eid}.inputs[{i.get('role')}]")
+                st = i.get("source_type")
+                ref = i.get(SOURCE_KEY.get(st, ""), "")
+                if st == "declared":
+                    continue
+                need(ref, f"{eid}.inputs[{i.get('role')}]")
+                if st in ("room_file", "check_output"):
+                    c = self._citation(ref)
+                    art = (c or {}).get("file_role") == "run_artifact"
+                    if c is not None and art != (st == "check_output"):
+                        out.append(f"{eid}.inputs[{i.get('role')}]: a `{st}` input cites "
+                                   f"{ref}, a {'run_artifact' if art else 'room'} read - "
+                                   f"{'check_output' if art else 'room_file'} (EVIDENCE.md § 3)")
             pop = e.get("population") or {}
             if pop.get("ref"):
                 need(pop["ref"], f"{eid}.population")
+                p = self._population(pop["ref"])
+                if e.get("zero_basis") == "measured_zero" and p is not None \
+                        and not (p.get("included_n") or 0) > 0:
+                    out.append(f"{eid}: `measured_zero` over {pop['ref']}, an empty "
+                               f"population - not_measured")
             expr = str(e.get("expression", ""))
             bad = NOT_WHOLE.search(expr)
             if bad:
@@ -643,10 +871,20 @@ class Ledger:
                                    f"in any ledger of the run")
                     continue
                 need(ref, f"{eid}.expression")
+        for t in self.ties:
+            for side in ("side_a", "side_b"):
+                fid, was = t[side]["figure_id"], t[side]["value"]
+                f = self.entries.get(fid) or dict.get(self.run_figures(), fid)
+                now = None if f is None else f.get("value")
+                if now is None or float(now) != float(was):
+                    out.append(f"{t['id']}: side {fid} is now {now!r}, {was!r} when the tie "
+                               f"was classified - tie it again")
         return out
 
     def write(self) -> tuple[pathlib.Path, pathlib.Path | None]:
-        """Write both ledgers, or nothing: refuses with every dead end named."""
+        """Write both ledgers, or nothing: refuses with every dead end named. A pass that
+        cites nothing removes an evidence ledger left by an earlier one."""
+        self._classify()
         bad = self.dead_ends()
         if bad:
             raise ValueError(f"{len(bad)} reference(s) resolve nowhere - nothing written:\n  "
@@ -659,6 +897,8 @@ class Ledger:
         if self.citations:
             ep = write_ledger(self.evidence_path,
                               [copy.deepcopy(e) for e in self.citations.values()], merge=False)
+        elif self.evidence_path.is_file():
+            self.evidence_path.unlink()
         self._run = None
         return fp, ep
 
@@ -672,7 +912,8 @@ def _label(eid: str, label) -> str:
 
 def _count(v, name: str) -> int:
     v = _num(v)
-    if v is None or float(v) != round(float(v)) or v < 0:
+    if v is None or (isinstance(v, float) and not math.isfinite(v)) \
+            or float(v) != round(float(v)) or v < 0:
         raise ValueError(f"`{name}` is a non-negative whole number, got {v!r}")
     return int(v)
 
@@ -694,15 +935,25 @@ def _bound(tid: str, name: str, v):
 
 
 def _check_population(pid: str, total_n: int, included_n: int, exclusions: list) -> None:
+    """`exclusions` as given; each count is normalized to an int in place."""
     if included_n > total_n:
         raise ValueError(f"{pid}: included_n {included_n} exceeds total_n {total_n}")
-    if included_n < total_n:
-        if not exclusions:
-            raise ValueError(f"{pid}: {total_n - included_n} excluded and no exclusion "
-                             f"named - each with its count (EVIDENCE.md § 3)")
-        for x in exclusions:
-            if not x.get("what") and not x.get("reason") or x.get("n", x.get("count")) is None:
-                raise ValueError(f"{pid}: exclusion {x} needs `what` and `n`")
+    if included_n < total_n and not exclusions:
+        raise ValueError(f"{pid}: {total_n - included_n} excluded and no exclusion "
+                         f"named - each with its count (EVIDENCE.md § 3)")
+    named = 0
+    for x in exclusions:
+        if not isinstance(x, dict):
+            raise ValueError(f"{pid}: exclusion {x!r} is a mapping {{what, n}}")
+        key = "n" if "n" in x else "count"
+        if not (x.get("what") or x.get("reason")) or x.get(key) is None:
+            raise ValueError(f"{pid}: exclusion {x} needs `what` and `n`")
+        x[key] = _count(x[key], f"{pid} exclusion n")
+        named += x[key]
+    if exclusions and named != total_n - included_n:
+        raise ValueError(f"{pid}: the exclusions name {named} item(s), and {total_n} total "
+                         f"less {included_n} included is {total_n - included_n} - every "
+                         f"excluded item is named once, with its count")
 
 
 def _population_ref(fid: str, p):
@@ -721,6 +972,9 @@ def _population_ref(fid: str, p):
                 raise ValueError(f"{fid}: an inline population carries total_n and included_n")
             p[k] = _count(p[k], k)
         p.setdefault("exclusions", [])
+        if isinstance(p["exclusions"], (str, dict)):
+            raise ValueError(f"{fid}: population exclusions are a list")
+        p["exclusions"] = [_plain(x, f"{fid}.population.exclusions") for x in p["exclusions"]]
         _check_population(fid, p["total_n"], p["included_n"], p["exclusions"])
         return p
     raise ValueError(f"{fid}: population {p!r} - a `P.` id or {{total_n, included_n, "

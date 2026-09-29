@@ -33,9 +33,16 @@ frame and the coordinates it read it at — `span(frame=df, file=..., source=...
 file_role=..., sheet=..., header_at=..., rows=..., columns={name: {"at": ..., "parse":
 ...}})` — and the entry is measured over that frame. `filter` is a polars SQL WHERE clause
 or a `pl.Expr`, recorded verbatim. With `reperform`, a cache id is first re-checked by
-`cache.verify` (the source file's sha256 and bytes, the parquet's row count) and a
-disagreement raises CacheDefect. `header_at`, `rows`, `holds`, `parse` and `filter` are
-always set; with no filter the entry states `none - full sheet consumed`.
+`cache.verify` (the source file's sha256 and bytes, the parquet's own sha256
+(`parquet_sha256`) and row count) and a disagreement raises CacheDefect. `header_at`,
+`rows`, `holds`, `parse` and `filter` are always set; with no filter the entry states
+`none - full sheet consumed`.
+
+The control total is `cache.control_value`'s, in `select` and `span` alike: exact, and
+refused on a null, NaN or infinite cell among the rows cited. Fill a blank that means
+zero in the extract (`fill_null(0)`) and say so in the column's `parse`. An item table
+leaves `amount` empty on a row that carries none; a span of it with `control="amount"`
+filters those rows out (`amount IS NOT NULL`) or cites the row count.
 
 Command line, printing the entry as YAML:
 
@@ -264,7 +271,9 @@ def _parse_select(sql: str) -> tuple[str, list[str] | None, str | None]:
 def select(run_dir, sql: str, *, id: str | None = None, control: str | None = None,
            note: str | None = None, read_at: str | None = None,
            reperform: bool = False):
-    """Run one SELECT over one cache id; return (rows, span entry) for those rows."""
+    """Run one SELECT over one cache id; return (rows, span entry) for those rows. The
+    control total is `cache.control_value` of the control column over the rows the WHERE
+    clause keeps, selected or not: a null, NaN or infinite cell among them is refused."""
     pl = cache._pl()
     run_dir = pathlib.Path(run_dir).resolve()
     table, names, where = _parse_select(sql)
@@ -339,9 +348,11 @@ def span(what=None, *, run_dir=None, frame=None, file=None, id: str | None = Non
     id `source` names in run.json; without it, `file` is the file's path on disk, which
     must exist, and `source` is a short name for where it came from (`bank`,
     `invoices`). A data-room path with no frame is refused — this module parses no
-    client file. With `reperform`, a cache read first runs `cache.verify` and raises
-    CacheDefect on a disagreement. With no `control` and none on the manifest, the
-    control total is the row count."""
+    client file. With `reperform`, a cache read first runs `cache.verify` (source and
+    parquet sha256, row count) and raises CacheDefect on a disagreement. With no
+    `control` and none on the manifest, the control total is the row count; otherwise it
+    is `cache.control_value` over the rows after `filter`, refused on a null, NaN or
+    infinite cell (filter an item table's rows without an amount: `amount IS NOT NULL`)."""
     run_dir = pathlib.Path(run_dir).resolve() if run_dir else None
     if frame is not None:
         if what is not None:

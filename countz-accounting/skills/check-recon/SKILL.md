@@ -56,16 +56,21 @@ their payment as not established from the records, never inferred.
 Your part is the mapping and the rules. Each side is a stream of `id`, `date`, `value`,
 with `entity`, `ref`, `text` and `batch` wherever the source carries them: `ref` a number
 both sides carry for the same thing (a cheque number on the book and on the statement),
-`text` a bank description, `batch` the key the lines of one deposit share. An id is
-unique: where the source's key repeats (a deposit id on each of its lines, a payment id on
-each invoice it pays), build the id from the key and the row, and map the key to `batch`
-or `ref` by what it means. One flow per call: receipts with their refunds, reversals and
+`text` a bank description, `batch` the key the lines of one deposit share. `resolve()`
+refuses a key or id held as a float or a decimal (cast it to text or an integer; for
+example, Excel reads cheque 1001 as `1001.0`), a time-zoned datetime (take the entity's
+local date first), date text that is not ISO, and a column a rule compares that one side
+lacks. An id is unique: where the source's key repeats (a deposit id on each of its
+lines, a payment id on each invoice it pays), build the id from the key and the row, and
+map the key to `batch` or `ref` by what it means. One flow per call: receipts with their refunds, reversals and
 returned items, or payments with theirs. Reconcile each bank account in its own call.
 Measure the window before choosing it: match once by reference at any date, or on amounts
 that occur once on each side, and read the days from the book's date to the bank's on those
 pairs; pass the few days most pairs fall in as `window`, the longest as `wide`, and, where
 items take longer to reach the bank than `window` (cheques paid out), that time as
-`transit=`. Pass `same_entity=True` where both sides name the same account or party. Add a
+`transit=`. Pass `end=`, the statement's end date; transit and age are measured at it,
+and without it at the bank's last line. Pass `same_entity=True` where both sides name
+the same account or party. Add a
 `Rule` with a named `difference` only for what a record says the bank keeps or converts: a
 processor's fee on its settlement report, a bank's conversion on its advice; scope it to
 the records it applies to with a column set only on those (the currency on a foreign
@@ -139,10 +144,14 @@ Files:
   with their evidence, the elections where any, and the statement.
 - `checks/<check>-matches.csv` — the match table of § 3, with its manifest block.
 - `out/tabs/<check>.xlsx` — your tabs. The file opens with the match tabs, one set per
-  `res` of § 3, written by `${CLAUDE_PLUGIN_ROOT}/scripts/match_tabs.py` from it and never
-  by hand, whether it came from `resolve()` or `from_assignment()`: the match summary, the
+  `res` of § 3, each set under its own token, written by
+  `${CLAUDE_PLUGIN_ROOT}/scripts/match_tabs.py` from it and never by hand, whether it came
+  from `resolve()` or `from_assignment()`. Pass `right_population` (the bank side's
+  population), and `currency` where the amounts are money: its minor units are the
+  `decimals` the streams were matched at, which the call reads from `res`. Figure ids are
+  `F.<check>.match.<token>.<line>`. The tabs: the match summary, the
   schedule (one row per left item, the ones kept out of the streams included as `others`:
-  an invoice with no cash, with its reason), the reconciling items and the rules
+  an invoice with no cash, each with its reason), the reconciling items and the rules
   (`WORKBOOK.md` § 6). Then your check tab, blocks per `WORKBOOK.md` § 4, with the
   reconciliation statement as the primary table and the item schedules. Every
   reconciliation carries the match tabs, so the reader finds the schedule on each one;

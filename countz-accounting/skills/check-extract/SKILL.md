@@ -45,7 +45,15 @@ entry, parse that table and `cache.write` it — with the entry's `what` — and
 coordinates (`header_at`, `rows` as the rows sit in the file) and, per column, where it
 sits and how its text was read (`parse`, in words). A value you cannot read stays text,
 and its column's `parse` says so. Where the document states a total for the table, pass
-it as `stated`. Any other table you see on a file is a `cache.note`, not extracted.
+it as `stated`, with a `tolerance` where 0.005 is not the difference that agrees (the
+tolerance is recorded). Any other table you see on a file is a `cache.note`, not
+extracted.
+
+`cache.write` refuses, before it touches the cache, a control column with a blank or
+unreadable cell. Fix the parse, or fill a blank that means zero (`fill_null(0)`) and say
+so in the column's `parse`. `sheet`, when given, is the sheet's name, non-empty. A source
+registered as one file takes that file's own name as `file`. `write` takes the source's
+sha256 when called: parse and write each table with the file unchanged in between.
 
 The script is the run's record of how every file was read: a reviewer re-performing a
 citation reads the file as it says, and a fix pass edits it. Write it to be read.
@@ -53,9 +61,10 @@ citation reads the file as it says, and a fix pass edits it. Write it to be read
 ## 3. Run and rule
 
 `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 workpapers/extract-<check>.py`, then
-`cache.py <run_dir> --show`. A `stated` total the rows do not agree to, or a row count or
-control total that disagrees with the profile's citation of the same table, is a
-blocker until you explain it — correct the script and re-run, or rule on why the
+`cache.py <run_dir> --show`. Where it refuses a manifest another schema wrote, delete
+`cache/` and re-run the script. A `stated` total the rows do not agree to, or a row
+count or control total that disagrees with the profile's citation of the same table, is
+a blocker until you explain it: correct the script and re-run, or rule on why the
 difference is right and record the ruling. A table you could not parse is a blocker
 naming its id; never drop an entry to make the step pass.
 

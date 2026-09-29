@@ -72,15 +72,19 @@ Write `out` as the stated input `ARR_POLICY.md` § The file describes: `company`
 `decisions`, `instructions`, `notes`. Then run
 `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/arr_policy.py resolve <out>`. An `ERROR` line is
 yours to fix in the file before you finish: a value that is not an option id, or a
-decision id that does not exist. The `ASK` and `STATUS` lines are for the user and need
-nothing from you.
+decision id that does not exist. An `ERROR` naming statements that contradict each other
+or the policy (a convention stated twice differently, a measurement window no stated rule
+uses) is the user's to settle: move each statement it names into `notes` with its
+citation, and leave its value out. The `ASK` and `STATUS`
+lines are for the user and need nothing from you.
 
 ## 3. Finish
 
 Write `<run_dir>/arr_policy/finish.json` holding `conclusion` (two sentences: which
 documents state the company's ARR rules, and how many decisions they settle),
 `produced` (`[out]`, relative to `run_dir`), `consumed` (`{path: used_for}` for each
-document you opened), and `notes` (the count of conflicts). Where no document
+document you opened), and `notes` (text naming the count of conflicts, e.g. `"2
+conflicts"` or `"no conflicts"`). Where no document
 states a rule, the outcome is still `complete`: say so in `conclusion`, and write `out`
 with `company`, `documents: []` and no decisions. Then:
 

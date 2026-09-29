@@ -18,7 +18,14 @@ match table. The module has no matching rule of its own; it checks the bookkeepi
 - every id of both populations appears exactly once, and no id outside them appears;
 - a matched row names its group and pass; an excluded row its pass and reason; an
   unmatched row neither a group nor a pass;
-- a group spans items of one currency (translate first; match the translated amount).
+- a group holds items of both sides (a match with nothing on the other side is none);
+- a group spans items of one currency (translate first; match the translated amount);
+- the ids are text or integers (an id read as a float writes `1001.0`, never `1001`);
+- `amount` and `currency` name a column on both sides or on neither, and every matched
+  item has its amount;
+- the assignment carries no `amount` or `currency` column; both come from the
+  populations. A `matched_to` or `diff` it carries (as a `resolve()` Resolution's
+  `items` does) is recomputed here.
 
 It returns the assignment with `amount`, `currency`, `matched_to` (the other side's ids
 in the group, `;`-joined) and `diff` (the group's left sum less right sum — a netted fee,
@@ -51,10 +58,14 @@ class MatchError(ValueError):
     """An assignment whose bookkeeping does not close."""
 
 
-def _pair(v) -> tuple:
+def _pair(v, what: str) -> tuple:
     if v is None or isinstance(v, str):
         return (v, v)
-    return tuple(v)
+    v = tuple(v)
+    if len(v) != 2 or (v[0] is None) != (v[1] is None):
+        raise MatchError(f"`{what}` is a column name, or a (left, right) pair of them - on "
+                         f"both sides or neither, got {v!r}")
+    return v
 
 
 def check_assignment(left: pl.DataFrame, right: pl.DataFrame, assignment: pl.DataFrame, *,
@@ -62,10 +73,17 @@ def check_assignment(left: pl.DataFrame, right: pl.DataFrame, assignment: pl.Dat
                      tol: float | None = 0.0) -> pl.DataFrame:
     """Validate `assignment` against both populations (module docstring); return it
     enriched. `amount` and `currency` are a column name or a (left, right) pair."""
-    amt, cur = _pair(amount), _pair(currency)
+    amt, cur = _pair(amount, "amount"), _pair(currency, "currency")
+    if tol is not None and (isinstance(tol, bool) or not isinstance(tol, (int, float))
+                            or not tol >= 0 or tol == float("inf")):
+        raise MatchError(f"tol is a non-negative number or None, got {tol!r}")
     need = {"side", "id", "status", "group", "pass", "reason"}
     if missing := need - set(assignment.columns):
         raise MatchError(f"assignment lacks column(s) {sorted(missing)}")
+    if clash := sorted({"amount", "currency"} & set(assignment.columns)):
+        raise MatchError(f"assignment carries {clash}, which this takes from the populations - "
+                         f"drop them (an amount riding along is never the one checked)")
+    assignment = assignment.drop("matched_to", "diff", strict=False)     # recomputed below
     A = assignment.with_columns(pl.col("id").cast(pl.Utf8), pl.col("side").cast(pl.Utf8))
     if bad := sorted(set(A["side"].drop_nulls()) - {"left", "right"} | (
             {"<null>"} if A["side"].null_count() else set())):
@@ -76,6 +94,14 @@ def check_assignment(left: pl.DataFrame, right: pl.DataFrame, assignment: pl.Dat
 
     pops = []
     for side, df, idc, i in (("left", left, left_id, 0), ("right", right, right_id, 1)):
+        for c in (idc, amt[i], cur[i]):
+            if c is not None and c not in df.columns:
+                raise MatchError(f"{side}: no column {c!r}")
+        if df[idc].dtype.is_float() or df[idc].dtype.is_decimal():
+            raise MatchError(f"{side}: ids in {idc!r} are {df[idc].dtype} - an id read as a "
+                             f"number writes `1001.0`; cast it to text or an integer")
+        if amt[i] and not (df[amt[i]].dtype.is_numeric() or df[amt[i]].dtype == pl.Null):
+            raise MatchError(f"{side}: amount {amt[i]!r} is {df[amt[i]].dtype}, not a number")
         cols = {"id": pl.col(idc).cast(pl.Utf8), "side": pl.lit(side),
                 "amount": pl.col(amt[i]).cast(pl.Float64) if amt[i] else pl.lit(None, pl.Float64),
                 "currency": (pl.col(cur[i]).cast(pl.Utf8).str.to_uppercase() if cur[i]
@@ -111,6 +137,13 @@ def check_assignment(left: pl.DataFrame, right: pl.DataFrame, assignment: pl.Dat
 
     out = A.join(pl.concat(pops), on=["side", "id"], how="left")
     g = out.filter(st == "matched")
+    if amt[0] and (ids := g.filter(pl.col("amount").is_null() | pl.col("amount").is_nan())["id"]
+                   .head(5).to_list()):
+        raise MatchError(f"matched without an amount: {ids}")
+    one = g.group_by("group").agg(pl.col("side").n_unique().alias("n")).filter(pl.col("n") < 2)
+    if one.height:
+        raise MatchError(f"group(s) {sorted(one['group'].to_list())[:5]} hold items of one side "
+                         f"only - a match pairs both sides")
     per = g.group_by("group").agg(
         curs=pl.col("currency").drop_nulls().unique(),
         passes=pl.col("pass").unique(),

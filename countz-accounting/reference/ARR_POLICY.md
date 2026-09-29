@@ -1,15 +1,14 @@
 # The ARR policy
 
-No accounting standard defines annual recurring revenue. Two analysts working from the
-same records compute different ARR, because a definition is a bundle of choices: which
-record sets the amount, what counts as recurring, when a customer enters and leaves,
-and at what price. A run that computes ARR therefore computes it under a written policy
-the company approved, and states that policy beside every figure that depends on it.
+No accounting standard defines annual recurring revenue. A definition is a set of
+choices: which record sets the amount, what counts as recurring, when a customer enters
+and leaves, and at what price. A run computes ARR under a written policy the company
+approved, and states that policy beside every figure that depends on it.
 
 This document is the contract for that policy. The catalog itself (every purpose,
-position, convention, decision, option and derivation) has one home,
-`scripts/arr_policy.py`, which reads and writes YAML, so it always runs through the
-plugin's pinned libraries. Print the catalog with:
+position, convention, decision, option and derivation) lives only in
+`scripts/arr_policy.py`; run it through the plugin's pinned libraries. Print the catalog
+with:
 
 ```
 uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/arr_policy.py catalog
@@ -31,13 +30,12 @@ position decides the decisions that policy owns:
 | `value` | At what annual price? |
 
 A **purpose** sets all four positions at once: `operator`, `public_reporting`,
-`sell_side` or `buy_side`. It is the first question to ask, because one answer settles
-18 decisions.
+`sell_side` or `buy_side`. Ask it first: it settles the 18 policy decisions.
 
 Every decision has one of three types:
 
 - **Policy (18).** The answer moves with a position. A decision decided by two policies
-  (S5, V5) takes one field from each.
+  (S5, L2, V1, V5) takes each of its two fields from one of them.
 - **Rule (7).** The same answer at every position: S6, S7, R3, R7, L4, A4, A5. A rule
   marks the edge of a spectrum, for example that a single period's revenue annualized is
   never ARR. A company may depart from a rule, and the departure is recorded as a rule
@@ -46,8 +44,9 @@ Every decision has one of three types:
   translation (V4), bridge classes (A1), acquired ARR (A2), the customer unit (A3) and
   the retention formula (A6). Each carries a default. Three further parameters sit beside
   them: the event a new stream enters ARR from and the months after it (L1), and the
-  document threshold for outlier contracts (L4). A convention no figure needs takes the value `none` and is not asked: the window
-  is `point_in_time` while ARR is a contract snapshot.
+  document threshold for outlier contracts (L4). The window is `point_in_time` exactly
+  when no decision measures an amount from a flow (§ Computing ARR, S2), and is then not
+  asked. `resolve` refuses any other window until the user settles it.
 
 An **override** is a decision the company settles differently from what its positions
 derive. It carries a `reason` or a `cite`. A policy whose stated rules need many
@@ -57,7 +56,10 @@ incoherent and asks for the position instead.
 ## The file
 
 One YAML file per company. `arr_policy.py resolve` writes it; `arr_policy.py approve`
-stamps it; nothing else edits a saved policy.
+stamps it; nothing else edits a saved policy. `approve` refuses a file that resolving
+again would change (one edited after `resolve`, or resolved under an older catalog), and
+stamps a digest of what the policy settles. `arr_policy.py check` passes only a file that
+resolving again would not change and that matches its digest.
 
 ```yaml
 # ARR policy. Before you use any value in this file, read how it is applied:
@@ -67,7 +69,7 @@ schema: countz-accounting/arr-policy@1
 apply_per: ${CLAUDE_PLUGIN_ROOT}/reference/ARR_POLICY.md § Applying the policy
 company: Acme Corp
 status: approved                  # draft until `approve`; any re-resolve returns it to draft
-approved: {by: Jane Smith, at: 2026-09-24T22:22:32Z}
+approved: {by: Jane Smith, at: 2026-09-24T22:22:32Z, digest: 3f9a0c6e1b2d4a57}
 purpose: sell_side                # optional; the dial
 documents:                        # where stated rules were read from
   - {path: /abs/ARR policy memo.pdf, title: ARR policy memo, FY2025}
@@ -103,11 +105,17 @@ instructions:                     # free text: how the decisions apply to this b
 - `set_by` on a position: `stated` (a document names the position), `inferred` (from the
   stated decisions it decides), `purpose`, `answer` (the user said so).
 - `set_by` on a convention: `stated`, `answer`, `default` (proposed and approved as shown),
-  `not_needed`.
+  `not_needed`. A composite convention stated in part takes the default for its other
+  fields and lists them in `default_fields`.
 - `basis` on a decision: `derived` (from its positions), `rule`, `convention`, `stated`
-  (a document states it and it agrees with the positions), `override`.
-- Values are the catalog's option ids. A composite decision (S5, R3, R5, R7, L2, L4, V1,
-  V5, A2, A6) is a mapping of fields.
+  (a document states it and it agrees with the positions), `override`. A composite
+  decision stated in part takes the derivation for its other fields and lists them in
+  `derived_fields`; every resolve derives them again, and they never count as stated. A
+  departure from a rule, or from a field the catalog fixes (R5 `outright_sales`), carries
+  `rule_breach: true`.
+- Values are the catalog's option ids. A composite decision (S5, R3, R5, R7, L2, L3, L4,
+  V1, V5, A2, A6) is a mapping of fields. A number of months is 0 or more; a percentage is
+  0 to 100, or `none`.
 - `instructions` are free text (§ Instructions). `source: stated` carries a `cite`,
   `source: inferred` a `basis`; `applies_to` names the decisions an instruction refines,
   or is empty for one that applies throughout.
@@ -115,22 +123,25 @@ instructions:                     # free text: how the decisions apply to this b
 **Stated input.** A document's rules enter as a partial file: `company`, `documents`, and
 under `decisions` each rule the document states, as `{value, basis: stated, cite,
 quote}`. A document that names a position or a convention directly enters under
-`policies` or `conventions` with `set_by: stated`. A stated rule no option can express
-enters under `instructions` with `source: stated` and its `cite`. `resolve` does the rest.
+`policies` or `conventions` with `set_by: stated`. The convention decisions (S2, V4, A1,
+A2, A3, A6) and L4's `document_threshold_pct` hold their convention's value; stated
+under both `decisions` and `conventions`, the two values must agree. A stated rule no
+option can express enters under `instructions` with `source: stated` and its `cite`.
+`resolve` does the rest. It prints each contradiction it cannot settle as an `ERROR` for
+the user to rule on.
 
 ## Instructions
 
-The 31 decisions are generic: they name choices every recurring-revenue business faces.
-A business also has its own products, contracts and channels, and how a decision applies
-to them often cannot be an option id. For example: that a certificate plan counts once
-however many reissues it carries, that a reseller's prepaid balance is not ARR until it
-is drawn, or that a usage tier resetting monthly is annualized at twelve times the tier.
-An **instruction** records that in plain English.
+The 31 decisions are generic. How a decision applies to a business's own products,
+contracts and channels often cannot be an option id; an **instruction** records it in
+plain English. Examples: a certificate plan counts once however many reissues it
+carries; a reseller's prepaid balance is not ARR until it is drawn; a usage tier that
+resets monthly is annualized at twelve times the tier.
 
 - **An instruction refines a decision; it never contradicts one.** It says how a
-  decision's value applies to this business's records. To change the value itself, the
-  decision is overridden, with its reason. An instruction that reads against its
-  decision's value is resolved by the user before the policy is approved.
+  decision's value applies to this business's records. To change the value itself,
+  override the decision with its reason. The user resolves an instruction that reads
+  against its decision's value before the policy is approved.
 - **Three sources.** `stated`: a company document says it, with a `cite`. `user`: the
   user said it, in create-arr-policy or in answer to a question. `inferred`: it follows
   from the policy's own settings, with a `basis` naming them. Every instruction is
@@ -146,8 +157,8 @@ An **instruction** records that in plain English.
   path.
 - **In a run:** pinned at `<run_dir>/arr_policy.yaml` by
   `setup_run.py <run_dir> --arr-policy <file>`, which refuses a policy `arr_policy.py
-  check` does not pass (complete and approved) and records its sha in
-  `run.json.inputs.arr_policy`. The pinned file is never edited. A policy amended during
+  check` does not pass (complete, approved, unchanged since approval) and records its
+  sha in `run.json.inputs.arr_policy`. The pinned file is never edited. A policy amended during
   the run (§ Applying the policy, step 6) replaces it: any approved policy before the plan
   is approved; after that, only one that adds instructions and changes no position,
   convention or decision (`arr_policy.py same-core`). Any other change is a new run.
@@ -165,18 +176,14 @@ of every step the recipe names. From there, § Applying the policy governs, and
 
 This section is the one statement of how an ARR policy is applied. The worker computing a
 figure, the critic reviewing it and the relay recording what they find all follow it.
-The worker and the critic reach it through the recipe, which they read whole and which
-routes every step carrying `params.arr_policy` here (`RECIPE_FORMAT.md` § The
-document), and through the header of the policy file itself. The relay reaches step 6
-through `PLAYBOOK_RECIPES.md` § 4.
 
 **When.** Every step whose `params` carry `arr_policy`, for every figure, population or
 ruling that a decision could move. The critic applies it to every such step it reviews:
 treatment that departs from what this section requires, or a ruling that fails step 5's
 tests, is a `judgment` finding, graded by the amount it moves.
 
-1. **Read the policy.** Run `arr_policy.py render <params.arr_policy>`. It prints the positions, the conventions, all 31 decisions and
-   the instructions.
+1. **Read the policy.** Run `arr_policy.py render <params.arr_policy>`. It prints the
+   positions, the conventions, all 31 decisions and the instructions.
 2. **State what applies, before computing.** Name the decisions the step applies, each
    with its value, and the instructions that refine them: every instruction whose
    `applies_to` names one of those decisions, and every instruction whose `applies_to`
@@ -188,8 +195,7 @@ tests, is a `judgment` finding, graded by the amount it moves.
    policy counts a committed consumption minimum and no record carries the commitment),
    withhold the figure with the `D.` naming the record that would allow it.
 4. **Cite the policy.** Beside every figure a decision or instruction moves, in the
-   figure's description and in the check's narrative, cite their ids: `S5, I1`. The
-   reader traces the number to the policy line that produced it.
+   figure's description and in the check's narrative, cite their ids: `S5, I1`.
 5. **Settle what is still pending, lazily.** A question is pending when this company's
    records raise it and no decision value, override or instruction answers it: a
    certificate reissued under one plan, a prepaid balance drawn down per purchase, a
@@ -199,10 +205,14 @@ tests, is a `judgment` finding, graded by the amount it moves.
      (`DOCTRINE.md` § Materiality). A reading that contradicts a decision's value is
      never inferred. Append it to `<run_dir>/arr_policy/gaps-<check_id>.yaml` under
      `inferred` as `{id: I.<check_id>.<n>, text, applies_to, basis}`, where `basis` names
-     the settings it follows from. Apply it, cite its id, and go on.
+     the settings it follows from. Apply it, cite its id, and go on. An id is permanent
+     across every run over the same company: number `n` above the highest `n` the policy
+     carries for that check id under `I.` or `IQ.`. `amend` refuses an id the policy
+     already gives to another text.
    - **Ask only when it does not.** Where two readings each fit the policy and would move a
      figure beyond materiality, append the question under `questions` as `{id:
-     Q.<check_id>.<n>, question, why, readings, applies_to}`. Compute everything the
+     Q.<check_id>.<n>, question, why, readings, applies_to}`, numbered the same way. Its
+     answer enters the policy as instruction `IQ.<check_id>.<n>`. Compute everything the
      question does not move. Then finish `blocked`, with one blocker per question whose
      `what` begins `ARR policy question Q.<check_id>.<n>` and whose `effect` names the
      figures held for the answer. A step cannot ask the user; the relay does (step 6).
@@ -228,8 +238,6 @@ tests, is a `judgment` finding, graded by the amount it moves.
      <that path>`, and re-dispatch each step that blocked on a question now answered
      (`run_state.py dispatch <run_dir> --checks <check id>`). `amend` skips an addition
      the policy already carries, so the gap files are passed whole every time.
-   - **Instructions accumulate.** Every addition lands in the library policy, so the next
-     run over the same company starts with it and does not ask again.
 
 **The deliverable** states the policy on the Basis of Preparation: the purpose, the four
 positions, the conventions, every override and rule breach with its reason or citation,
@@ -238,12 +246,12 @@ and every instruction with its source.
 ## Computing ARR
 
 This section is the one statement of how ARR, its movements and its retention are
-computed from a policy's values. A recipe says where the figures land (its cube, its
-bridge, its tabs) and which decisions each step turns on; it never says how a
-decision's value becomes a number. That is here, for every decision and every option,
-and the plugin's own tests fail when an option in the catalog has no rule below. An
-instruction refines these rules for one company's records (§ Instructions); a question
-neither reaches is settled per § Applying the policy, step 5.
+computed from a policy's values, for every decision and every option; the plugin's tests
+fail when a catalog option has no rule below. A recipe says where the figures land (its
+cube, its bridge, its tabs) and which decisions each step turns on, never how a
+decision's value becomes a number. An instruction refines these rules for one company's
+records (§ Instructions); a question neither reaches is settled per § Applying the
+policy, step 5.
 
 ### ARR at a date
 
@@ -294,9 +302,11 @@ records show, a month served in part included, annualized as it stands.
 
 **S2 · Measurement window.** How a flow is annualized; it applies to a run-rate S1, to
 usage R1 and R2 count, and to S3, S4 and S5 wherever they take a recognized amount.
-- `point_in_time`: no window; the value in force at the date. Only a contract-based S1
-  with no usage counted takes it: `contract_else_billed`, R1 `commit_plus_usage` and R2
-  `include` each need a window.
+- `point_in_time`: no window; the value in force at the date. The window is
+  `point_in_time` exactly when the policy takes none of these options, each of which
+  measures an amount from a flow: S1 `recognized_run_rate`, `billed_spread` or
+  `contract_else_billed`; S3 `ratable_revenue`; S4 `recognized_revenue`; S5 `timing`
+  `at_issuance`; R1 `commit_plus_usage`; R2 `include`.
 - `month_x12`: the month ending at the date, times twelve.
 - `trailing_3_months`: the three months ending at the date, times four.
 - `trailing_12_months`: the twelve months ending at the date.
@@ -383,11 +393,9 @@ stream already in ARR enters nothing, and its value changes per § Modifications
 stream enters ARR in the latest of these months:
 - the entry month plus `signing_lag_months`. The entry month is the month of the event
   the `entry_event` convention names: `signed`, when the contract is signed, or
-  `booked`, when the order is recorded as booked in the company's records (a booking
-  can follow the signature by days, and fall in the next month). At `0` the entry month
-  itself, at `1` the month after, at `6` the entry month plus six. The lag lets a trial or
-  cancellation period pass before the stream counts; a contract cancelled before its
-  entry month never enters ARR, and is neither new nor churn;
+  `booked`, when the order is recorded as booked in the company's records. A contract
+  cancelled before the month it would enter ARR never enters ARR, and is neither new
+  nor churn;
 - its service start month, under `exclude_report_separately`, where a signed contract
   not yet started is contracted ARR, carried beside ARR on its own line until then.
   Under `include` the service start sets no floor: the stream is ARR from the lag alone;
@@ -406,10 +414,9 @@ one that governs; the other is recorded beside it:
 - `earliest_end`: the earliest end any record shows.
 - `contract_as_amended`: the contract and every amendment to it (an extension, an early
   termination, a change order), wherever the data room holds them: signed documents, an
-  amendment or modification log, CRM contract records. The run identifies those sources
-  in its own data room. Where they disagree with each other, the latest-dated amendment
-  governs; a date only a CRM or billing record shows, with no contract document behind
-  it, is recorded beside the contract's.
+  amendment or modification log, CRM contract records. Where they disagree with each
+  other, the latest-dated amendment governs; a date only a CRM or billing record shows,
+  with no contract document behind it, is recorded beside the contract's.
 
 Where no record dates a contract's end, the end is a pending question. A stream measured
 from revenue or billing rather than a contract (a run-rate S1, the billed leg of
@@ -419,15 +426,13 @@ none.
 **L3 · Renewal gaps, holdover and grace periods.** The last month end a contract is
 carried, and so the month it churns. Its end is dated by L2. `treatment`:
 - `grace_window`: the contract is carried at every month end on or before its end date,
-  and at the first `grace_months` month ends after it. At `0`, a contract ending on the
-  15th is out at that month's end; one ending on the month's last day is carried at
-  it, being in force that day. At `1`, the month the contract ends in part-way is
-  carried whole, as a company billing whole months bills it. At `3`, a late renewal has
-  three months to arrive.
+  and at the first `grace_months` month ends after it. Examples: at `0`, a contract
+  ending on the 15th is out at that month's end, and one ending on the month's last day
+  is carried at it; at `1`, the month the contract ends in part-way is carried whole; at
+  `3`, a late renewal has three months to arrive.
 - `continuation`: the contract is carried at every month end on or before its end date,
-  and after it at every month end it is still billed or recognized for, as billing a
-  whole month carries the month it ends in; then at the first `grace_months` month ends
-  after the last of those.
+  and after it at every month end it is still billed or recognized for; then at the
+  first `grace_months` month ends after the last of those.
 - `until_renewal`: the contract is carried at every month end on or before its end date.
   Where the records show its renewal, booked before or after its end, it is also carried
   at every month end after its end until the renewal's first month in ARR, however long
@@ -456,10 +461,11 @@ monthly value of the months it served, never annualized beyond them; `annualize`
 rule breach) carries it at its annual value while in force; `exclude` (a rule breach)
 carries it at no month end, those before its termination included: it never enters ARR,
 and is neither new nor churn. Measured on the records as they stand, so a month reported
-before the termination was recorded is restated. `document_threshold_pct`
-(the `outlier_threshold_pct` convention): a contract whose annualized value exceeds that share of total ARR at the first date it is
-in force enters ARR only with the signed order form or amendment that evidences it;
-without one it is withheld with its `D.`. At `none`, no contract is held to this test.
+before the termination was recorded is restated. `document_threshold_pct` (the
+`outlier_threshold_pct` convention): a contract whose annualized value exceeds that
+share of total ARR at the first date it is in force enters ARR only with the signed
+order form or amendment that evidences it; without one it is withheld with its `D.`. At
+`none`, no contract is held to this test.
 
 **L5 · Stub, co-term and month-to-month contracts.**
 - `exclude`: none of them carries ARR.
@@ -552,9 +558,8 @@ values, and one the values do not settle is an exception at its amount.
 **A1 · Mid-term modifications: bridge classes.** Whether expansion and contraction are
 split into fixed classes.
 - `expansion_contraction`: no split. A same-customer increase is expansion and a
-  decrease is contraction, which is all net revenue retention needs. Any finer
-  analysis of why a customer's ARR moved is the recipe's, built on the dimensions the
-  data room carries, never on labels fixed in the policy.
+  decrease is contraction. Any finer analysis of why a customer's ARR moved belongs to
+  the recipe, on the dimensions the data room carries.
 - `register_type`: the class the modification register gives the change; a change with
   no register row is classed by `price_vs_quantity`.
 - `price_vs_quantity`: the same product and quantity at another unit price is price

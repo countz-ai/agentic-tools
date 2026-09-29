@@ -103,10 +103,129 @@ def main() -> int:
                 bad.append("frame height")
         except ImportError:
             pass
+        _hardening(td, bad, refuses)
     for b in bad:
         print("FAIL", b)
     print("items: ok" if not bad else "items: self-check FAILED")
     return 1 if bad else 0
+
+
+def _row(i, **kw) -> dict:
+    return {"item_id": f"I.{i}", "side": "book", "period": "fy2025", "amount": 1.0,
+            "unit": "usd", **kw}
+
+
+def _hardening(td, bad: list[str], refuses) -> None:
+    """Each refusal, beside its valid neighbour."""
+    import datetime
+    import decimal
+    import numpy as np
+    import polars as pl
+
+    def takes(what, fn, *a, **k):
+        try:
+            return fn(*a, **k)
+        except ItemsError as exc:
+            bad.append(f"{what}: refused: {exc}")
+            return None
+
+    # the path: a check id has no '-' and a table name no upper case, so no two tables share a file
+    for what, check, name in (("check with '-'", "c4-a", "b"), ("upper-case table", "c5", "Matches"),
+                              ("upper-case check", "C5", "m"), ("tab in name", "c5", "a\tb"),
+                              ("newline in name", "c5", "a\n"), ("colon", "c5", "a:b")):
+        if not refuses(write_items, td, check, name, [_row(1)]):
+            bad.append(f"table path accepted: {what}")
+    if takes("a hyphenated table name", write_items, td, "c4", "book-only", [_row(1)]) is None \
+            or read_items(td, "c4", "book-only")[0]["item_id"] != "I.1":
+        bad.append("a hyphenated table name under a check id does not round-trip")
+
+    # numpy scalars are written as the number they hold, never as np.float64(...)
+    takes("numpy cells", write_items, td, "c6", "np",
+          [_row(1, amount=np.float64(2.5), days=np.float64(12.5), n=np.int64(3))],
+          extensions=["days", "n"])
+    text = (pathlib.Path(td) / "checks" / "c6-np.csv").read_text()
+    if "np." in text or "I.1,book,fy2025,2.5,usd,12.5,3" not in text:
+        bad.append(f"numpy cells written as {text!r}")
+
+    # a zero-row table read as a frame keeps its columns; the types do not depend on the rows
+    write_items(td, "c6", "empty", [], extensions=["class"])
+    f = read_items(td, "c6", "empty", frame=True)
+    if f.columns != ["item_id", "side", "period", "amount", "unit", "class"] or f.height:
+        bad.append(f"a zero-row frame lost its columns: {f.columns}")
+    write_items(td, "c6", "roster", [{"item_id": "R1", "side": "gl"}])
+    s = dict(read_items(td, "c6", "roster", frame=True).schema)
+    if s["amount"] != pl.Float64 or s["period"] != pl.String:
+        bad.append(f"a roster frame's types: {s}")
+
+    # amounts: refused where a float would change them; plain numbers of any type accepted
+    for what, v in (("int beyond 2**53", 2**53 + 1),
+                    ("Decimal beyond a float", decimal.Decimal("12345678901234567.89")),
+                    ("too large for a float", 10**400), ("underscores", "1_000"),
+                    ("non-ASCII digits", "١٢٣"), ("grouping", "1,000"), ("a word", "nan"),
+                    ("a bool", True)):
+        if not refuses(write_items, td, "c7", "amt", [_row(1, amount=v)]):
+            bad.append(f"amount accepted: {what}")
+    ok = [(2**53, 2.0**53), (decimal.Decimal("1204.40"), 1204.4), (" 5e2 ", 500.0),
+          (np.int64(7), 7.0), (np.float32(0.5), 0.5), ("-0.10", -0.1)]
+    m = takes("plain amounts", write_items, td, "c7", "ok",
+              [_row(i, amount=v) for i, (v, _) in enumerate(ok)])
+    if m is not None and [r["amount"] for r in read_items(td, "c7", "ok")] != [x for _, x in ok]:
+        bad.append(f"plain amounts read back as {[r['amount'] for r in read_items(td, 'c7', 'ok')]}")
+
+    # the vocabulary: a list of non-empty strings; what write accepts, read accepts
+    for what, word, kw in (("int classes", 1, dict(classes=[1, 2])),
+                           ("classes as a string", "matched", dict(classes="matched")),
+                           ("empty word", "", dict(classes=["", "matched"])),
+                           ("sides as a string", "matched", dict(sides="book"))):
+        if not refuses(write_items, td, "c8", "v", [_row(1, cls=word)], extensions=["cls"],
+                       class_column="cls", **kw):
+            bad.append(f"vocabulary accepted: {what}")
+    vk = dict(extensions=["cls"], class_column="cls", classes=["matched", None], sides=["1", "book"])
+    takes("None in classes, an int side", write_items, td, "c8", "v",
+          [_row(1, cls=None), {**_row(2, cls="matched"), "side": 1}], **vk)
+    back = takes("the same table read back", read_items, td, "c8", "v", **vk)
+    if back is not None and [(r["side"], r["cls"]) for r in back] != [("book", None),
+                                                                      ("1", "matched")]:
+        bad.append(f"vocabulary round trip: {back}")
+
+    # extensions compare as a set; a repeated name is refused
+    write_items(td, "c9", "ord", [_row(1, a="x", b="y")], extensions=["a", "b"])
+    takes("extensions in another order", read_items, td, "c9", "ord", extensions=["b", "a"])
+    if not refuses(read_items, td, "c9", "ord", extensions=["a", "b", "a"]):
+        bad.append("read_items accepted a repeated extension")
+
+    # the period: a period key or an ISO date; a date is written as its ISO date
+    for what, p in (("not a period", "not a period"), ("a datetime",
+                                                       datetime.datetime(2025, 1, 31)),
+                    ("upper case", "FY2025"), ("padded", " fy2025"), ("bad date", "2025-02-30"),
+                    ("a float", 2025.0)):
+        if not refuses(write_items, td, "c10", "p", [{**_row(1), "period": p}]):
+            bad.append(f"period accepted: {what}")
+    good = ["fy2025", "2025-12", "2026q1", "ltm_2025-12", "2025-01-31",
+            datetime.date(2025, 1, 31), None]
+    takes("period keys and dates", write_items, td, "c10", "p",
+          [{**_row(i), "period": p} for i, p in enumerate(good)])
+    if [r["period"] for r in read_items(td, "c10", "p")] != \
+            ["fy2025", "2025-12", "2026q1", "ltm_2025-12", "2025-01-31", "2025-01-31", None]:
+        bad.append(f"periods read back as {[r['period'] for r in read_items(td, 'c10', 'p')]}")
+
+    # the manifest's stated fields keep their shapes
+    for what, kw in (("citations as a string", dict(citations={"book": "E.c11.gl"})),
+                     ("a citation that is not an E. id", dict(citations={"book": ["F.c11.x"]})),
+                     ("a citation for an undeclared side",
+                      dict(citations={"bank": ["E.c11.b"]}, sides=["book"])),
+                     ("keys as a string", dict(keys="deposit_id")),
+                     ("an empty closes", dict(closes=" "))):
+        if not refuses(write_items, td, "c11", "m", [_row(1)], **kw):
+            bad.append(f"manifest field accepted: {what}")
+    m = takes("stated fields", write_items, td, "c11", "m", [_row(1)], sides=["book", "bank"],
+              keys=(k for k in ["deposit_id"]), citations={"bank": ["E.c11.b"]},
+              closes="F.c11.total")
+    if m is not None and (m["keys"] != ["deposit_id"] or m["citations"] != {"bank": ["E.c11.b"]}):
+        bad.append(f"stated fields recorded as {m['keys']} {m['citations']}")
+    left = [p.name for p in (pathlib.Path(td) / "checks").iterdir() if p.name.endswith(".tmp")]
+    if left:
+        bad.append(f"temporary files left in checks/: {left}")
 
 
 if __name__ == "__main__":

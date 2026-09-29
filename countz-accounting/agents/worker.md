@@ -91,10 +91,13 @@ Where one fits:
 - `resolve.py` — `resolve()`: two streams of transactions matched by ordered rules, as
   reconciliation software does; every match names its rule, every other item is an
   exception with its reason. `from_assignment()`: a match built with joins, as the same
-  result.
+  result. Both refuse float or decimal ids and keys, time-zoned datetimes and non-ISO
+  date text, and take `end=`, the statement's end.
 - `match_tabs.py` — `match_tabs()`: the match summary, schedule, reconciling items and
-  rules of a reconciliation, from `resolve()` or `from_assignment()` (`WORKBOOK.md` § 6).
-- `items.py` — item tables and their manifest (`EVIDENCE.md` § 5).
+  rules of a reconciliation, from `resolve()` or `from_assignment()` (`WORKBOOK.md` § 6);
+  it needs `right_population` as well as `population`.
+- `items.py` — item tables and their manifest (`EVIDENCE.md` § 5); a table name is
+  lower case.
 - `rework.py` — `snapshot()` before a fix pass, `diff_ledger()` after, to state what moved.
 
 ## What you never do

@@ -279,12 +279,12 @@ Example, the same page message stated well and badly:
 
 ## 4. Style
 
-The deck is in the Countz deck system, held in px by `scripts/design/slide_layout.py` in
-the monorepo and mirrored in inches and points by `build_report.py`. Inter throughout. A
-bone ground (`F5F3EE`); ink for headlines and figures; a dark-grey body text; a muted
-grey for labels, notes, footers and the message under a headline; one teal accent as a
-3 px rule above a block, on kickers and on chart series. Bone hairlines between table
-rows, no vertical rules or fills. In every table the first column reads left and every
+The deck is in the Countz deck system, which `build_report.py` holds: layout, type and
+colors. Inter throughout. A sea-foam ground
+(`F7F6F3`); ink (`1C2130`) for headlines and figures; secondary ink (`484C57`) for body
+text; muted ink (`5E616A`) for labels, notes, footers and the message under a headline;
+one teal (`0A5F6A`) as a 3 px rule above a block, on kickers and on chart series. Border
+hairlines (`D8D8D9`) between table rows, no vertical rules or fills. In every table the first column reads left and every
 other column reads right, header and body alike. The three semantic states appear on
 status words only, as text. Negatives in parentheses; zero as an en dash in a table and
 `$0` in a sentence. Every page ends in the teal band: the page's optional `tagline` on

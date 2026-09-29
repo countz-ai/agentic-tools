@@ -180,22 +180,25 @@ tab states `No item grain:` (check-recon § 3).
   and the right items matched and not in the book.
 - `<token> Match schedule` has one row per left item: its label, date, amount, status, the
   rule that matched it and its match group, what it matched to, the difference a rule
-  tolerated, and why an unmatched item is unmatched (no candidate, or more than one). It
+  tolerated (on the group's first row only, so the column sums to the difference lines),
+  and why an unmatched item is unmatched (no candidate, or more than one). It
   is sorted by status in the summary's order, so each status is one block of rows, and its
   AutoFilter sits on the header.
 - `<token> Reconciling items` (`<token> Recon items` where the name would pass 31
   characters) is the reconciliation, each line a figure, net and gross (its positive and
   negative items apart, adding to the net): the left items per books; less those in
   transit; less those not matched; each difference a rule tolerated; plus the right items
-  not in the book; the right items per bank. Then every item not matched, with its age at
-  the statement's end.
+  not in the book; the right items per bank. Then every item not matched (the ones kept
+  out with cash included), with its age at the statement's end (`res.end`).
 - `<token> Match rules` (`<token> Rules` where the name would pass 31 characters) lists the
   rules in the order they ran, each with its criteria and what it matched.
 
 A hyperlink cannot apply a filter; the link selects the status's block instead, and
 `check_workbook.py` GATE 6 refuses a line whose count or amount differs from the schedule
 filtered on its status, and a reconciliation that does not foot. The tabs belong to the
-check (the token leads their names) and are copied like its other tabs.
+check (the token leads their names) and are copied like its other tabs; a check with two
+reconciliations writes two sets, each under its own token, the later set ahead of the
+earlier.
 
 **Basis of Preparation** — what the run stood on and how to read what it produced.
 Tables, not paragraphs, in this order:

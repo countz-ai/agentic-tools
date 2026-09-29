@@ -44,8 +44,11 @@ is recorded as a blocker. Place each posting and each bank line on its **local**
 filter with `Period.mask` / `local_date`, which convert a timezone-aware timestamp to
 `params.timezone` before taking the date (a UTC export otherwise moves a 23:30 posting on
 the period end into the next period), and refuse a timezone-aware column when no zone is
-declared. State the populations: every book posting and every bank line dated inside the
-window, each side with its count and control total, cited as spans.
+declared. They also refuse a string or integer date column (`"09/30/2025"`,
+`20250930`): parse it to `Date` or `Datetime` first, in the file's own format
+(`str.to_date("%m/%d/%Y")`), never by guess. State the populations: every book posting
+and every bank line dated inside the window, each side with its count and control
+total, cited as spans.
 
 ## 2. Trace both directions
 

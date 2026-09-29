@@ -87,6 +87,13 @@ label or window typed per check drifts between tabs.
 
 - Report, don't advocate. State procedures performed, figures produced, and quantified
   differences. The reader forms the opinion.
+- **American English, in spelling and grammar, on every surface**: tabs, notes, open
+  items, the deck. *Behavior*, *catalog*, *aging*, *labeled*, *canceled*, *installment*,
+  *uncollectible*, *reorganization*, *judgment*, *analyze*. A collective noun takes a
+  singular verb: *management represents*, *the company holds*. Words taken from a recipe,
+  a source file or another check's tab are respelled when written into ours. A record's
+  own text stays as the record spells it: an identifier, a file, sheet or column name, a
+  quoted memo line.
 - **Procedures are first-person plural, past tense, active.** *We agreed*, *we traced*,
   *we reconciled*, *we vouched*, *we were unable to obtain*. Never the passive (*is
   stated*, *was measured*, *is carried*, *were tested*), never an agentless verb (*the
@@ -119,7 +126,7 @@ label or window typed per check drifts between tabs.
   power is expanding, and the gap is concentrated in…"), no sentence written to land a
   beat, no intensifiers (*dramatically*, *robust*, *stellar*, *very strong*). The number
   carries the weight.
-- **Judgements stay.** A judgment's `nature` (`good`/`bad`/`neutral`) and `confidence`
+- **Judgments stay.** A judgment's `nature` (`good`/`bad`/`neutral`) and `confidence`
   are part of the contract. State the observed condition and its quantified consequence.
 - **Answer-first stays.** Lead with the finding, then the evidence. "We identified FY20XX
   Adjusted EBITDA of $X" is answer-first and flat.

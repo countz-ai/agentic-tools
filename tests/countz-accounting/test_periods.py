@@ -14,7 +14,7 @@ import sys
 # The plugin under test: <repo>/countz-accounting/scripts, from <repo>/tests/countz-accounting.
 SCRIPTS = pathlib.Path(__file__).resolve().parents[2] / "countz-accounting" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
-from periods import DASH, FiscalCalendar, Period, Periods, cutoff_spec, fy_of, month_key, month_seq, parse_fiscal_year_end, window  # noqa: E402
+from periods import DASH, FiscalCalendar, Period, Periods, add_business_days, check_key, cutoff_spec, fy_of, local_date, month_key, month_seq, parse_fiscal_year_end, window  # noqa: E402
 
 
 def main() -> int:
@@ -50,6 +50,11 @@ def main() -> int:
     # Parent and subsidiary on different year ends.
     group = {"by_entity": {"us_parent": "12-31", "jp_sub": jp}}
     SS = ["sat", "sun"]
+    NY = "America/New_York"
+    # 03:30Z on October 1 is 23:30 on September 30 in New York.
+    aware = dt.datetime(2025, 10, 1, 3, 30, tzinfo=dt.timezone.utc)
+    naive = dt.datetime(2025, 10, 1, 3, 30)
+    y999 = {"years": [{"name": 999, "start": "0999-01-01", "end": "0999-12-31"}]}
     checks = [
         (fy25.start, D(2024, 10, 1)), (fy25.end, D(2025, 9, 30)),
         (len(fy25.months), 12), (fy25.label(), "FY2025"), (fy25.label("snapshot"), "FY2025"),
@@ -118,6 +123,30 @@ def main() -> int:
         (Period.parse("fy2025", w53).label(), "FY2025"),
         (Period.parse("ltm_2025-06", w53).months[0], "2024-07"),
         (Period.parse("ltm_2025-06", w53).label(), "LTM June 2025"),
+        # a single timestamp is placed on the local date, as a column is
+        (fy_of(aware, "09-30", timezone=NY), "fy2025"),
+        (fy_of(naive, "09-30"), "fy2026"),                          # naive: wall time
+        (fy_of(naive, "09-30", timezone=NY, source_timezone="UTC"), "fy2025"),
+        (Periods(["fy2025"], "09-30", timezone=NY).fy_of(aware), "fy2025"),
+        (Periods(["fy2025"], "09-30", timezone=NY)["fy2025"].contains(aware), True),
+        (Period.parse("fy2025", "09-30").contains(naive), False),
+        (month_key(aware, NY), "2025-09"), (month_key("2025-09-30"), "2025-09"),
+        # a DST-overlap wall time whose two instants share one local date is placed
+        (fy_of(dt.datetime(2025, 11, 2, 1, 30), "09-30", timezone=NY,
+               source_timezone="America/Los_Angeles"), "fy2026"),
+        (fy_of(dt.datetime(2025, 11, 2, 1, 30), "09-30", timezone=NY, source_timezone=NY),
+         "fy2026"),
+        # a month-end calendar places any date; a declared name keeps its four digits
+        (fy_of(D(1900, 5, 1), "09-30"), "fy1900"), (fy_of(D(2200, 1, 1), "09-30"), "fy2200"),
+        (Period.parse("fy1949", "12-31").start, D(1949, 1, 1)),
+        (fy_of(D(999, 6, 1), y999), "fy0999"), (Period.parse("fy0999", y999).end, D(999, 12, 31)),
+        # a month wholly inside one declared year is placed
+        (fy_of("2025-08", w53), "fy2025"), (fy_of((2025, 8), w53), "fy2025"),
+        # a calendar-month column needs no calendar for its entity
+        (Periods(["2025-12"], group, entity="uk").keys, ["2025-12"]),
+        (window("2025-09-30", 1, 0), (D(2025, 9, 29), D(2025, 9, 30))),
+        (add_business_days("2025-09-30", 2, weekend=SS), D(2025, 10, 2)),
+        (check_key("ytd_2025-12"), None),
     ]
     bad = [f"got {got!r}, want {want!r}" for got, want in checks if got != want]
     refusals = [
@@ -156,6 +185,36 @@ def main() -> int:
         lambda: Periods(["2025-09", "w2025-08-16_2025-09-30"]).months,
         lambda: Period.parse("ytd_2024-12", hist),                  # ytd on declared years
         lambda: Period.parse("ytd_2025-06", w53),
+        # a timezone-aware timestamp with no zone, or with a contradicting source zone
+        lambda: fy_of(aware, "09-30"), lambda: month_key(aware),
+        lambda: Period.parse("fy2025", "09-30").contains(aware),
+        lambda: fy_of(aware, "09-30", timezone=NY, source_timezone="Asia/Tokyo"),
+        lambda: month_seq(aware, "2025-12"),
+        # a wall time in the DST gap; an overlap wall time on two local dates
+        lambda: fy_of(dt.datetime(2025, 3, 9, 2, 30), "09-30", timezone=NY, source_timezone=NY),
+        lambda: fy_of(dt.datetime(2025, 10, 26, 1, 30), "09-30", timezone="Atlantic/Cape_Verde",
+                      source_timezone="Europe/London"),
+        lambda: Periods(["fy2025"], "09-30", timezone="America/NewYork"),
+        # keys outside the grammar: a trailing newline, non-ASCII digits, month 13
+        lambda: check_key("fy2025\n"), lambda: check_key("fy\uff12\uff10\uff12\uff15"),
+        lambda: check_key("\u0662\u0660\u0662\u0665-\u0661\u0662"),
+        lambda: check_key("ytd_2025-13"), lambda: Periods(["fy2025", "fy2025\n"], "09-30"),
+        # a month a declared year boundary splits
+        lambda: fy_of("2025-09", w53), lambda: fy_of((2025, 9), w53),
+        lambda: Periods(["fy2024"], group, entity="uk"),            # fiscal, no calendar
+        lambda: Periods(["2025-12"], "09-15"),                      # a bad calendar still
+        lambda: FiscalCalendar.parse({"years": [{"name": 10000, "start": "2025-01-01",
+                                                  "end": "2025-12-31"}]}),
+        lambda: FiscalCalendar.parse("09-30").quarter(2025, 0),
+        lambda: FiscalCalendar.parse("09-30").half(2025, 3),
+        lambda: window("2025-09-30", 10 ** 7, 0),
+        lambda: cutoff_spec({"period_ends": ["2025-09-30"], "before": 10 ** 7, "after": 0}),
+        lambda: add_business_days("2025-09-30", 2.7, weekend=SS),
+        lambda: add_business_days("2025-09-30", True, weekend=SS),
+        lambda: month_key("2025-02-30"), lambda: month_key("2025-09-30T10:00"),
+        lambda: month_seq("2025-02-31", "2025-03"),
+        lambda: Periods(["2025-12"], labels={"2025-12": 2025}),
+        lambda: Periods(["2025-12"], labels={"2025-12": " "}),
     ]
     for i, f in enumerate(refusals):
         try:
@@ -171,6 +230,65 @@ def main() -> int:
             {"id": "c", "params": {"fiscal_year_end": "September"}}]}))
         if Periods.load(tmp, "a")["fy2025"].end != D(2025, 9, 30):
             bad.append("load: `09-30` and `September` did not agree")
+
+    def load(checks, check):
+        with tempfile.TemporaryDirectory() as tmp:
+            (pathlib.Path(tmp) / "run.json").write_text(json.dumps({"checks": checks}))
+            return Periods.load(tmp, check)
+    us = {"by_entity": {"us_parent": "12-31"}}
+    jps = {"by_entity": {"jp_sub": jp}}
+    runs = [
+        # one entity: the zone any check declares
+        ([{"id": "a", "params": {"columns": ["fy2025"], "fiscal_year_end": "09-30"}},
+          {"id": "b", "params": {"timezone": NY}}], "a", lambda P: P.timezone, NY),
+        # many entities: never another entity's zone; the zone of a check naming this one
+        ([{"id": "us", "params": {"columns": ["fy2024"], "entities": ["us_parent"],
+                                  "fiscal_year_end": group}},
+          {"id": "jp", "params": {"columns": ["fy2024"], "entities": ["jp_sub"],
+                                  "fiscal_year_end": group, "timezone": "Asia/Tokyo"}}],
+         "us", lambda P: P.timezone, None),
+        ([{"id": "us", "params": {"entities": ["us_parent"], "timezone": NY}},
+          {"id": "jp", "params": {"entities": ["jp_sub"], "timezone": "Asia/Tokyo"}},
+          {"id": "c", "params": {"columns": ["2024-12"], "entities": ["us_parent"]}}],
+         "c", lambda P: P.timezone, NY),
+        ([{"id": "us", "params": {"entities": ["us_parent"], "timezone": NY}},
+          {"id": "jp", "params": {"entities": ["jp_sub"], "timezone": "Asia/Tokyo"}},
+          {"id": "c", "params": {"columns": ["2024-12"]}}], "c", lambda P: P.timezone, None),
+        # by_entity maps on different checks merge entity by entity
+        ([{"id": "a", "params": {"fiscal_year_end": us}}, {"id": "b", "params":
+          {"fiscal_year_end": jps}}, {"id": "c", "params": {"columns": ["fy2024"],
+                                                             "entities": ["us_parent"]}},
+          {"id": "d", "params": {"columns": ["fy2024"], "entities": ["jp_sub"]}}],
+         "c", lambda P: P["fy2024"].end, D(2024, 12, 31)),
+        ([{"id": "a", "params": {"fiscal_year_end": us}}, {"id": "b", "params":
+          {"fiscal_year_end": jps}}, {"id": "d", "params": {"columns": ["fy2024"],
+                                                             "entities": ["jp_sub"]}}],
+         "d", lambda P: P["fy2024"].end, D(2025, 3, 31)),
+    ]
+    for i, (checks, check, got, want) in enumerate(runs):
+        try:
+            if got(load(checks, check)) != want:
+                bad.append(f"load case {i}: got {got(load(checks, check))!r}, want {want!r}")
+        except ValueError as exc:
+            bad.append(f"load case {i} refused: {exc}")
+    for i, checks in enumerate([
+            # one check covering two entities whose checks declare two zones
+            [{"id": "us", "params": {"entities": ["us_parent"], "timezone": NY}},
+             {"id": "jp", "params": {"entities": ["jp_sub"], "timezone": "Asia/Tokyo"}},
+             {"id": "c", "params": {"columns": ["2024-12"], "entities": ["us_parent",
+                                                                          "jp_sub"]}}],
+            # one entity's calendar read two ways; the two forms mixed
+            [{"id": "a", "params": {"fiscal_year_end": us}},
+             {"id": "b", "params": {"fiscal_year_end": {"by_entity": {"us_parent": "06-30"}}}},
+             {"id": "c", "params": {"columns": ["fy2024"], "entities": ["us_parent"]}}],
+            [{"id": "a", "params": {"fiscal_year_end": "12-31"}},
+             {"id": "b", "params": {"fiscal_year_end": jps}},
+             {"id": "c", "params": {"columns": ["fy2024"], "entities": ["jp_sub"]}}]]):
+        try:
+            load(checks, "c")
+            bad.append(f"load refusal case {i} was accepted")
+        except ValueError:
+            pass
     try:
         import polars as pl
         df = pl.DataFrame({"d": [D(2024, 9, 30), D(2024, 10, 1), D(2025, 12, 31)]})
@@ -229,6 +347,61 @@ def main() -> int:
         except Exception as exc:                    # polars wraps the ValueError
             if "timezone" not in str(exc):
                 bad.append(f"mask: unexpected error {exc}")
+
+        def refused(what, frame, e, words):         # polars keeps the ValueError's text
+            try:
+                frame.select(e)
+                bad.append(f"{what}: accepted")
+            except Exception as exc:                # noqa: BLE001
+                if words not in str(exc):
+                    bad.append(f"{what}: unexpected error {exc}")
+        # a column that is not a date or datetime is refused, never cast by guess
+        ints = pl.DataFrame({"d": [20250930]})
+        refused("mask on yyyymmdd ints", ints, fy25.mask(pl.col("d")), "not a date")
+        refused("fy_of on Int32", ints, fy_of(pl.col("d").cast(pl.Int32), "09-30"), "not a date")
+        refused("mask on ISO strings", pl.DataFrame({"d": ["2025-09-30"]}),
+                fy25.mask(pl.col("d")), "not a date")
+        if pl.DataFrame({"d": [None]}).select(fy25.mask(pl.col("d")))["d"].to_list() != [None]:
+            bad.append("mask: an all-null column did not read as null dates")
+        # the slug keeps the input column's name on either calendar form
+        if df.with_columns(fy_of(pl.col("d"), "09-30")).columns != ["d"] or \
+                df.tail(2).select(fy_of(pl.col("d"), "09-30"), fy_of(pl.col("d"), sep).alias("x")
+                          ).columns != ["d", "x"]:
+            bad.append("fy_of: the slug column is not named for its input")
+        old = pl.DataFrame({"d": [D(1900, 5, 1), D(2200, 1, 1)]})
+        if old.select(fy_of(pl.col("d"), "09-30"))["d"].to_list() != ["fy1900", "fy2200"]:
+            bad.append("fy_of expr: a month-end calendar did not place any date")
+        # DST: the gap refused, an overlap on two local dates refused, one on one date placed
+        gap = pl.DataFrame({"t": [dt.datetime(2025, 3, 9, 2, 30)]})
+        refused("DST gap", gap, fy_of(pl.col("t"), "09-30", timezone=NY, source_timezone=NY),
+                "never occur")
+        ldn = pl.DataFrame({"t": [dt.datetime(2025, 10, 26, 1, 30)]})
+        refused("DST overlap on two dates", ldn, fy25.mask(pl.col("t"), "Atlantic/Cape_Verde",
+                                                            "Europe/London"), "occur twice")
+        fall = pl.DataFrame({"t": [dt.datetime(2025, 11, 2, 1, 30)]})
+        got = fall.select(fy_of(pl.col("t"), "09-30", timezone=NY,
+                                source_timezone="America/Los_Angeles"))["t"].to_list()
+        if got != ["fy2026"]:
+            bad.append(f"DST overlap on one local date: {got}")
+        # a source zone on an aware column must be the column's own
+        refused("source_timezone on an aware column", utc,
+                ny.mask(pl.col("t"), source_timezone="Asia/Tokyo"), "already carries")
+        if utc.select(ny.mask(pl.col("t"), source_timezone="UTC"))["t"].to_list() != [True]:
+            bad.append("mask: a source_timezone equal to the column's zone was refused")
+        try:
+            local_date(pl.col("t"), "America/NewYork")
+            bad.append("local_date: accepted a zone that is not IANA")
+        except ValueError:
+            pass
+        # a timezone-aware column is never read in another entity's zone: refused
+        P = load([{"id": "us", "params": {"columns": ["fy2024"], "entities": ["us_parent"],
+                                          "fiscal_year_end": group}},
+                  {"id": "jp", "params": {"columns": ["fy2024"], "entities": ["jp_sub"],
+                                          "fiscal_year_end": group, "timezone": "Asia/Tokyo"}}],
+                 "us")
+        dec31 = pl.DataFrame({"t": [dt.datetime(2025, 1, 1, 1, 0)]}).with_columns(
+            pl.col("t").dt.replace_time_zone("UTC"))    # 20:00 on December 31 in New York
+        refused("another entity's zone", dec31, P["fy2024"].mask(pl.col("t")), "timezone")
     except ImportError:
         pass
     for b in bad:

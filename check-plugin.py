@@ -1822,7 +1822,7 @@ def check(root: pathlib.Path) -> list[str]:
                             f'<row r="4">{c("B4", "id", 2)}{c("C4", "line", 2)}</row>']
                     rows += [f'<row r="{i}">{c(ref, v)}</row>'
                              for i, (ref, v) in enumerate(body.items(), 5)]
-                    pre = ('<sheetPr><tabColor rgb="FF0F756D"/></sheetPr><sheetViews><sheetView '
+                    pre = ('<sheetPr><tabColor rgb="FF0A5F6A"/></sheetPr><sheetViews><sheetView '
                            f'workbookViewId="0" showGridLines="0"><pane xSplit="1" ySplit="{split}" '
                            f'topLeftCell="B{split + 1}" activePane="bottomRight" state="frozen"/></sheetView>'
                            '</sheetViews>')
@@ -1835,17 +1835,17 @@ def check(root: pathlib.Path) -> list[str]:
 
             styles = (f'<?xml version="1.0"?><styleSheet xmlns="{ns}"><numFmts count="1">'
                       '<numFmt numFmtId="164" formatCode="#,##0;(#,##0);&quot;–&quot;"/></numFmts>'
-                      '<fonts count="4"><font><sz val="10"/><color rgb="FF1C2A2A"/><name val="Arial"/></font>'
-                      '<font><b/><sz val="14"/><color rgb="FF1C2A2A"/><name val="Arial"/></font>'
+                      '<fonts count="4"><font><sz val="10"/><color rgb="FF1C2130"/><name val="Arial"/></font>'
+                      '<font><b/><sz val="14"/><color rgb="FF1C2130"/><name val="Arial"/></font>'
                       '<font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Arial"/></font>'
-                      '<font><sz val="10"/><color rgb="FF566665"/><name val="Arial"/></font></fonts>'
+                      '<font><sz val="10"/><color rgb="FF5E616A"/><name val="Arial"/></font></fonts>'
                       '<fills count="3"><fill><patternFill patternType="none"/></fill>'
                       '<fill><patternFill patternType="gray125"/></fill>'
-                      '<fill><patternFill patternType="solid"><fgColor rgb="FF005C53"/></patternFill></fill></fills>'
+                      '<fill><patternFill patternType="solid"><fgColor rgb="FF0A5F6A"/></patternFill></fill></fills>'
                       '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>'
-                      '<border><left style="thin"><color rgb="FFD3DAD8"/></left><right style="thin">'
-                      '<color rgb="FFD3DAD8"/></right><top style="thin"><color rgb="FFD3DAD8"/></top>'
-                      '<bottom style="thin"><color rgb="FFD3DAD8"/></bottom><diagonal/></border></borders>'
+                      '<border><left style="thin"><color rgb="FFD8D8D9"/></left><right style="thin">'
+                      '<color rgb="FFD8D8D9"/></right><top style="thin"><color rgb="FFD8D8D9"/></top>'
+                      '<bottom style="thin"><color rgb="FFD8D8D9"/></bottom><diagonal/></border></borders>'
                       '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
                       '<cellXfs count="5"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
                       '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0"/>'
@@ -2276,7 +2276,7 @@ def check(root: pathlib.Path) -> list[str]:
             if b == wk:
                 continue
             t = b.read_text()
-            if "005C53" in t and "NamedStyle(" in t:
+            if "0A5F6A" in t and "NamedStyle(" in t:
                 bad.append(f"{rel(b)}: carries its own copy of the workbook kit - import "
                            f"scripts/wbkit.py instead")
         for doc in ("reference/WORKBOOK.md", "reference/WORKBOOK_STYLE.md"):

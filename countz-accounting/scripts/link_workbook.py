@@ -96,7 +96,7 @@ EXEC = "Exec Summary"
 RUN_TABS = {"exec_summary", "basis_of_preparation", "coverage", "open_items", "sources", "evidence"}
 # Which ledger tab an id prefix resolves on. Every other prefix homes where it is stated.
 LEDGER = {"F": SOURCES, "P": SOURCES, "E": EVIDENCE}
-LINK_COLOR = "0F756D"   # WORKBOOK_STYLE.md § 1a `ACCENT`; the cell keeps its own font
+LINK_COLOR = "0A5F6A"   # WORKBOOK_STYLE.md § 1a `ACCENT`; the cell keeps its own font
 # The navigable form of a row: the whole cell is a check id ("q6_ebitda_bridge", the
 # Coverage and Basis of Preparation table form), or the id opens the cell ahead of a separator
 # ("Q6 · the EBITDA bridge", the prose form).

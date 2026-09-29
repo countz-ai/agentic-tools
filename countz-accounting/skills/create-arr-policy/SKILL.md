@@ -78,10 +78,13 @@ slug lowercase with hyphens.
 arr_policy.py resolve <stated.yaml> --out <draft.yaml>
 ```
 
-Exit 0 means every decision is settled: go to step 4. Exit 1 is a malformed input: fix
-the file (a policy file the user gave you is theirs, so say what is wrong and ask them).
-Exit 2 prints what is left, as `ASK` lines in the order to ask them. Put all of them to
-the user in **one message**:
+Exit 0 means every decision is settled: go to step 4. Exit 1 is a malformed or
+contradictory input, each `ERROR` line naming it: fix a malformed value (a policy file
+the user gave you is theirs, so say what is wrong and ask them), and put a contradiction
+(a convention stated twice differently, a measurement window no figure uses, or none
+where a figure needs one) to the user with the statements' citations, recording their
+ruling as below. Exit 2 prints what is left, as `ASK` lines in the order to ask them. Put
+all of them to the user in **one message**:
 
 - **`ASK purpose`**: the four purposes, each with its meaning and the four positions it
   sets, from `arr_policy.py catalog`. Offer "set the positions myself" as the fifth
@@ -132,8 +135,9 @@ shown again. Nothing is saved before the user approves.
 arr_policy.py approve <draft.yaml> --by "<the user's name>" --out <path>
 ```
 
-`<path>` is the library path unless the user names another. It prints `SAVED`. With a
-`run_dir`, pin it into the run:
+`<path>` is the library path unless the user names another. It prints `SAVED`. It refuses
+a draft that resolving again would change (one edited after `resolve`): resolve it
+again and show it again. With a `run_dir`, pin it into the run:
 
 ```
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/setup_run.py <run_dir> --session ${CLAUDE_SESSION_ID} \

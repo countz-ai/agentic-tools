@@ -57,7 +57,7 @@ ask, on a catalog miss only, scrubbed by an agent under [SCRUB.md](SCRUB.md)
 | `<run_dir>/engagement-preview.md` | `scripts/setup_run.py`, on every registration: the collected parameters, each source's location, and a metadata-only directory summary of every folder source (3 levels, file counts, KB) | the user, via preview, right after registration and before the first dispatch |
 | `<run_dir>/file_index.json` | the plan step: every registered file with its relevance verdict (`relevant: true`, `"context"` for a file kept for later explanation, or `false`). Plan-driven runs only | dispatched steps, `scripts/preview.py` |
 | `<run_dir>/sources/<id>.md` (+ `<id>.entities.json` where the source stacks several accounts, statements or entities) | the plan step, for each source its roster binds. Plan-driven runs only | the check steps |
-| `<run_dir>/cache/<id>.parquet` + `<run_dir>/cache/manifest.json` | the `extract` step's script (`workpapers/extract-<check>.py`), through `scripts/cache.py`: each table the plan's steps read, parsed once into typed parquet, and the manifest — per table its source file, sha256 and bytes, header and row coordinates in the file, columns with where each sits and how it was parsed, row count, control total and any stated total; tables seen and not extracted under `not_extracted`. Plan-driven runs whose plan scheduled an extraction | the steps that name it in `params.cache_from` (`scripts/cache.py read`), `scripts/evidence.py select` for their citations. Excluded from `run_sync.tar.gz`: rebuilt by re-running the step's script, cited by nothing |
+| `<run_dir>/cache/<id>.parquet` + `<run_dir>/cache/manifest.json` | the `extract` step's script (`workpapers/extract-<check>.py`), through `scripts/cache.py`: each table the plan's steps read, parsed once into typed parquet, and the manifest (schema `cache@3`) — per table its source file, sha256 and bytes, header and row coordinates in the file, columns with where each sits and how it was parsed, row count, control total and any stated total, and the parquet's own sha256 (`parquet_sha256`) that `cache.py --verify` re-checks; tables seen and not extracted under `not_extracted`. `cache.py` refuses a manifest of another schema. Plan-driven runs whose plan scheduled an extraction | the steps that name it in `params.cache_from` (`scripts/cache.py read`), `scripts/evidence.py select` for their citations. Excluded from `run_sync.tar.gz`: rebuilt by re-running the step's script, cited by nothing |
 | `<run_dir>/recipes/<recipe-name>.md` | `scripts/setup_run.py --recipe` (a served recipe, byte for byte) or the `create-recipe` step (a generated one, validated by `scripts/validate_recipe.py`); written once, never edited | the plan, review and report steps, through `run.json.plan.recipe` |
 | `<run_dir>/plan.md` + `<run_dir>/plan/<name>.json` | the plan step, once per draft; a revised draft rewrites both | the user (via preview), the relay, the playbook engine (the definition it executes) |
 | `<run_dir>/steps/<NNNN>-<step>.json` | the step that produced it, once, at its end | the relay (`run_state.py record`), the playbook engine, the review step |
@@ -121,9 +121,10 @@ dispatches: []                      # ORDERED, append-only; one entry per dispat
 next_seq: 8                         # the next unused seq; seqs are never reused
 ```
 
-`checks[].id` is a slug the run mints (`tie_gl_tb`, `recon_cash`); it names the check's
-files and its tab. `checks[].goal` is kept verbatim; `playbook-save` distills it into the
-saved playbook.
+`checks[].id` is an id the run mints (`tie_gl_tb`, `recon_cash`), `[a-z0-9][a-z0-9_]*`;
+it names the check's files and its tab. It takes no `-`, which separates the check id
+from the table name in `checks/<check>-<table>.csv`. `checks[].goal` is kept verbatim;
+`playbook-save` distills it into the saved playbook.
 
 ### Parameters — the standing answers
 
@@ -179,6 +180,15 @@ around.
 - `debug <run_dir> [--off]` turns the run's debug mode on or off after registration.
   `setup_run.py --debug` turns it on at registration.
 
+**The brief's argument block.** After the line `Your arguments:`, one line per argument,
+`    key=value` (four spaces), the key `[A-Za-z0-9_]+`. A value holding a line break,
+starting with `"`, carrying leading or trailing whitespace, or spelled `(none)` is
+written as one JSON string. A bare `(none)` is an empty value. A list of non-empty plain
+strings with no comma is comma-joined; any other value is compact JSON. `run_state.py`
+writes every brief this way, and `parse_brief_args` reads the block back for it and for
+`step_record.py`. `dispatch --briefs` refuses a block holding any other line, a key
+twice, or a value starting with `"` that is not one JSON string.
+
 ## The step record
 
 `<run_dir>/steps/<NNNN>-<step>.json`, `NNNN` the zero-padded seq from the dispatch args.
@@ -220,7 +230,10 @@ from the step's own brief (`dispatch/<NNNN>-<step>.md`) and `started_at` from it
 and the recipe, and `produced` from the check's own files written since the start. The
 step passes only what no file records: the conclusion, the blockers, the notes, a read
 no citation covers (another check's record, a source profile) and, on a non-check step,
-what it produced. It refuses a record the relay could not classify.
+what it produced. It refuses a record the relay could not classify, an `error` that is
+neither null nor a non-empty message, an extra field naming one the record derives
+(`schema`, `step`, `check_id`, `args`, `started_at`, ...), and a `produced` path that
+does not exist under the run directory.
 
 `error` is read before `outcome`. A step never marks itself successful; it reports, and
 `run_state.py record` classifies. A gate that refused is `outcome: blocked` with the

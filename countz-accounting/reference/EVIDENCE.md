@@ -203,8 +203,9 @@ at the seal. `Ledger.tie()` mints a tie's difference figure and classifies it
   coverage statement; never written into the deliverable as a value), or
   `not_applicable` with a reason.
 - **`population`** is a `P.` reference or inline `{total_n, included_n, exclusions[]}`.
-  When `included_n < total_n`, every exclusion is named with its count, and the narrowing
-  is stated where the figure is first presented.
+  When `included_n < total_n`, every exclusion is named with its count, the counts add up
+  to `total_n - included_n` (every excluded item named once), and the narrowing is stated
+  where the figure is first presented.
 
 ## 4. Figures in the deliverable
 
@@ -246,3 +247,11 @@ used, `row_count`, and a control total per side. The report and a re-performer r
 table; the ledger's figures cite the citations; the manifest block is the hop between
 them. A fix re-run that moves the check's figures rewrites its own tables in the same
 pass; no other step edits them.
+
+Write and read them through `scripts/items.py`; its docstring lists the columns and
+every refusal. The check id is a run's check id (`RUN_CONTRACT.md` § run.json), and the
+table name a lower-case slug, `[a-z0-9][a-z0-9_-]*`. A row's `period` is a period key
+(§ 0) or an ISO date (`YYYY-MM-DD`). `amount` is stored as a float. `items.py` refuses an
+amount a float cannot hold exactly (an integer beyond 2**53, a Decimal or string with
+more significant digits than a float keeps): round it to the precision it closes to, or
+pass the float.

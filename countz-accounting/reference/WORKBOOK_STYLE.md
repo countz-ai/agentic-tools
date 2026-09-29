@@ -1,9 +1,8 @@
 # Countz workbook style — palette, type, and application rules for xlsx financial reports
 
-Companion to the "Find Fast, Fix Faster" slide (Paper, 2026-09-04). Same hue family, same
-restraint: one accent, neutrals do the work, color only where it carries meaning.
-Ground is WHITE — the slide's bone ground does not transfer to spreadsheets (cells default
-to white, tints print badly, and a tinted ground fights the gridlines).
+Colors are the Countz design system's: one teal for identity and action, ink and
+navy-tinted greys for everything else, color only where it carries meaning. The ground is
+white, not the design system's sea foam: cells default to white, and tints print badly.
 
 Written to be applied by an agent. Every rule names the element it governs and the value
 to set. Hex values are given without `#`; openpyxl wants `RRGGBB`, xlsxwriter wants
@@ -13,35 +12,38 @@ to set. Hex values are given without `#`; openpyxl wants `RRGGBB`, xlsxwriter wa
 
 ## 1. Palette
 
-Twelve colors, three groups. Contrast ratios are measured against white.
+Each token names the design-system token it matches. Contrast ratios are measured against white
+unless stated.
 
-### 1a. Structure (the brand teal, three steps)
+### 1a. Structure
 
-| Token      | Hex      | Role                                                                                  | Contrast |
-|------------|----------|---------------------------------------------------------------------------------------|----------|
-| `BAND`     | `005C53` | Fill of the ONE header band per sheet (title bar or primary table header). White text on it. | 7.9 |
-| `ACCENT`   | `0F756D` | Section headings, hyperlink/id text, tab color of deliverable tabs, the rule under the title. | 5.5 |
-| `MARKER`   | `2A9D90` | Decorative only: chart series 3, sparkline, bullet dots. NEVER body text (3.3 fails at 10pt). | 3.3 |
-| `TINT`     | `E1F0ED` | Fill of the headline figure cell and of a "current period" column when one must stand out. Ink text on it (12.7). | — |
+| Token      | Hex      | Design token | Role                                                                                  | Contrast |
+|------------|----------|--------------|---------------------------------------------------------------------------------------|----------|
+| `BAND`     | `0A5F6A` | `--color-brand` | Fill of the ONE header band per sheet (title bar or primary table header). White text on it. | 7.35 |
+| `ACCENT`   | `0A5F6A` | `--color-action` | Section headings, hyperlink/id text, tab color of deliverable tabs, the rule under the title. | 7.35 |
+| `MARKER`   | `16203A` | `--color-navy` | Chart series 3 only. Never text, never a fill beside `BAND` or `ACCENT` (2.20 against teal). | — |
+| `TINT`     | `E6EFF0` | `--color-surface-accent` | Fill of the headline figure cell and of a "current period" column when one must stand out. Ink text on it (13.7). | — |
 
-### 1b. Neutrals (teal-biased greys so they sit with the accent)
+### 1b. Neutrals (ink and navy tinted over the ground; no neutral grey)
 
-| Token      | Hex      | Role                                                                   | Contrast |
-|------------|----------|------------------------------------------------------------------------|----------|
-| `INK`      | `1C2A2A` | All body text and computed numbers. Not pure black.                    | 14.9 |
-| `SLATE`    | `566665` | Subtitle, notes, footnotes, source lines, secondary labels, ledger-tab color. | 6.0 |
-| `HAIRLINE` | `D3DAD8` | Every border: under headers, above subtotals, table rules. Never darker. | — |
-| `MIST`     | `F1F5F4` | Fill of subtotal rows and of plain (non-band) header rows.             | — |
-| `WHITE`    | `FFFFFF` | Ground. Text on `BAND`.                                                | — |
+| Token      | Hex      | Design token | Role                                                                   | Contrast |
+|------------|----------|--------------|------------------------------------------------------------------------|----------|
+| `INK`      | `1C2130` | `--color-text` | All body text and computed numbers. Not pure black.                  | 16.0 |
+| `SLATE`    | `5E616A` | `--color-text-muted` | Subtitle, notes, footnotes, source lines, secondary labels, ledger-tab color. | 6.2 |
+| `HAIRLINE` | `D8D8D9` | `--color-border` | Every border: under headers, above subtotals, table rules. Never darker. | — |
+| `MIST`     | `EDEBE3` | `--color-surface-inset` | Fill of subtotal rows and of plain (non-band) header rows.   | — |
+| `WHITE`    | `FFFFFF` | `--color-surface` | Ground. Text on `BAND`.                                            | — |
 
-### 1c. Semantic (meaning only — never decoration)
+### 1c. Semantic (meaning only, never decoration)
 
-| Token       | Hex text | Hex fill | Role                                                                    | Contrast (text on fill) |
-|-------------|----------|----------|-------------------------------------------------------------------------|---------|
-| `INPUT`     | `1F4FA3` | none     | Font color of values transcribed from a client file (hard inputs). Computed values stay `INK`. | 7.8 on white |
-| `BREAK`     | `B42318` | `FBEAE7` | Does not tie, material exception, failed check. Text always; fill on the status cell only. | 5.7 |
-| `REVIEW`    | `9A5B00` | `FFF3D1` | Needs review, immaterial variance, open item.                           | 5.0 |
-| `TIED`      | `1E7B3C` | `E5F3E8` | Agreed / tied / passed status cells. Text only by default; fill optional. | 4.7 |
+Status text sits on the inset surface, as the design system's badges do.
+
+| Token       | Hex text | Hex fill | Design token | Role                                                                    | Contrast (text on fill) |
+|-------------|----------|----------|--------------|-------------------------------------------------------------------------|---------|
+| `INPUT`     | `1F4FA3` | none     | none (workbook convention) | Font color of values transcribed from a client file (hard inputs). Computed values stay `INK`. | 7.8 on white |
+| `BREAK`     | `A33A2E` | `EDEBE3` | `--color-danger` | Does not tie, material exception, failed check. Text always; fill on the status cell only. | 5.5 |
+| `REVIEW`    | `8A5A00` | `EDEBE3` | `--color-warning` | Needs review, immaterial variance, open item.                           | 5.0 |
+| `TIED`      | `0A5F6A` | `EDEBE3` | `--color-success` | Agreed / tied / passed status cells. Text only by default; fill optional. | 6.2 |
 
 Negative numbers are NOT red. They are in parentheses (§ 3). Red means "exception".
 
@@ -91,6 +93,8 @@ column of zeros reads as "nothing here", not as data.
 |-----------------------|----------------------------------------|----------------------------------------------------|
 | Whole currency        | `#,##0;(#,##0);"–"`                    | Default for schedules and summaries.               |
 | Currency with cents   | `#,##0.00;(#,##0.00);"–"`              | Detail/ledger tabs only.                           |
+| Match-tab amount, 0-decimal currency | `#,##0;(#,##0);"–"`   | `match_tabs()` shows every amount at the currency's minor units: JPY, KRW. |
+| Match-tab amount, 3-decimal currency | `#,##0.000;(#,##0.000);"–"` | KWD, BHD, OMR. A 2-decimal currency's match tabs use the cents string. |
 | Thousands             | `#,##0,;(#,##0,);"–"`                  | Trailing comma divides by 1,000 in Excel. State the scale once, in the table's title — the band subtitle's unit for the primary table, the `Section` heading for any other ("Aging by customer ($ in thousands)") — never in a column header, as the deck does (`REPORT.md` § 4). |
 | Percent               | `0.0%;(0.0%);"–"`                      | One decimal.                                       |
 | Rate                  | `0.00%` (`FMT_RATE`)                   | An interest, discount or growth rate.              |
@@ -147,8 +151,7 @@ then Notes (9 italic SLATE): source line, method line, any caveat
 - **Alignment**: text left; numbers right; headers align with their column's content;
   period headers right; status words left. Center nothing except a single-character flag.
 - **Tab colors**: `ACCENT` for deliverable/summary tabs; `SLATE` for ledgers (Sources,
-  Evidence, Population); `REVIEW` fill color (`FFF3D1` is too pale for a tab — use the
-  text color `9A5B00`) for open-items/review tabs; none for raw data.
+  Evidence, Population); `REVIEW` text color (`8A5A00`) for open-items/review tabs; none for raw data.
 - **Tab order**: Summary first, then the schedules the summary's figures are drawn from, then
   the basis and the remaining schedules in the order the report cites them, ledgers last.
 
@@ -199,7 +202,7 @@ blue do not appear.
 
 - Font Arial 9, `INK` for axis labels, `SLATE` for the axis lines; horizontal gridlines
   `HAIRLINE` only, no vertical gridlines.
-- Series colors in order: `ACCENT`, `SLATE`, `MARKER`, `9A5B00`. Prior period in
+- Series colors in order: `ACCENT`, `SLATE`, `MARKER`, `8A5A00`. Prior period in
   `HAIRLINE`.
 - Flat fills. No 3D, no gradients, no shadows, no data labels on every point (label
   the endpoint or the total only).
@@ -273,10 +276,10 @@ panes `B4`, column A width 2, row 1 height 24 and row 4 height 20, the tab color
 ### xlsxwriter
 
 ```python
-P = dict(band="#005C53", accent="#0F756D", marker="#2A9D90", tint="#E1F0ED",
-         ink="#1C2A2A", slate="#566665", hairline="#D3DAD8", mist="#F1F5F4", white="#FFFFFF",
-         input="#1F4FA3", break_t="#B42318", break_f="#FBEAE7",
-         review_t="#9A5B00", review_f="#FFF3D1", tied_t="#1E7B3C", tied_f="#E5F3E8")
+P = dict(band="#0A5F6A", accent="#0A5F6A", marker="#16203A", tint="#E6EFF0",
+         ink="#1C2130", slate="#5E616A", hairline="#D8D8D9", mist="#EDEBE3", white="#FFFFFF",
+         input="#1F4FA3", break_t="#A33A2E", break_f="#EDEBE3",
+         review_t="#8A5A00", review_f="#EDEBE3", tied_t="#0A5F6A", tied_f="#EDEBE3")
 base = {"font_name": "Arial", "font_size": 10, "font_color": P["ink"]}
 F = {
   "title":     wb.add_format({**base, "font_size": 14, "bold": True}),

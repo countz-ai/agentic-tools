@@ -563,8 +563,8 @@ RUN_LEVEL_TABS = {EXEC, BASIS, "Coverage", "Open Items", SOURCES, EVIDENCE}
 LEDGER_TABS = {SOURCES, EVIDENCE}
 DESIGN_FONT = "Arial"
 DESIGN_SIZES = {9.0, 10.0, 11.0, 12.0, 14.0}
-BAND_FILL = "005C53"
-TAB_COLOR = {"deliverable": "0F756D", "ledger": "566665", "review": "9A5B00"}
+BAND_FILL = "0A5F6A"
+TAB_COLOR = {"deliverable": "0A5F6A", "ledger": "5E616A", "review": "8A5A00"}
 # Prose: a text cell longer than PROSE_MIN. It sits in a wrapped column at least
 # PROSE_WIDTH wide, or overflows a row that is empty to its right (WORKBOOK.md § 4, § 5).
 PROSE_MIN = 60

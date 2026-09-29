@@ -100,11 +100,26 @@ another file.
 1. Read `{agent}` — your standing instructions.
 2. Read `{plug}/skills/{skill}/SKILL.md` — your procedure.
 
+An argument whose value starts with `"` is one JSON string: read it with its escapes
+decoded (`\\n` is a line break).
+
 Your arguments:
 
     run_dir={run_dir}
     seq={seq}
 {args}"""
+
+# The argument block, read back by `parse_brief_args` (here and in step_record.py): the
+# lines after ARGS_HEAD, one `    <key>=<value>` per line, the key ARG_KEY. A value holding
+# a line break, starting with `"`, carrying leading or trailing whitespace, or spelled
+# `(none)` is written as a JSON string. A list of non-empty plain strings with no comma is
+# comma-joined; any other list is compact JSON. `run_dir`, `seq` and `check` are the
+# template's own keys.
+ARGS_HEAD = "Your arguments:"
+ARG_KEY = re.compile(r"[A-Za-z0-9_]+")
+ARG_LINE = re.compile(r"    ([A-Za-z0-9_]+)=(.*)")
+TEMPLATE_KEYS = ("run_dir", "seq", "check")
+LINE_BREAKS = ("\n", "\r", "\v", "\f", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029")
 
 # The order a check dispatch's arguments render in, before anything --extra adds; a
 # step dispatch (plan / review / report) renders its --args in the order given.
@@ -259,11 +274,55 @@ def skill_agent(skill: str) -> pathlib.Path:
 
 def render_brief(run_dir: pathlib.Path, seq: int, step: str, skill: str,
                  check_id: str | None, args: dict) -> str:
+    """The brief's text. Refuses an argument key outside ARG_KEY or in TEMPLATE_KEYS."""
+    bad = [k for k in args if not isinstance(k, str) or not ARG_KEY.fullmatch(k)
+           or k in TEMPLATE_KEYS]
+    if bad:
+        raise Refuse(f"argument key(s) {bad}: a key is [A-Za-z0-9_]+ and not one of "
+                     f"{', '.join(TEMPLATE_KEYS)} - the brief carries those itself")
     lines = [f"    check={check_id}\n"] if check_id else []
     lines += [f"    {k}={_arg(v)}\n" for k, v in args.items()]
     return BRIEF.format(nnnn=f"{seq:04d}", step=step, plug=PLUGIN_ROOT,
-                        agent=skill_agent(skill), skill=skill, run_dir=run_dir, seq=seq,
-                        args="".join(lines))
+                        agent=skill_agent(skill), skill=skill, run_dir=_arg(str(run_dir)),
+                        seq=seq, args="".join(lines))
+
+
+def parse_brief_args(text: str) -> dict[str, str | None]:
+    """A brief's argument block as `{key: value}`, the inverse of `_arg`: a bare `(none)`
+    is None; a value written as a JSON string is decoded back to that string; any other
+    value is as written, less surrounding whitespace (a comma-joined list and compact
+    JSON stay text).
+    Raises ValueError on a brief with no ARGS_HEAD line, a line after it that is not
+    `    <key>=<value>` (a value that spans lines), a key given twice, or a value starting
+    with `"` that is not one JSON string."""
+    lines = text.split("\n")
+    if ARGS_HEAD not in lines:
+        raise ValueError(f"no `{ARGS_HEAD}` line - not a dispatch brief")
+    at = lines.index(ARGS_HEAD)
+    out: dict[str, str | None] = {}
+    for n, line in enumerate(lines[at + 1:], at + 2):
+        if not line.strip():
+            continue
+        m = ARG_LINE.fullmatch(line.rstrip("\r"))
+        if not m:
+            raise ValueError(f"line {n} {line[:60]!r} is not `    <key>=<value>` - every "
+                             f"argument is one line; a value holding a line break is "
+                             f"written as a JSON string")
+        k, v = m.group(1), m.group(2).strip()
+        if k in out:
+            raise ValueError(f"line {n}: argument `{k}` is given twice")
+        if v.startswith('"'):
+            try:
+                v = json.loads(v)
+            except ValueError:
+                v = None
+            if not isinstance(v, str):
+                raise ValueError(f"line {n}: `{k}` starts with `\"` but is not one JSON "
+                                 f"string")
+        elif v == "(none)":
+            v = None
+        out[k] = v
+    return out
 
 
 def write_row_brief(run_dir: pathlib.Path, row: dict) -> pathlib.Path:
@@ -302,16 +361,31 @@ def _q(p) -> str:
     return shlex.quote(str(p))
 
 
-def _flat(v) -> str:
-    return v if isinstance(v, str) else json.dumps(v, separators=(",", ":"))
+def _plain(s: str) -> bool:
+    """A string an argument line carries bare: it reads back as written."""
+    return (s == s.strip() and not s.startswith('"') and s != "(none)"
+            and not any(b in s for b in LINE_BREAKS))
+
+
+def _jstr(s: str) -> str:
+    """A string as one JSON string on one line (json leaves U+0085/2028/2029 raw)."""
+    return (json.dumps(s, ensure_ascii=False).replace("\x85", "\\u0085")
+            .replace("\u2028", "\\u2028").replace("\u2029", "\\u2029"))
 
 
 def _arg(v) -> str:
-    """One argument value as the brief prints it: an empty value is `(none)` (the worker
-    skills read that spelling), a list is comma-joined, anything else is flat."""
+    """One argument value as the brief prints it, always on one line: an empty value is
+    `(none)` (the worker skills read that spelling); a plain string as written, any other
+    string as a JSON string; a list of plain strings with no comma comma-joined; anything
+    else compact JSON (ARGS_HEAD's rule, read back by parse_brief_args)."""
     if v is None or v == {} or v == []:
         return "(none)"
-    return ",".join(v) if isinstance(v, list) else _flat(v)
+    if isinstance(v, str):
+        return v if _plain(v) else _jstr(v)
+    if isinstance(v, list) and all(isinstance(x, str) and x and _plain(x) and "," not in x
+                                   for x in v):
+        return ",".join(v)
+    return json.dumps(v, separators=(",", ":"))
 
 
 def _args_text(args: dict) -> str:
@@ -319,7 +393,7 @@ def _args_text(args: dict) -> str:
     for k, v in args.items():
         if v is None or v == {} or v == []:
             continue
-        parts.append(f"{k}={','.join(v) if isinstance(v, list) else _flat(v)}")
+        parts.append(f"{k}={_arg(v)}")
     return " ".join(parts)
 
 
@@ -364,8 +438,9 @@ def register_checks(run: dict, entries: list[dict],
     added = []
     for e in entries:
         cid, kind = e.get("id"), e.get("kind")
-        if not cid or not check_playbook.SLUG.match(str(cid)):
-            raise Refuse(f"check id {cid!r} is not a slug")
+        if not cid or not check_playbook.CHECK_ID.fullmatch(str(cid)):
+            raise Refuse(f"check id {cid!r} is not a check id ([a-z0-9][a-z0-9_]*, no `-`: "
+                         f"it names the check's files)")
         if check_row(run, cid):
             raise Refuse(f"check id {cid!r} is already registered")
         if kind not in check_playbook.KINDS:
@@ -611,14 +686,20 @@ def parse_brief(path: pathlib.Path) -> dict:
         raise Refuse(f"{path}: not a dispatch brief (dispatch/<NNNN>-<step>.md)")
     text = path.read_text(encoding="utf-8")
     sk = re.search(r"skills/([a-z-]+)/SKILL\.md", text)
-    kv = dict(re.findall(r"^    (\w+)=(.*)$", text, re.M))
-    if not sk or "check" not in kv or int(kv.get("seq", -1)) != int(m.group(1)):
+    try:
+        kv = parse_brief_args(text)
+    except ValueError as exc:
+        raise Refuse(f"{path}: {exc}")
+    if not sk or not kv.get("check") or kv.get("seq") != str(int(m.group(1))):
         raise Refuse(f"{path}: does not carry the brief template's skill and args")
-    args = {"sources": [s for s in kv.get("sources", "").split(",") if s],
-            "goal": None if kv.get("goal") in (None, "(none)") else kv["goal"],
-            "params": {} if kv.get("params") in (None, "(none)")
-            else json.loads(kv["params"]),
-            "mode": kv.get("mode", "fresh")}
+    try:
+        params = {} if kv.get("params") is None else json.loads(kv["params"])
+    except ValueError as exc:
+        raise Refuse(f"{path}: params is not JSON: {exc}")
+    args = {"sources": [s for s in (kv.get("sources") or "").split(",") if s],
+            "goal": kv.get("goal"),
+            "params": params,
+            "mode": kv.get("mode") or "fresh"}
     return {"path": path, "seq": int(m.group(1)), "step": m.group(2),
             "skill": sk.group(1), "check": kv["check"], "args": args}
 

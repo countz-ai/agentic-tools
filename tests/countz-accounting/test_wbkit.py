@@ -34,6 +34,8 @@ def main() -> int:
     status(ws.cell(row=5, column=5), "pass")
     count(ws.cell(row=5, column=6), 1204)
     amount(ws.cell(row=5, column=7), 5000.0)
+    ident(ws.cell(row=6, column=2), "=1+2")             # an id opening with `=`: text, not a formula
+    text(ws.cell(row=6, column=3), 12345)               # a number as a label: its digits, not blank
     register_status("matched", "tied")
     status(ws.cell(row=6, column=5), "matched")
     try:
@@ -73,7 +75,10 @@ def main() -> int:
           and sheet["D10"].number_format == FMT_AMOUNT and sheet["E10"].number_format == FMT_COUNT
           and sheet["F10"].number_format == FMT_FX and sheet["G10"].number_format == FMT_DATE
           and sheet["H11"].font.color.rgb.endswith(BREAK_T)
-          and sheet["B11"].border.bottom.style is not None)
+          and sheet["B11"].border.bottom.style is not None
+          and (sheet["B6"].value, sheet["B6"].data_type) == ("=1+2", "s")
+          and (sheet["C6"].value, sheet["C6"].data_type) == ("12345", "s")
+          and sheet["B5"].value == "F.k1.total" and sheet["C5"].value.startswith("A wrapped"))
     print("wbkit: ok" if ok else "wbkit: self-check FAILED")
     return 0 if ok else 1
 

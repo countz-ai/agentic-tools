@@ -182,10 +182,190 @@ def main() -> int:
             bad.append(f"from_assignment did not refuse {what}")
         except ValueError:
             pass
+    corner_cases(bad)
+    counting_agrees_with_pairs(bad)
     for b in bad:
         print("FAIL", b)
     print("resolve.py self-check:", "FAIL" if bad else "ok")
     return 1 if bad else 0
+
+
+def corner_cases(bad: list[str]) -> None:
+    """Inputs inside the documented contract that once matched wrongly, or crashed."""
+    import time
+
+    D = dt.date(2024, 3, 1)
+    S = lambda **c: pl.DataFrame(c)  # noqa: E731
+
+    def expect(cond, what):
+        if not cond:
+            bad.append(what)
+
+    def refused(what, fn):
+        try:
+            fn()
+            bad.append(f"accepted {what}")
+        except ValueError:
+            pass
+
+    def status(res):
+        return {(r["side"], r["id"]): (r["status"], r["pass"], r["matched_to"]) for r in res.items.iter_rows(named=True)}
+
+    # a float key is refused (1001.0 would key as `10010`); its text or int form matches
+    refused("a float ref", lambda: resolve(S(id=["b1"], date=[D], value=[500.0], ref=[1001.0]),
+                                           S(id=["k1"], date=[D], value=[500.0], ref=["1001"])))
+    refused("a decimal ref", lambda: resolve(S(id=["b1"], date=[D], value=[5.0], ref=[1001.0]).with_columns(
+        pl.col("ref").cast(pl.Decimal(10, 2))), S(id=["k1"], date=[D], value=[5.0], ref=["1001"])))
+    refused("a float id", lambda: resolve(S(id=[1.0], date=[D], value=[5.0]), S(id=["k1"], date=[D], value=[5.0])))
+    refused("a float entity under same_entity", lambda: resolve(
+        S(id=["b1"], date=[D], value=[5.0], entity=[7.0]), S(id=["k1"], date=[D], value=[5.0], entity=[7.0]),
+        rules(same_entity=True)))
+    res = resolve(S(id=["b1"], date=[D], value=[500.0], ref=[1001]),
+                  S(id=["k1"], date=[D], value=[500.0], ref=["01001"]))
+    expect(status(res)[("left", "b1")] == ("matched", "reference", "k1"), "an int ref keys with its text form")
+
+    # a zero amount has no direction: a tolerance never pairs it with any amount
+    fee = [Rule("fee", (), (0, 2), tolerance=(-50.0, 0.0), difference="processor fee")]
+    res = resolve(S(id=["b0"], date=[D], value=[0.0]), S(id=["k9"], date=[D], value=[98765.43]), fee)
+    expect(res.matches.height == 0, "a zero left amount matched under a tolerance")
+    res = resolve(S(id=["b1"], date=[D], value=[30.0]), S(id=["k0"], date=[D], value=[0.0]), fee)
+    expect(res.matches.height == 0, "a zero right amount matched under a tolerance")
+    res = resolve(S(id=["b1"], date=[D], value=[1000.0]), S(id=["k1"], date=[D], value=[971.0]), fee)
+    expect(res.matches.height == 1, "a tolerance still pairs two amounts within it")
+    res = resolve(S(id=["b0"], date=[D], value=[0.0]), S(id=["k0"], date=[D], value=[0.0]))
+    expect(res.matches.height == 1, "two zeros still match under an exact rule")
+
+    # a group carries its items' references: never paired with a reference none of them has
+    b = S(id=["b1", "b2"], date=[D, D], value=[100.0, 50.0], ref=["1001", "1002"], entity=["ACME", "ACME"])
+    res = resolve(b, S(id=["k1"], date=[D], value=[150.0], ref=["9999"], entity=["ACME"]))
+    expect(res.matches.height == 0, f"a group overrode its items' references: {res.matches}")
+    res = resolve(b, S(id=["k1"], date=[D], value=[150.0], ref=[None], entity=["ACME"]))
+    expect(res.matches.height == 1 and res.matches["type"][0] == "n:1", "a group still matches an unreferenced line")
+    b2 = S(id=["b1", "b2"], date=[D, D], value=[100.0, 50.0], ref=["1001", None], entity=["ACME", "Acme"])
+    res = resolve(b2, S(id=["k1"], date=[D], value=[150.0], ref=["1001"], entity=["acme"]))
+    expect(res.matches.height == 1 and res.matches["rule"][0] == "day's items",
+           f"a group's one reference agrees; entities group as keys: {res.matches}")
+
+    # a time-zoned datetime's date depends on its zone: refused; naive datetimes are their date
+    ts = dt.datetime(2024, 3, 1, 22, 0)
+    refused("a time-zoned datetime", lambda: resolve(
+        S(id=["b1"], date=[ts], value=[10.0]).with_columns(pl.col("date").dt.replace_time_zone("America/New_York")),
+        S(id=["k1"], date=[D], value=[10.0])))
+    res = resolve(S(id=["b1"], date=[ts], value=[10.0]), S(id=["k1"], date=[D], value=[10.0]),
+                  [Rule("same day", (), (0, 0))])
+    expect(res.matches.height == 1, "a naive datetime is its own date")
+    for text in ("2024-3-1", "03/01/2024", "2024-02-30", "2024-03-01T10:00:00Z", "2024-03-01+01:00"):
+        refused(f"date text {text!r}", lambda: resolve(S(id=["b1"], date=[text], value=[1.0]),
+                                                        S(id=["k1"], date=[D], value=[1.0])))
+    res = resolve(S(id=["b1"], date=["2024-03-01T10:00:00"], value=[1.0]), S(id=["k1"], date=[D], value=[1.0]))
+    expect(res.matches.height == 1, "ISO text with a time and no zone")
+
+    # rules as the engine reads them: named once, ranges forward, percent a fraction
+    refused("two rules of one name", lambda: resolve(S(id=["b1"], date=[D], value=[1.0]),
+                                                     S(id=["k1"], date=[D], value=[1.0]),
+                                                     [Rule("p", ("ref",), (0, 0)), Rule("p", (), (0, 0))]))
+    for r in (Rule("x", "ref"), Rule("x", (), (3, 0)), Rule("x", (), (0.5, 2)),
+              Rule("x", (), (0, 2), percent=(-3, 0), difference="fee"),
+              Rule("x", (), (0, 2), tolerance=(5.0, -5.0), difference="fee"),
+              Rule("x", (), (0, 2), tolerance=(-5.0, 0.0)), Rule("x", ("value",)), Rule("x", ("date",)),
+              Rule("x", (), (0, 2), group_left=("c",)), Rule("", ())):
+        refused(f"rule {r}", lambda: resolve(S(id=["b1"], date=[D], value=[1.0]), S(id=["k1"], date=[D], value=[1.0]), [r]))
+
+    # a column a rule compares that one side lacks is refused; so is same_entity with no entity
+    refused("same_entity with no entity on one side", lambda: resolve(
+        S(id=["b1"], date=[D], value=[10.0], entity=["X"]), S(id=["k1"], date=[D], value=[10.0]), rules(same_entity=True)))
+    refused("same_entity with no entity on either side", lambda: resolve(
+        S(id=["b1"], date=[D], value=[10.0]), S(id=["k1"], date=[D], value=[10.0]), rules(same_entity=True)))
+    refused("a ref only one side carries", lambda: resolve(
+        S(id=["b1"], date=[D], value=[10.0], ref=["1"]), S(id=["k1"], date=[D], value=[10.0])))
+    refused("summing by a column the side lacks", lambda: resolve(
+        S(id=["b1"], date=[D], value=[10.0]), S(id=["k1"], date=[D], value=[10.0]),
+        [Rule("slips", (), (0, 2), group_left=("slip",))]))
+    expect(resolve(S(id=["b1"], date=[D], value=[10.0]), S(id=["k1"], date=[D], value=[10.0])).matches.height == 1,
+           "neither side carrying ref, entity or batch is fine under the defaults")
+
+    # transit and age are measured at the statement's end when it is given
+    b = S(id=["b1", "b2"], date=[D + dt.timedelta(days=23), D + dt.timedelta(days=29)], value=[7.0, 8.0])
+    k = S(id=["k1"], date=[D + dt.timedelta(days=24)], value=[99.0])
+    quiet = resolve(b, k, transit=2)
+    at_end = resolve(b, k, transit=2, end=dt.date(2024, 3, 31))
+    tr = lambda r: dict(r.exceptions.filter(pl.col("side") == "left").select("id", "in_transit").iter_rows())  # noqa: E731
+    expect(tr(quiet) == {"b1": True, "b2": True} and quiet.end == dt.date(2024, 3, 25),
+           f"by default measured at the right side's last date: {tr(quiet)}")
+    expect(tr(at_end) == {"b1": False, "b2": True} and at_end.end == dt.date(2024, 3, 31)
+           and at_end.exceptions.filter(pl.col("id") == "b1")["age"][0] == 7,
+           f"measured at `end`: {tr(at_end)}")
+    expect(at_end.decimals == 2 and resolve(b, k, decimals=0).decimals == 0, "the Resolution carries its decimals")
+    refused("an end that is not a date", lambda: resolve(b, k, end="31/03/2024"))
+
+    # chain: a reason is the first item's, by id
+    inv = S(id=["I1"], date=[D], value=[100.0], ref=["I1"])
+    app = S(id=["C1", "C2", "C3"], date=[D, D, D], value=[50.0, 30.0, 20.0], ref=["I1", "I1", "I1"])
+    bank = S(id=["K1"], date=[D], value=[50.0])
+    r1 = resolve(inv, app, [Rule("ref totals", ("ref",), None, ("ref",), ("ref",))])
+    r2 = resolve(app, bank, [Rule("amt", (), (0, 0))])
+    ch = chain(r1, r2).row(0, named=True)
+    expect(ch["status"] == "partly traced" and ch["stopped"] == 2 and ch["reaches"] == "K1", f"chain: {ch}")
+
+    # many items of one amount: counted, never listed pair by pair
+    n = 20_000
+    b = pl.DataFrame({"id": [f"b{i}" for i in range(n)], "value": [49.0] * n,
+                      "date": [D + dt.timedelta(days=i % 60) for i in range(n)]})
+    k = pl.DataFrame({"id": [f"k{i}" for i in range(n)], "value": [49.0] * n,
+                      "date": [D + dt.timedelta(days=i % 60 + 1) for i in range(n)]})
+    t0 = time.time()
+    res = resolve(b, k)
+    want = sum(1 for i in range(n) if 0 <= i % 60 + 1 <= 2)        # b0's window: days 0 to 2
+    expect(time.time() - t0 < 30 and res.matches.height == 0
+           and res.items.filter(pl.col("id") == "b0")["reason"][0] == f"{want} candidates under amount and date",
+           f"{n} items of one amount a side: {time.time() - t0:.1f}s, {res.items['reason'][0]}")
+    refused("a tolerance rule over too many pairs", lambda: resolve(
+        b, k, [Rule("fee", (), None, tolerance=(-1.0, 0.0), difference="fee")]))
+
+
+def counting_agrees_with_pairs(bad: list[str]) -> None:
+    """The counting path (`_reach`) and the pair join (`_pairs`) give every candidate the
+    same count and the same partner, over random streams with undated items, repeated
+    amounts, zeros, negatives, references that agree, differ or are absent, entities
+    and batches, under keyed, dated, undated and grouped rules."""
+    import random
+
+    import resolve as engine
+    D = dt.date(2024, 3, 1)
+
+    def stream(rng, n, side):
+        rows = [(f"{side}{i}", None if rng.random() < 0.1 else D + dt.timedelta(days=rng.randint(0, 12)),
+                 rng.choice([10.0, 20.0, 30.0, 0.0, -10.0]), rng.choice([None, "A", "B"]),
+                 rng.choice([None, None, "1001", "1002", "01001"]), rng.choice([None, "X1", "X2", "X3"]))
+                for i in range(n)]
+        df = pl.DataFrame(rows, orient="row", schema={"id": pl.Utf8, "date": pl.Date, "value": pl.Float64,
+                                                      "entity": pl.Utf8, "ref": pl.Utf8, "batch": pl.Utf8})
+        return engine._stream(df, "left" if side == "b" else "right", 100, {"entity", "ref", "batch"})
+    rs = [Rule("r1", ("ref",), (0, 3)), Rule("r2", (), (0, 2)), Rule("r3", (), (-2, 5)), Rule("r4", (), None),
+          Rule("r5", ("entity",), (0, 1)), Rule("r6", (), (0, 2), group_right=("batch",)),
+          Rule("r7", (), (0, 2), group_left=("entity", "date")),
+          Rule("r8", (), (1, 4), group_left=("entity", "date"), group_right=("batch",)),
+          Rule("r9", ("ref",), None, ("ref",), ("ref",)), Rule("r10", ("entity", "ref"), (0, 0))]
+    seen = {1: 0, 2: 0}
+    for seed in range(150):
+        rng = random.Random(seed)
+        L, R = stream(rng, rng.randint(0, 25), "b"), stream(rng, rng.randint(0, 25), "k")
+        for rule in rs:
+            fast = engine._candidates(L, R, rule, 100)
+            p = engine._pairs(engine._group(L, rule.group_left, rule.on),
+                              engine._group(R, rule.group_right, rule.on), rule, 100)
+            for got, g, other in ((fast[0], "g", "g_r"), (fast[1], "g_r", "g")):
+                want = {r["g"]: (r["n"], r["p"] if r["n"] == 1 else None) for r in
+                        p.group_by(g).agg(n=pl.len(), p=pl.col(other).first()).rename({g: "g"}).iter_rows(named=True)}
+                have = {r["g"]: (r["n"], r["partner"]) for r in got.iter_rows(named=True) if r["n"]}
+                seen[1] += sum(v[0] == 1 for v in want.values())
+                seen[2] += sum(v[0] > 1 for v in want.values())
+                if have != want:
+                    bad.append(f"counting path disagrees with the pairs: seed {seed}, rule {rule.name}")
+                    return
+    expect_ = seen[1] > 1000 and seen[2] > 1000
+    if not expect_:
+        bad.append(f"the equivalence fuzz exercised too little: {seen}")
 
 
 if __name__ == "__main__":

@@ -23,12 +23,16 @@ the company's own documents state (`basis: stated`, with `cite`) — and:
 - takes each unset position from the stated decisions that position decides, choosing the
   position most of them agree with; a stated decision that disagrees becomes an override;
 - takes each position still unset from `purpose`, when one is set;
-- defaults each convention that is still unset and marks it `set_by: default`;
-- derives every decision no statement or override settles.
+- defaults each convention that is still unset and marks it `set_by: default`, and each
+  field a partly stated convention leaves open (`default_fields`);
+- derives every decision no statement or override settles, and each field a partly
+  stated decision leaves open (`derived_fields`).
 
 It prints one line per finding and exits 0 when every decision is settled, 2 when the
 policy still needs answers (each `ASK` line is one question, in the order to ask them),
-and 1 on a malformed input. Lines:
+and 1 on a malformed or contradictory input, each `ERROR` line naming what to fix.
+`approve` refuses a file that resolving again would change; `check` passes only an
+approved file unchanged since approval. Lines:
 
     POSITION <policy>=<position> <how it was set>
     INCOHERENT <policy> <why> -- candidates: <positions>
@@ -129,23 +133,26 @@ PURPOSE_POSITIONS = {
                  "lifecycle": "live_paying", "value": "net_all"},
 }
 
-# A convention is a choice no position decides. `fields` for a composite value; `needed`
-# names when it bears on any figure (None: always), from the positions and the stated or
-# overridden decision values; where it does not, its value is `none`.
+# A convention is a choice no position decides. `fields`: a composite value's fields.
+# `needed(values)`: whether any figure uses it, from the policy and rule decisions' values
+# (None: always); where none does, it takes `not_needed`. `field`: the field it supplies
+# in a decision that is not itself a convention (L4's threshold).
 CONVENTIONS = {
     "window": {
         "decision": "S2", "label": "Measurement window for flow-based ARR",
         "options": ["month_x12", "trailing_3_months", "trailing_12_months"],
         "default": "trailing_3_months",
-        "needed": lambda p, s: p.get("source") in ("recognized_run_rate", "billed_spread")
-        or p.get("recurrence") == "plus_usage_actual"
-        or s.get("S1") in ("recognized_run_rate", "billed_spread", "contract_else_billed")
-        or s.get("R1") == "commit_plus_usage" or s.get("R2") == "include",
+        "needed": lambda v: v["S1"] in ("recognized_run_rate", "billed_spread",
+                                        "contract_else_billed")
+        or v["S3"] == "ratable_revenue" or v["S4"] == "recognized_revenue"
+        or v["S5"]["timing"] == "at_issuance"
+        or v["R1"] == "commit_plus_usage" or v["R2"] == "include",
         "not_needed": "point_in_time",
         "why_not_needed": "a contract snapshot at the date needs no window",
-        "needed_text": "when source is recognized_run_rate or billed_spread, or recurrence "
-                       "is plus_usage_actual, or a decision counts a flow (S1 "
-                       "contract_else_billed, R1 commit_plus_usage, R2 include)",
+        "needed_text": "when a decision measures an amount from a flow: S1 "
+                       "recognized_run_rate, billed_spread or contract_else_billed, S3 "
+                       "ratable_revenue, S4 recognized_revenue, S5 timing at_issuance, R1 "
+                       "commit_plus_usage, R2 include",
     },
     "fx": {
         "decision": "V4", "label": "Currency translation rate",
@@ -189,6 +196,7 @@ CONVENTIONS = {
         "decision": "L4", "label": "Contract size, % of ARR, that needs document support "
                                    "(none: no such test)",
         "options": "number", "default": 5, "needed": None,
+        "field": "document_threshold_pct",
     },
 }
 
@@ -282,9 +290,10 @@ DECISIONS = [
      "derive": _by("lifecycle", ["exclude_report_separately", "exclude_report_separately",
                                  "exclude_report_separately", "include"])},
     {"id": "L2", "name": "Churn timing, and which termination record wins", "type": "policy",
-     "by": ["lifecycle"], "constrained_by": ["source"],
+     "by": ["lifecycle", "source"],
      "fields": {"churn_at": ["at_notice", "effective_date"],
                 "conflicting_records": ["earliest_end", "contract_as_amended"]},
+     "field_by": {"churn_at": "lifecycle", "conflicting_records": "source"},
      "derive": lambda p, c: {
          "churn_at": "at_notice" if p["lifecycle"] == "live_paying" else "effective_date",
          "conflicting_records": "earliest_end" if p["source"] == "all_agree"
@@ -314,10 +323,10 @@ DECISIONS = [
      "derive": _by("lifecycle", ["exclude_written_off_and_90_days", "exclude_written_off",
                                  "exclude_written_off", "include_until_terminated"])},
     # Value
-    {"id": "V1", "name": "Ramps and escalators", "type": "policy", "by": ["value"],
-     "constrained_by": ["source"],
+    {"id": "V1", "name": "Ramps and escalators", "type": "policy", "by": ["value", "source"],
      "fields": {"step": ["current_step", "term_average"],
                 "billing_only_step_ups": ["require_contract_evidence", "as_billed"]},
+     "field_by": {"step": "value", "billing_only_step_ups": "source"},
      "derive": lambda p, c: {
          "step": ["current_step", "current_step", "term_average",
                   "term_average"][_ix("value", p["value"])],
@@ -367,8 +376,9 @@ GROUP = {"S": "source", "R": "recurrence", "L": "lifecycle", "V": "value", "A": 
 
 def _derived_at(d: dict, pol: str, pos: str, positions: dict, conv: dict):
     """The value `d` derives when `pol` sits at `pos` and the others where they are.
-    Unset positions are filled with the first position so a derivation can run; only
-    the field `pol` decides is compared, so the filler never decides anything."""
+    Unset positions take the first position so the derivation runs. Only the field `pol`
+    decides is compared, and each field depends on its one deciding policy alone
+    (test_arr_policy asserts it), so the filler never decides the result."""
     p = {k: positions.get(k) or next(iter(POLICIES[k]["positions"])) for k in POLICIES}
     p[pol] = pos
     return d["derive"](p, conv)
@@ -451,29 +461,75 @@ def _valid_value(d_or_opts, value) -> str | None:
                 return f"`{k}` {err}"
         return None
     opts = spec["options"] if isinstance(spec, dict) else spec
-    if opts == "int":
-        return None if isinstance(value, int) and not isinstance(value, bool) else "expects a whole number"
-    if opts == "number":  # `none` switches a numeric test off
+    if opts == "int":  # months: a count, never negative
+        return None if isinstance(value, int) and not isinstance(value, bool) and value >= 0 \
+            else "expects a whole number, 0 or more"
+    if opts == "number":  # a percentage; `none` switches its test off
         return None if value == "none" or (isinstance(value, (int, float))
-                                           and not isinstance(value, bool)) \
-            else "expects a number, or none"
+                                           and not isinstance(value, bool)
+                                           and 0 <= value <= 100) \
+            else "expects a percentage from 0 to 100, or none"
     if value not in opts:
         return f"`{value}` is not one of: {', '.join(map(str, opts))}"
     return None
 
 
+def _empty(value) -> str | None:
+    return "states none of its fields" if isinstance(value, dict) and not value else None
+
+
+def _stated_part(value, filled) -> object:
+    """What a statement said of a composite: its value less the fields `resolve` filled
+    (`derived_fields`, `default_fields`). Those are refilled on every resolve and never
+    count as stated."""
+    if isinstance(value, dict) and filled:
+        return {f: x for f, x in value.items() if f not in filled}
+    return value
+
+
+def _merge_part(have, part):
+    """A convention stated in two places: the value both carry, or None where they
+    disagree. A composite may be stated in parts; each field must agree wherever stated."""
+    if isinstance(have, dict) and isinstance(part, dict):
+        if any(k in have and have[k] != v for k, v in part.items()):
+            return None
+        return {**have, **part}
+    return have if have == part else None
+
+
+def _conv_value(k: str, value):
+    """A convention's value for the derivations: its default where unset, and its
+    default's fields where a composite is partly stated."""
+    spec = CONVENTIONS[k]
+    if value is None:
+        return spec["default"]
+    if "fields" in spec and isinstance(value, dict):
+        return {f: value.get(f, spec["default"][f]) for f in spec["fields"]}
+    return value
+
+
 # ---------------------------------------------------------------------------- resolve
 
 INSTRUCTION_SOURCES = ("user", "stated", "inferred")
+# An instruction's id: `I<n>` given here, `I.<check_id>.<n>` a step inferred, or
+# `IQ.<check_id>.<n>` the answer to a step's question Q.<check_id>.<n> (ARR_POLICY.md
+# § Applying the policy). A check id is check_playbook.CHECK_ID: no `-`.
+CHECK_ID = r"[a-z0-9][a-z0-9_]*"
+INSTRUCTION_ID = re.compile(rf"I[1-9]\d*|IQ?\.{CHECK_ID}\.[1-9]\d*")
+GAP_ID = {"inferred": re.compile(rf"I\.{CHECK_ID}\.[1-9]\d*"),
+          "questions": re.compile(rf"Q\.{CHECK_ID}\.[1-9]\d*")}
 
 
 def instructions(doc: dict, errors: list[str]) -> list[dict]:
-    """Validate the free-text instructions and give each a stable id (I1, I2, ...)."""
+    """Validate the free-text instructions and give each without an id a stable one (I1,
+    I2, ...). One id never names two texts, since figures cite instructions by id: an
+    instruction repeated (under its own id or without one) is skipped; another text under
+    a taken id is refused."""
     raw = doc.get("instructions") or []
     if not isinstance(raw, list):
         errors.append("instructions: a list of {text, applies_to, source, ...}")
         return []
-    out, seen_ids, seen_text = [], set(), set()
+    out, by_id, seen_text = [], {}, set()
     taken = {str(e.get("id")) for e in raw if isinstance(e, dict) and e.get("id")}
     n = 0
     for k, e in enumerate(raw, 1):
@@ -497,26 +553,45 @@ def instructions(doc: dict, errors: list[str]) -> list[dict]:
         if bad:
             errors.append(f"instructions[{k}]: applies_to names no such decision: {', '.join(bad)}")
         e["applies_to"] = [i for i in at if i in DEC]
-        key = " ".join(e["text"].split()).lower()
-        if key in seen_text:
-            continue
-        seen_text.add(key)
-        if not e.get("id") or str(e["id"]) in seen_ids:
+        key = " ".join(str(e["text"]).split()).lower()
+        if e.get("id"):
+            e["id"] = str(e["id"])
+            if not INSTRUCTION_ID.fullmatch(e["id"]):
+                errors.append(f"instructions[{k}]: id `{e['id']}` is not I<n>, I.<check_id>.<n> "
+                              f"or IQ.<check_id>.<n> (a check id is lowercase letters, digits "
+                              f"and `_`)")
+                continue
+            if e["id"] in by_id:
+                if by_id[e["id"]] != key:
+                    errors.append(f"instructions[{k}]: id `{e['id']}` already names another "
+                                  f"instruction; a step numbers its additions after the highest "
+                                  f"`n` the policy carries for its check id")
+                continue
+        else:
+            if key in seen_text:
+                continue
             while True:
                 n += 1
-                if f"I{n}" not in taken and f"I{n}" not in seen_ids:
+                if f"I{n}" not in taken:
                     break
             e["id"] = f"I{n}"
-        seen_ids.add(str(e["id"]))
+        by_id[e["id"]] = key
+        seen_text.add(key)
         out.append({"id": e["id"], **{k2: v for k2, v in e.items() if k2 != "id"}})
     return out
 
 
 def resolve(doc: dict) -> tuple[dict, list[str], list[str], list[str]]:
-    """Settle what can be settled. Returns (policy, report lines, asks, errors)."""
+    """Settle what can be settled. Returns (policy, report lines, asks, errors).
+    Idempotent: only what a document stated or the user answered is carried; everything
+    else is recomputed from it."""
     errors: list[str] = []
     lines: list[str] = []
     asks: list[str] = []
+    for k in ("policies", "conventions", "decisions"):
+        if doc.get(k) is not None and not isinstance(doc[k], dict):
+            errors.append(f"{k}: expects a mapping")
+            doc = {**doc, k: {}}
 
     purpose = doc.get("purpose")
     if purpose is not None and purpose not in PURPOSES:
@@ -535,12 +610,16 @@ def resolve(doc: dict) -> tuple[dict, list[str], list[str], list[str]]:
 
     convs = {k: _slot((doc.get("conventions") or {}).get(k), "value") for k in CONVENTIONS}
     for k, s in convs.items():
-        if "value" in s and s["value"] not in (None, "none"):
-            err = _valid_value(CONVENTIONS[k] if "fields" in CONVENTIONS[k]
-                               else {"options": CONVENTIONS[k]["options"]}, s["value"])
-            if err:
-                errors.append(f"conventions.{k} {err}")
-                s.clear()
+        spec = CONVENTIONS[k]
+        if s.get("value") is None:
+            continue
+        s["value"] = _stated_part(s["value"], s.pop("default_fields", None))
+        err = None if s["value"] == spec.get("not_needed") else (
+            _valid_value(spec if "fields" in spec else {"options": spec["options"]}, s["value"])
+            or _empty(s["value"]))
+        if err:
+            errors.append(f"conventions.{k} {err}")
+            s.clear()
     for k in (doc.get("conventions") or {}):
         if k not in CONVENTIONS:
             errors.append(f"conventions.{k}: no such convention ({', '.join(CONVENTIONS)})")
@@ -551,27 +630,49 @@ def resolve(doc: dict) -> tuple[dict, list[str], list[str], list[str]]:
         if i not in DEC:
             errors.append(f"decisions.{i}: no such decision")
             continue
-        e = e if isinstance(e, dict) and "value" in e else {"value": e}
-        err = _valid_value(DEC[i], e["value"])
+        e = dict(e) if isinstance(e, dict) and "value" in e else {"value": e}
+        e["value"] = _stated_part(e["value"], e.get("derived_fields"))
+        err = _valid_value(DEC[i], e["value"]) or _empty(e["value"])
         if err:
             errors.append(f"decisions.{i} {err}")
             continue
-        if e.get("basis") == "override" and "derived" in e:
-            e = {k: v for k, v in e.items() if k != "derived"}
         if e.get("basis") in (None, "stated", "override", "answer"):
-            stated[i] = e
+            stated[i] = {k: v for k, v in e.items()
+                         if k not in ("derived", "derived_fields", "rule_breach")}
 
-    positions = {k: s.get("position") for k, s in pols.items()}
-    conv_now = {k: (s.get("value") if s.get("value") is not None
-                    else CONVENTIONS[k]["default"]) for k, s in convs.items()}
-
-    # 1. A convention a stated decision carries is that convention's value.
+    # 1. A convention has one value. A convention decision (S2, V4, A1, A2, A3, A6) and a
+    #    rule field a convention supplies (L4's threshold) hold it; stated in both places,
+    #    the two must agree.
     for k, spec in CONVENTIONS.items():
         i = spec["decision"]
-        if i in stated and convs[k].get("value") is None and DEC[i]["type"] == "convention":
-            convs[k] = {"value": stated[i]["value"], "set_by": "stated",
-                        **({"cite": stated[i]["cite"]} if stated[i].get("cite") else {})}
-            conv_now[k] = stated[i]["value"]
+        e = stated.get(i)
+        if e is None:
+            continue
+        if DEC[i]["type"] == "convention":
+            part = e["value"]
+            del stated[i]
+        elif isinstance(e["value"], dict) and spec.get("field") in e["value"]:
+            rest = dict(e["value"])
+            part = rest.pop(spec["field"])
+            if rest:
+                stated[i] = {**e, "value": rest}
+            else:
+                del stated[i]
+        else:
+            continue
+        have = convs[k].get("value")
+        if have is None:
+            convs[k] = {"value": part, "set_by": "answer" if e.get("basis") == "answer"
+                        else "stated", **{x: e[x] for x in ("cite", "reason") if e.get(x)}}
+            continue
+        merged = _merge_part(have, part)
+        if merged is None:
+            errors.append(f"decisions.{i} states {json.dumps(part)} and conventions.{k} is "
+                          f"{json.dumps(have)}: state the `{k}` convention once")
+        else:
+            convs[k]["value"] = merged
+    conv_now = {k: _conv_value(k, s.get("value")) for k, s in convs.items()}
+    positions = {k: s.get("position") for k, s in pols.items()}
 
     # 2. Infer each unset position from the stated decisions it decides.
     ties: dict[str, list[str]] = {}
@@ -579,7 +680,7 @@ def resolve(doc: dict) -> tuple[dict, list[str], list[str], list[str]]:
         if positions[pol]:
             pols[pol].setdefault("set_by", "stated")
             continue
-        voters = [DEC[i] for i in stated if pol in DEC[i]["by"]]
+        voters = [d for d in DECISIONS if d["id"] in stated and pol in d["by"]]
         if not voters:
             continue
         score = {}
@@ -640,67 +741,93 @@ def resolve(doc: dict) -> tuple[dict, list[str], list[str], list[str]]:
         asks.insert(0, f"ASK purpose ({'; '.join(what)}; or answer each policy position "
                        f"directly)")
 
-    # 4. Conventions: unset ones take their default; ones no figure needs are `none`.
+    # 4. Conventions: an unset one, and each field a partly stated one leaves open, takes
+    #    its default. One no figure needs takes `not_needed`; any other value there, or
+    #    `not_needed` where a figure needs it, is an error.
+    complete = all(positions.values())
+    values = {}
+    if complete:
+        for d in DECISIONS:
+            if d["type"] != "convention":
+                v, s = d["derive"](positions, conv_now), (stated.get(d["id"]) or {}).get("value")
+                values[d["id"]] = v if s is None else ({**v, **s} if isinstance(v, dict) else s)
     for k, spec in CONVENTIONS.items():
-        needed = spec["needed"] is None or (
-            all(positions.values())
-            and spec["needed"](positions, {i: e["value"] for i, e in stated.items()}))
-        if spec["needed"] is not None and all(positions.values()) and not needed:
-            convs[k] = {"value": spec["not_needed"], "set_by": "not_needed",
-                        "why": spec["why_not_needed"]}
-            conv_now[k] = spec["not_needed"]
-            continue
-        if convs[k].get("value") is None:
+        s, v = convs[k], convs[k].get("value")
+        if spec["needed"] is not None and complete:
+            if not spec["needed"](values):
+                if v is None:
+                    convs[k] = {"value": spec["not_needed"], "set_by": "not_needed",
+                                "why": spec["why_not_needed"]}
+                    conv_now[k] = spec["not_needed"]
+                elif v != spec["not_needed"]:
+                    errors.append(f"conventions.{k} is `{v}`, but no figure uses it "
+                                  f"({spec['why_not_needed']}); it is needed "
+                                  f"{spec['needed_text']}: remove it, or settle the decision "
+                                  f"it serves")
+                continue
+            if v == spec["not_needed"]:
+                errors.append(f"conventions.{k} is `{v}`, but a figure needs it: it is needed "
+                              f"{spec['needed_text']}")
+                continue
+        if v is None:
             convs[k] = {"value": spec["default"], "set_by": "default"}
             conv_now[k] = spec["default"]
             asks.append(f"ASK convention {k} default={json.dumps(spec['default'])} "
                         f"({spec['label']}; the default stands unless changed)")
-        else:
-            convs[k].setdefault("set_by", "stated")
+            continue
+        s.setdefault("set_by", "stated")
+        open_ = [f for f in spec.get("fields") or {} if isinstance(v, dict) and f not in v]
+        if open_:
+            s["value"] = conv_now[k]
+            s["default_fields"] = open_
+            asks.append(f"ASK convention {k} default="
+                        f"{json.dumps({f: spec['default'][f] for f in open_})} ({spec['label']}: "
+                        f"{', '.join(open_)} not stated; the default stands unless changed)")
 
-    # 5. Derive every decision; a statement that departs from its derivation is an override.
+    # 5. Derive every decision; a statement that departs from its derivation is an override,
+    #    and one that departs from a rule, or from a field the catalog fixes, a rule breach.
     decisions: dict[str, dict] = {}
-    complete = all(positions.values())
     filled = {k: positions.get(k) or next(iter(POLICIES[k]["positions"])) for k in POLICIES}
     for d in DECISIONS:
         i = d["id"]
         # A rule or a convention needs no position; a policy decision needs them all.
         derived = d["derive"](positions, conv_now) if complete else \
             (d["derive"](filled, conv_now) if d["type"] != "policy" else None)
-        if i in stated:
-            e = stated[i]
-            val = e["value"]
-            if isinstance(derived, dict) and isinstance(val, dict):
-                val = {**derived, **val}
-            row = {"value": val}
-            same = derived is not None and val == derived
-            if d["type"] == "convention":
-                row["basis"] = "convention"
-            elif same:
-                row["basis"] = "stated"
-            elif d["type"] == "rule":
-                row["basis"] = "override"
-                row["rule_breach"] = True
-                lines.append(f"RULE-BREACH {i} {json.dumps(val)} (the rule fixes "
-                             f"{json.dumps(derived)})")
-            elif derived is not None:
-                row["basis"] = "override"
-                row["derived"] = derived
-                lines.append(f"OVERRIDE {i} {json.dumps(val)} ({'+'.join(d['by'])} derives "
-                             f"{json.dumps(derived)})")
-            else:
-                row["basis"] = "stated"
-            for k in ("reason", "cite", "quote"):
-                if e.get(k):
-                    row[k] = e[k]
-            if row["basis"] == "override" and not row.get("reason") and not row.get("cite"):
-                errors.append(f"decisions.{i}: an override needs a `reason` or a `cite`")
-        elif derived is not None:
-            row = {"value": derived,
-                   "basis": {"policy": "derived", "rule": "rule",
-                             "convention": "convention"}[d["type"]]}
-        else:
+        if i not in stated:
+            if derived is not None:
+                decisions[i] = {"value": derived,
+                                "basis": {"policy": "derived", "rule": "rule",
+                                          "convention": "convention"}[d["type"]]}
             continue
+        e = stated[i]
+        val, open_ = e["value"], []
+        if isinstance(derived, dict) and isinstance(val, dict):
+            open_ = [f for f in derived if f not in val]
+            val = {f: val.get(f, derived[f]) for f in derived}
+        row = {"value": val}
+        if derived is None or val == derived:
+            row["basis"] = "stated"
+        else:
+            row["basis"] = "override"
+            fixed = d.get("fixed_fields") or {}
+            breach = {f: val[f] for f, x in fixed.items() if val.get(f) != x}
+            departs = [f for f in derived if f not in fixed and val[f] != derived[f]] \
+                if isinstance(derived, dict) else [i]
+            if d["type"] == "rule" or breach:
+                row["rule_breach"] = True
+                lines.append(f"RULE-BREACH {i} {json.dumps(breach or val)} (the rule fixes "
+                             f"{json.dumps({f: fixed[f] for f in breach} or derived)})")
+            if d["type"] == "policy" and departs:
+                row["derived"] = derived
+                lines.append(f"OVERRIDE {i} {json.dumps(val)} "
+                             f"({'+'.join(d['by'])} derives {json.dumps(derived)})")
+        if open_:
+            row["derived_fields"] = open_
+        for k in ("reason", "cite", "quote"):
+            if e.get(k):
+                row[k] = e[k]
+        if row["basis"] == "override" and not row.get("reason") and not row.get("cite"):
+            errors.append(f"decisions.{i}: an override needs a `reason` or a `cite`")
         decisions[i] = row
 
     out = {
@@ -720,8 +847,32 @@ def resolve(doc: dict) -> tuple[dict, list[str], list[str], list[str]]:
 
 
 def is_complete(policy: dict) -> bool:
-    return len(policy.get("decisions") or {}) == len(DECISIONS) and \
-        all((policy.get("policies") or {}).get(k, {}).get("position") for k in POLICIES)
+    """Every position set, and every decision settled with every field of a composite."""
+    decs, pols = policy.get("decisions") or {}, policy.get("policies") or {}
+    return all(isinstance(pols.get(k), dict) and pols[k].get("position") for k in POLICIES) \
+        and all(isinstance(decs.get(i), dict) and "value" in decs[i]
+                and ("fields" not in d or (isinstance(decs[i]["value"], dict)
+                                           and set(decs[i]["value"]) == set(d["fields"])))
+                for i, d in DEC.items())
+
+
+# What a policy settles: what `approve` digests and `check` compares. A file whose CORE
+# differs from its own resolution was edited after `resolve`, or the catalog changed.
+CORE = ("company", "purpose", "policies", "conventions", "decisions", "instructions")
+
+
+def _core(policy: dict) -> dict:
+    return {k: policy.get(k) or None for k in CORE}
+
+
+def _drift(doc: dict, policy: dict) -> list[str]:
+    a, b = _core(doc), _core(policy)
+    return [k for k in CORE if a[k] != b[k]]
+
+
+def _digest(policy: dict) -> str:
+    return hashlib.sha256(json.dumps(_core(policy), sort_keys=True, default=str)
+                          .encode()).hexdigest()[:16]
 
 
 # ---------------------------------------------------------------------------- render
@@ -742,6 +893,18 @@ BASIS = {"derived": "derived", "rule": "rule", "convention": "convention",
          "stated": "stated", "override": "OVERRIDE", "answer": "answer"}
 
 
+def _row(*cells) -> str:
+    """A table row: a `|` or a line break in free text would split it."""
+    return "| " + " | ".join(str(c).replace("|", "\\|").replace("\r", " ").replace("\n", " ")
+                             for c in cells) + " |"
+
+
+def _entry(v, key: str) -> dict:
+    """A policy, convention or decision entry, which a file `resolve` has not yet written
+    may carry as a bare value."""
+    return v if isinstance(v, dict) else ({key: v} if v is not None else {})
+
+
 def render(policy: dict) -> str:
     L = []
     L.append(f"# ARR policy: {policy.get('company') or '(company not named)'}")
@@ -750,30 +913,36 @@ def render(policy: dict) -> str:
     L.append("")
     st = policy.get("status", "draft")
     ap = policy.get("approved") or {}
-    L.append(f"**Status:** {st}" + (f", approved by {ap.get('by')} on {ap.get('at')}" if ap else ""))
+    L.append(f"**Status:** {st}" + (f", approved by {ap.get('by')} on {ap.get('at')}"
+                                    if isinstance(ap, dict) and ap else ""))
     if policy.get("purpose"):
-        L.append(f"**Purpose:** {_fmt(policy['purpose'])}: {PURPOSES[policy['purpose']]}")
+        L.append(f"**Purpose:** {_fmt(policy['purpose'])}: "
+                 f"{PURPOSES.get(policy['purpose'], 'not a purpose')}")
     if policy.get("documents"):
         L.append("**Read from:** " + "; ".join(
             str(d.get("title") or d.get("path")) if isinstance(d, dict) else str(d)
             for d in policy["documents"]))
     L += ["", "## Policies", "", "| Policy | Question | Position | Set by |", "|---|---|---|---|"]
     for k, spec in POLICIES.items():
-        s = (policy.get("policies") or {}).get(k) or {}
+        s = _entry((policy.get("policies") or {}).get(k), "position")
         pos = s.get("position")
-        L.append(f"| {k.title()} | {spec['question']} | "
-                 f"{spec['positions'][pos] if pos else '**not set**'} | "
-                 f"{SET_BY.get(s.get('set_by'), s.get('set_by') or '')}"
-                 f"{(' (' + s['evidence'] + ')') if s.get('evidence') else ''} |")
+        L.append(_row(k.title(), spec["question"],
+                      spec["positions"].get(pos, f"`{pos}`, not a position") if pos
+                      else "**not set**",
+                      f"{SET_BY.get(s.get('set_by'), s.get('set_by') or '')}"
+                      f"{(' (' + str(s['evidence']) + ')') if s.get('evidence') else ''}"))
     L += ["", "## Conventions", "", "| Convention | Decision | Value | Set by |", "|---|---|---|---|"]
     for k, spec in CONVENTIONS.items():
-        s = (policy.get("conventions") or {}).get(k) or {}
-        L.append(f"| {spec['label']} | {spec['decision']} | {_fmt(s.get('value', 'not set'))} | "
-                 f"{SET_BY.get(s.get('set_by'), s.get('set_by') or '')}"
-                 f"{(' (' + s['why'] + ')') if s.get('why') else ''} |")
+        s = _entry((policy.get("conventions") or {}).get(k), "value")
+        why = [str(s[x]) for x in ("why", "reason", "cite") if s.get(x)]
+        if s.get("default_fields"):
+            why.append(f"{', '.join(map(_fmt, s['default_fields']))}: proposed default")
+        L.append(_row(spec["label"], spec["decision"], _fmt(s.get("value", "not set")),
+                      f"{SET_BY.get(s.get('set_by'), s.get('set_by') or '')}"
+                      f"{(' (' + '; '.join(why) + ')') if why else ''}"))
     L += ["", f"## The {len(DECISIONS)} decisions", "",
           "| ID | Decision | Type | Value | Basis | Note |", "|---|---|---|---|---|---|"]
-    decs = policy.get("decisions") or {}
+    decs = {i: _entry(e, "value") for i, e in (policy.get("decisions") or {}).items()}
     ins = policy.get("instructions") or []
     for d in DECISIONS:
         e = decs.get(d["id"])
@@ -785,24 +954,29 @@ def render(policy: dict) -> str:
             note.append(f"policy derives {_fmt(e['derived'])}")
         if e.get("rule_breach"):
             note.append("departs from a rule")
+        if e.get("derived_fields"):
+            note.append(f"{', '.join(map(_fmt, e['derived_fields']))} derived")
         for k in ("reason", "cite"):
             if e.get(k):
                 note.append(str(e[k]))
-        refs = [x["id"] for x in ins if d["id"] in (x.get("applies_to") or [])]
+        refs = [str(x.get("id")) for x in ins
+                if isinstance(x, dict) and d["id"] in (x.get("applies_to") or [])]
         if refs:
             note.append("see " + ", ".join(refs))
-        L.append(f"| {d['id']} | {d['name']} | {d['type']} | {_fmt(e['value'])} | "
-                 f"{BASIS.get(e.get('basis'), e.get('basis'))} | {'; '.join(note)} |")
+        L.append(_row(d["id"], d["name"], d["type"], _fmt(e.get("value")),
+                      BASIS.get(e.get("basis"), e.get("basis")), "; ".join(note)))
     L += ["", "## Instructions", ""]
     if ins:
         L += ["How the decisions apply to this business, in words no option can carry.", "",
               "| ID | Instruction | Applies to | Source | Basis |", "|---|---|---|---|---|"]
         src = {"user": "the user", "stated": "stated in the company's documents",
                "inferred": "inferred from the policy"}
-        for x in ins:
-            L.append(f"| {x['id']} | {x['text']} | {', '.join(x.get('applies_to') or []) or 'all'} | "
-                     f"{src.get(x.get('source'), x.get('source'))} | "
-                     f"{x.get('basis') or x.get('cite') or ''} |")
+        for x in (_entry(x, "text") for x in ins):
+            at = x.get("applies_to") or []
+            L.append(_row(x.get("id", ""), x.get("text", ""),
+                          (at if isinstance(at, str) else ", ".join(map(str, at))) or "all",
+                          src.get(x.get("source"), x.get("source") or ""),
+                          x.get("basis") or x.get("cite") or ""))
     else:
         L.append("None.")
     ov = [i for i, e in decs.items() if e.get("basis") == "override"]
@@ -877,39 +1051,55 @@ def catalog_json() -> dict:
 
 def amend(doc: dict, args) -> int:
     """Add a run's pending additions to a policy as instructions (ARR_POLICY.md § Applying
-    the policy): every `inferred` entry as it stands, with the id the step cited it by,
-    and every question the user answered as a `user` instruction. An unanswered question
-    is an ASK line; the draft is written either way, and needs approval before it is
-    pinned again."""
+    the policy): each `inferred` entry under its id `I.<check_id>.<n>`, and each answered
+    question `Q.<check_id>.<n>` as a `user` instruction `IQ.<check_id>.<n>`. An id the
+    policy already gives to another text is refused. An unanswered question is an ASK
+    line. The draft is written either way and needs approval before it is pinned again."""
+    gaps, errors = {"inferred": [], "questions": []}, []
     try:
-        gaps = {"inferred": [], "questions": []}
         for g in args.gaps:
             one = _load(g) or {}
+            if not isinstance(one, dict):
+                errors.append(f"{g}: a mapping of `inferred` and `questions`")
+                continue
             for k in gaps:
-                gaps[k] += one.get(k) or []
+                part = one.get(k) or []
+                if not isinstance(part, list) or not all(isinstance(x, dict) for x in part):
+                    errors.append(f"{g}: `{k}` is a list of mappings")
+                    continue
+                for x in part:
+                    if not GAP_ID[k].fullmatch(str(x.get("id") or "")):
+                        errors.append(f"{g}: {k} id `{x.get('id')}` is not "
+                                      f"{'I' if k == 'inferred' else 'Q'}.<check_id>.<n> (a "
+                                      f"check id is lowercase letters, digits and `_`)")
+                gaps[k] += part
         answers = (_load(args.answers) or {}) if args.answers else {}
     except Exception as exc:  # noqa: BLE001
         print(f"ERROR the gaps or answers file is not YAML or JSON ({exc})")
         return 1
+    if not isinstance(answers, dict):
+        errors.append(f"{args.answers}: a mapping of question id to the user's answer")
+    if errors:
+        for e in errors:
+            print(f"ERROR {e}")
+        return 1
     stamp = {"at": datetime.datetime.now(datetime.timezone.utc).isoformat(
         timespec="seconds").replace("+00:00", "Z"), **({"in": args.run} if args.run else {})}
     new = list(doc.get("instructions") or [])
-    added, asks = [], []
-    for e in gaps.get("inferred") or []:
-        new.append({**({"id": e["id"]} if e.get("id") else {}),
-                    "text": e.get("text"), "applies_to": e.get("applies_to") or [],
+    before = {str(x.get("id")) for x in new if isinstance(x, dict) and x.get("id")}
+    asks = []
+    for e in gaps["inferred"]:
+        new.append({"id": e["id"], "text": e.get("text"), "applies_to": e.get("applies_to") or [],
                     "source": "inferred", "basis": e.get("basis"), "added": stamp})
-        added.append(("inferred", e.get("text")))
-    for q in gaps.get("questions") or []:
-        a = answers.get(q.get("id"))
+    for q in gaps["questions"]:
+        a = answers.get(q["id"])
         if a is None:
-            asks.append(f"ASK {q.get('id')} {q.get('question')}")
+            asks.append(f"ASK {q['id']} {q.get('question')}")
             continue
         a = a if isinstance(a, dict) else {"text": str(a)}
-        new.append({**({"id": "I" + str(q["id"])} if q.get("id") else {}),
-                    "text": a.get("text"), "applies_to": a.get("applies_to") or q.get("applies_to") or [],
+        new.append({"id": "I" + str(q["id"]), "text": a.get("text"),
+                    "applies_to": a.get("applies_to") or q.get("applies_to") or [],
                     "source": "user", "basis": f"answer to: {q.get('question')}", "added": stamp})
-        added.append(("user", a.get("text")))
     doc = {**doc, "instructions": new}
     policy, lines, _asks, errors = resolve(doc)
     if errors:
@@ -918,8 +1108,9 @@ def amend(doc: dict, args) -> int:
         return 1
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(_dump(policy))
-    for src, text in added:
-        print(f"ADDED {src}: {text}")
+    for x in policy["instructions"]:
+        if str(x["id"]) not in before:
+            print(f"ADDED {x['id']} {x['source']}: {x['text']}")
     for x in asks:
         print(x)
     print("STATUS " + ("complete" if not asks and is_complete(policy) else
@@ -981,10 +1172,9 @@ def main() -> int:
     except Exception as exc:  # noqa: BLE001
         print(f"arr_policy: {args.file} is not YAML or JSON ({exc})", file=sys.stderr)
         return 1
-
-    if args.cmd == "render":
-        print(render(doc), end="")
-        return 0
+    if not isinstance(doc, dict):
+        print(f"ERROR {args.file}: a policy is a mapping (ARR_POLICY.md § The file)")
+        return 1
 
     if args.cmd == "amend":
         return amend(doc, args)
@@ -1012,6 +1202,10 @@ def main() -> int:
             print(f"ERROR {e}")
         return 1
 
+    if args.cmd == "render":
+        print(render(doc), end="")
+        return 0
+
     if args.cmd == "resolve":
         if args.out:
             args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -1031,9 +1225,17 @@ def main() -> int:
         if not is_complete(policy):
             print(f"REFUSED: the policy does not settle all {len(DECISIONS)} decisions - resolve it first")
             return 2
+        # Stamp only what the user saw rendered: a file `resolve` would change is refused.
+        drift = _drift(doc, policy)
+        if drift:
+            print(f"REFUSED: {args.file} is not what resolve writes from it (differs in "
+                  f"{', '.join(drift)}) - resolve it with --out, show its render, and approve "
+                  f"that file")
+            return 2
         policy["status"] = "approved"
         policy["approved"] = {"by": args.by, "at": datetime.datetime.now(
-            datetime.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")}
+            datetime.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+            "digest": _digest(policy)}
         args.out.parent.mkdir(parents=True, exist_ok=True)
         data = _dump(policy)
         args.out.write_text(data)
@@ -1049,11 +1251,22 @@ def main() -> int:
                   + (f" (missing {', '.join(missing)}: resolve and approve it again)"
                      if missing else ""))
             return 2
-        if doc.get("status") != "approved" or not doc.get("approved"):
+        drift = _drift(doc, policy)
+        if drift:
+            print(f"NOT-CONSISTENT: the file is not what resolve writes from it (differs in "
+                  f"{', '.join(drift)}): it was edited by hand, or the catalog changed since - "
+                  f"resolve and approve it again")
+            return 2
+        stamp = doc.get("approved")
+        if doc.get("status") != "approved" or not isinstance(stamp, dict) or not stamp.get("at"):
             print("NOT-APPROVED: the policy was never approved - run create-arr-policy")
             return 2
+        if stamp.get("digest") != _digest(doc):
+            print("NOT-APPROVED: the policy changed after it was approved - resolve and "
+                  "approve it again")
+            return 2
         print(f"OK {policy.get('company')}: {len(DECISIONS)} decisions settled, approved "
-              f"{doc['approved'].get('at')}")
+              f"{stamp.get('at')}")
         return 0
     return 1
 

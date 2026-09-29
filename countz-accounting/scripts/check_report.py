@@ -36,7 +36,8 @@ page beyond its cover.
 GATE 5 — the recipe's schedules. On a plan-driven run whose recipe declares `## Report`
 schedules (RECIPE_FORMAT.md § Report), each is on the deck as a table from its family's
 tab carrying every declared column and period, at the full population its `where` and
-`through` leave: every row's identity is on the deck, none is trimmed. A run with no
+`through` leave: every row's identity is on the deck, none is trimmed. A check whose
+declared periods scripts/periods.py refuses fails this gate by name. A run with no
 recipe, or a recipe with no `## Report`, is not held to it.
 
 GATE 6 — the opening (REPORT.md § 1). The first page after the cover is the executive
@@ -529,9 +530,12 @@ def backed(value: float, tol: float, variants, pool: list[float]) -> bool:
 
 
 # --- the plan's periods ------------------------------------------------------------------
-def plan_periods(run_dir: pathlib.Path | None) -> list | None:
+def plan_periods(run_dir: pathlib.Path | None, defects: list[str] | None = None) -> list | None:
     """Every period the run's checks declare (`params.columns`, scripts/periods.py), or
-    None when the run declares none — the gate then reads periods off the headers."""
+    None when the run declares none — the gate then reads periods off the headers. A
+    check whose periods scripts/periods.py refuses (mixed calendar forms, a zone that is
+    not IANA, a blank label, ...) adds a line to `defects` naming it and the refusal;
+    its periods are missing from the plan."""
     if run_dir is None or not (run_dir / "run.json").is_file():
         return None
     try:
@@ -546,7 +550,11 @@ def plan_periods(run_dir: pathlib.Path | None) -> list | None:
         try:
             # periods.py resolves the check's own columns, year end, calendar and labels
             ps = Periods.load(run_dir, c["id"])
-        except (ValueError, TypeError, KeyError):
+        except (ValueError, TypeError, KeyError) as exc:
+            if defects is not None:
+                defects.append(f"check `{c['id']}` declares periods scripts/periods.py refuses "
+                               f"({exc}) - the recipe's schedules cannot be held to them; fix "
+                               f"the check's params and re-run it")
             continue
         for p in ps:
             if p.key not in seen:
@@ -592,7 +600,8 @@ def audit(deck: pathlib.Path, workbook: pathlib.Path, run_dir: pathlib.Path | No
     if run_dir is not None and (run_dir / "workpapers").is_dir():
         ledger_pool = [v for v, _ in admitted_values(run_dir, [])]
     pool += ledger_pool
-    plan = plan_periods(run_dir)
+    period_defects: list[str] = []
+    plan = plan_periods(run_dir, period_defects)
     fails: list[str] = []
     if not slides:
         return {"slides": 0, "failures": ["the deck holds no slides"], "numbers": 0, "unbacked": []}
@@ -691,6 +700,7 @@ def audit(deck: pathlib.Path, workbook: pathlib.Path, run_dir: pathlib.Path | No
         except (OSError, ValueError):
             schedules = metrics = None
     if schedules:
+        fails.extend(period_defects)
         fails.extend(schedule_gate(schedules, tabs, workbook_texts(workbook), slides, plan))
     fails.extend(opening_gate(metrics, schedules, tabs, slides))
     return {"slides": len(slides), "failures": fails, "numbers": total, "unbacked": unbacked,

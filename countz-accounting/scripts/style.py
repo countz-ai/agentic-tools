@@ -151,11 +151,14 @@ def money(value: float, unit: str = "usd", style: str = "prose") -> str:
     """One amount as written. `prose`: whole units (`$9,438,108`); `deck`: scaled
     (`$9.4M`); `cell`: the currency's minor units (`$9,438,108.22`, `¥120,000`). Negatives
     in parentheses; an amount that rounds to zero at the shown precision is never
-    parenthesized."""
+    parenthesized. NaN and infinity are refused."""
     if style not in ("prose", "deck", "cell"):
         raise ValueError(f"style {style!r}: prose, deck or cell")
     sym = symbol(unit)
     v = float(value)
+    if v != v or v in (float("inf"), float("-inf")):
+        raise ValueError(f"{value!r} is no amount - a missing figure is written by its caller "
+                         f"(figures.fmt reads None as unable to establish)")
     a = abs(v)
     if style == "deck":
         body = compact(a)

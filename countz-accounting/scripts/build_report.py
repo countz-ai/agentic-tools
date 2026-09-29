@@ -61,14 +61,16 @@ except ImportError as exc:  # pragma: no cover
 # The Countz deck system, as read out of the Paper artboard "Find Fast, Fix Faster — v2"
 # and carried by the c4 decks: scripts/design/slide_layout.py in the monorepo holds it in
 # px on a 1280x720 artboard (STYLES, RULE, BODY_TOP, FOOTER_TOP). The plugin ships alone,
-# so the same values are mirrored here in inches and points (px / 96, px * 0.75). A change
-# there is a change here.
-BONE = "F5F3EE"                          # the ground
-INK, BODY, MUTED = "1C2A2A", "2E3D3C", "566665"
-TEAL, BAND, DOT, MARKER = "0F756D", "005C53", "2A9D90", "2A9D90"
-RULE, WHITE = "D9D4C8", "FFFFFF"
+# so the same values are mirrored here in inches and points (px / 96, px * 0.75); copy a
+# change there here. The colours are copied from the monorepo's design-system tokens
+# (docs/product/ux/design-system.css, teal 0A5F6A from 2026-09-25) and override the
+# artboard's. Nothing reads either file at run time.
+BONE = "F7F6F3"                          # the ground (sea foam)
+INK, BODY, MUTED = "1C2130", "484C57", "5E616A"
+TEAL, BAND, DOT, MARKER = "0A5F6A", "0A5F6A", "0A5F6A", "16203A"
+RULE, WHITE = "D8D8D9", "FFFFFF"
 ACCENT, SLATE = TEAL, MUTED              # the workbook's names for the same two colours
-BREAK_T, REVIEW_T, TIED_T = "B42318", "9A5B00", "1E7B3C"   # WORKBOOK_STYLE.md § 1c, text only
+BREAK_T, REVIEW_T, TIED_T = "A33A2E", "8A5A00", "0A5F6A"   # WORKBOOK_STYLE.md § 1c, text only
 FONT = "Inter"
 SERIES = [TEAL, MUTED, MARKER, REVIEW_T]
 

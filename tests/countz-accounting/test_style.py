@@ -69,7 +69,8 @@ def main() -> int:
         got = next((f for rx, f in COL_SCALE if rx.search(h)), None)
         if got != want:
             bad.append(f"header {h!r}: {got} != {want}")
-    for fn, arg in ((currency, "xyz"), (scale_of, "lakh")):
+    for fn, arg in ((currency, "xyz"), (scale_of, "lakh"), (money, float("nan")),
+                    (money, float("inf")), (money, float("-inf"))):
         try:
             fn(arg)
             bad.append(f"{fn.__name__}({arg!r}) did not refuse")

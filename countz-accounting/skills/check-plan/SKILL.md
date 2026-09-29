@@ -236,7 +236,10 @@ EVIDENCE.md § 0; also `fy2025h1`, `fy2025p03`, `ytd_2025-12` (a `"MM-DD"` year 
 step that reports by period, and `fiscal_year_end` wherever a column is a fiscal year,
 half, period or quarter, the same calendar on every step, in a form
 `${CLAUDE_PLUGIN_ROOT}/scripts/periods.py` reads (its docstring). `timezone` (an IANA
-zone) wherever a source carries timestamps, and `column_labels` where the company's own heading for a period differs from
+zone name, e.g. `America/New_York`; the validation refuses any other) wherever a source
+carries timestamps. Where the steps name more than one entity, set it on every step that
+reads timestamps: a step whose entities no zone-declaring step covers fails mid-run on a
+timezone-aware column. `column_labels` where the company's own heading for a period differs from
 the default; each `declared` option written verbatim into
 the steps the recipe directs to read it — required keys per kind are enforced by the
 validation below), `reads` and `cache_from` per the next subsection, and `after`

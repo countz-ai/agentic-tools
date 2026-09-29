@@ -78,6 +78,41 @@ def main() -> int:
     r = check_assignment(ra, rb, ros, left_id="gl", right_id="acct")
     expect(r.filter(pl.col("id") == "1010")["matched_to"][0] == "x1", "roster match")
 
+    # corner cases that once passed a wrong assignment, or crashed
+    L = pl.DataFrame({"id": ["b1", "b2"], "value": [100.0, 5.0]})
+    R = pl.DataFrame({"id": ["k1", "k2"], "value": [60.0, 5.0]})
+    A = pl.DataFrame({"side": ["left", "right", "left", "right"], "id": ["b1", "k1", "b2", "k2"],
+                      "status": ["matched"] * 4, "group": [1, 1, 2, 2], "pass": ["p"] * 4,
+                      "reason": [None] * 4})
+    refuses(lambda: check_assignment(L, R, A.with_columns(amount=pl.lit(100.0)), left_id="id",
+                                     right_id="id", amount="value"),
+            "an assignment carrying its own amounts (100 against 60 passed tol=0)")
+    refuses(lambda: check_assignment(L, R, A, left_id="id", right_id="id", amount="value"),
+            "a 100 against 60 match at tol=0")
+    r = check_assignment(L, R, A.with_columns(matched_to=pl.lit("stale"), diff=pl.lit(9.9)),
+                         left_id="id", right_id="id", amount="value", tol=None)
+    expect(r.filter(pl.col("id") == "b1")["matched_to"][0] == "k1" and r["diff"][0] == 40.0
+           and "diff_right" not in r.columns, "a carried matched_to/diff is recomputed")
+    refuses(lambda: check_assignment(L, R, A.with_columns(group=pl.Series([1, 3, 2, 2])), left_id="id",
+                                     right_id="id", amount="value", tol=None),
+            "a matched group with one side only")
+    refuses(lambda: check_assignment(L.with_columns(value=pl.Series([None, 5.0])), R, A, left_id="id",
+                                     right_id="id", amount="value", tol=None),
+            "a matched item with no amount")
+    refuses(lambda: check_assignment(L, R, A, left_id="id", right_id="id", amount=("value", None)),
+            "an amount on one side only")
+    refuses(lambda: check_assignment(L, R, A, left_id="id", right_id="id", amount="value", tol=-1),
+            "a negative tolerance")
+    refuses(lambda: check_assignment(L, R, A, left_id="id", right_id="id", amount="nope"),
+            "an amount column the population lacks")
+    Lf = pl.DataFrame({"id": [1.0, 2.0], "value": [1.0, 2.0]})
+    Af = pl.DataFrame({"side": ["left", "left", "right", "right"], "id": ["1.0", "2.0", "k1", "k2"],
+                       "status": ["unmatched"] * 4, "group": [None] * 4, "pass": [None] * 4,
+                       "reason": [None] * 4})
+    refuses(lambda: check_assignment(Lf, R, Af, left_id="id", right_id="id"), "float ids")
+    check_assignment(Lf.with_columns(pl.col("id").cast(pl.Int64)), R,
+                     Af.with_columns(id=pl.Series(["1", "2", "k1", "k2"])), left_id="id", right_id="id")
+
     for b in bad:
         print("FAIL", b)
     print("matching.py self-check:", "FAIL" if bad else "ok")
