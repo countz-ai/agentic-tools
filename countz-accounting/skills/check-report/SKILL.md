@@ -41,7 +41,9 @@ rules in `WORKBOOK.md` § 6. The headline check is the one in `run.json.checks` 
 `params.family` matches the recipe's `headline`; its walk's spine — starting figure to
 closing figure, one row per item the walk includes, grouped under its rung — is the
 schedule the story is most often built on. A run with no recipe tells the story its
-objective and results support.
+objective and results support. Read `${CLAUDE_PLUGIN_ROOT}/reference/DOCTRINE.md`
+§ Voice again before writing its sentences
+(`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py DOCTRINE.md Voice`).
 
 **Sources.** Collapse the roots first, never by hand:
 
@@ -73,7 +75,18 @@ files stay text — file · sheet · cell — never file links.
 
 The deck is for the decider; the workbook is for the reviewer who checks it
 (`WORKBOOK.md` § 1). The brief and its three rules are `REPORT.md` § 1 — read it before
-planning. What this step writes:
+planning.
+
+The plan states each page's message, so the voice binds from the plan on. You read
+`${CLAUDE_PLUGIN_ROOT}/reference/DOCTRINE.md` § Voice before the workbook's assembly;
+read it again now, before planning, by section:
+
+```
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py DOCTRINE.md Voice
+```
+
+Every sentence the plan and the pages carry — a `title`, `message`, `text`, `bullets`,
+`note`, a stat's `label` and `note` — is written to it. What this step writes:
 
 - `out/.staging/report-plan.md` — the plan, before any page: the story in a few
   sentences, then the pages in order, each with its one message and the tabs it draws

@@ -1684,7 +1684,12 @@ class Deck:
         gutter_text = cats if horiz else [axis_text(t, step) for t in ticks]
         gut = min(max([text_w(t, pt) for t in gutter_text] + [0.35]) + 0.10, w * 0.35)
         px, pw = x + gut, w - gut
-        py, ph = yy, CHART_H - legend_h - CHART_AXIS_H
+        # the strip under the plot grows with its labels: a month-end category ("As of
+        # January 2025") wraps in a narrow slot, and a fixed strip ran it into the legend
+        cat_lines = 1 if horiz else max(lines_for(str(c), pw / n_cat, pt) for c in cats or [""])
+        cat_h = cat_lines * pt * 1.2 / 72
+        axis_h = max(CHART_AXIS_H, 0.07 + cat_h + 0.04)
+        py, ph = yy, CHART_H - legend_h - axis_h
 
         def vx(v):                                  # a value along a horizontal value axis
             return px + pw * (v - lo) / span
@@ -1745,7 +1750,7 @@ class Deck:
                           align=PP_ALIGN.RIGHT, anchor=MSO_ANCHOR.MIDDLE)
             else:
                 slot = pw / n_cat
-                self.text(s, px + ci * slot, py + ph + 0.07, slot, 0.18,
+                self.text(s, px + ci * slot, py + ph + 0.07, slot, cat_h,
                           [[(str(c), pt, False, MUTED)]], "chart-cat", align=PP_ALIGN.CENTER)
 
         # the legend, centred under the plot
