@@ -344,7 +344,7 @@ sections:
               - {label: Reported EBITDA · LTM Jul 2025, value: "{q6 | = Reported EBITDA | LTM Jul 2025 | $}"}
               - {label: Diligence adjusted EBITDA · LTM Jul 2025, value: "{q6 | = Diligence adjusted EBITDA | LTM Jul 2025 | $}"}
           - heading: What this rests on
-          - bullets: ["The FY2023 income statement ties to the trial balance with no exception (q1)."]
+          - bullets: ["The FY2023 income statement ties to the trial balance with no exception."]
       - title: Adjusted EBITDA
         blocks:
           - table: {from: q6, rows: ["= Reported EBITDA", "= Diligence adjusted EBITDA"], columns: [line, FY2023, FY2024, LTM Jul 2025], title: "EBITDA bridge, USD"}
@@ -508,10 +508,22 @@ def main() -> int:
                 fails.append(f"4a: an edited chart value must be refused, named (exit {g.returncode}): "
                              f"{(g.stdout + g.stderr).strip()[:300]}")
 
+        # 2b. the run's own vocabulary on a slide — a step token or a ledger id — is refused
+        spec.write_text(GOOD_SPEC.replace(
+            '"The FY2023 income statement ties to the trial balance with no exception."',
+            '"The FY2023 income statement ties to the trial balance with no exception, as q1 found (Q.q6.mgmt_residual)."'),
+            encoding="utf-8")
+        r = run(build)
+        g = run(gate)
+        if r.returncode != 0 or g.returncode != 1 or "vocabulary" not in g.stdout \
+                or "Q.q6.mgmt_residual" not in g.stdout:
+            fails.append(f"2b: a step token or ledger id on a slide must be refused (build {r.returncode}, "
+                         f"gate {g.returncode}): {(g.stdout + g.stderr).strip()[:300]}")
+
         # 2. a typed figure in a sentence: builds, gate refuses it by token
         spec.write_text(GOOD_SPEC.replace(
-            '"The FY2023 income statement ties to the trial balance with no exception (q1)."',
-            '"The FY2023 income statement ties to the trial balance within $1,234,567 (q1)."'), encoding="utf-8")
+            '"The FY2023 income statement ties to the trial balance with no exception."',
+            '"The FY2023 income statement ties to the trial balance within $1,234,567."'), encoding="utf-8")
         r = run(build)
         g = run(gate)
         if r.returncode != 0 or g.returncode != 1 or "$1,234,567" not in g.stdout:
@@ -718,7 +730,7 @@ def main() -> int:
             g = run(gate_eur)
             if g.returncode != 0:
                 fails.append(f"14: a EUR deck must pass the gate (exit {g.returncode}): {(g.stdout + g.stderr).strip()[-300:]}")
-        spec_eur.write_text(GOOD_SPEC.replace("with no exception (q1)", "within €1,234,567 (q1)"),
+        spec_eur.write_text(GOOD_SPEC.replace("with no exception.", "within €1,234,567."),
                             encoding="utf-8")
         r = run(build_eur)
         g = run(gate_eur)

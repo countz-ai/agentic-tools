@@ -476,6 +476,12 @@ def main() -> int:
             if (sheet, coord) not in walk and not isinstance(cell.value, (int, float)):
                 font.underline = "single"
             cell.font = font
+        # Every table an Excel table of its own (wbkit.excel_tables): a tab copied cell by
+        # cell arrives without its table objects, and names must be unique workbook-wide.
+        sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+        from wbkit import excel_tables
+        taken: set[str] = set()
+        n_tables = sum(len(excel_tables(ws, taken)) for ws in wb.worksheets)
         wb.save(a.workbook)
 
     ledgers = (SOURCES, EVIDENCE)
@@ -487,6 +493,7 @@ def main() -> int:
            "unmatched_walk_amounts": [{"cell": c, "row": l, "column": h}
                                       for c, l, h in missed],
            "match_lines": len(matches),
+           "tables": 0 if a.dry_run else n_tables,
            "other": len(targets) - up - back - nav - len(walk) - len(matches),
            "dead_ends": sorted(dead), "internal_refs": sorted(internal),
            "dry_run": a.dry_run}

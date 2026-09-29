@@ -16,15 +16,18 @@ what goes where.
 
 ### Tab order
 - Exec Summary
-- The match tabs — for each reconciliation (check-recon § 3), in roster
-  order: its match summary, its match schedule, its reconciling items, its match
-  rules (§ 6)
 - The lead tabs — the recipe's `lead:` list (`RECIPE_FORMAT.md` § The document);
   absent, the headline family's tab alone
 - Basis of Preparation
 - every other check tab in roster order
 - Coverage, Open Items, Sources, Evidence
 - Nothing hidden, nothing else.
+
+A reconciliation's match tabs (check-recon § 3) follow its check's own tab, wherever
+that sits: its match summary, its match schedule, its reconciling items, its match rules
+(§ 6). They are that check's item detail — a lead reconciliation carries them among the
+lead tabs, any other in roster order — and never stand between the Exec Summary and the
+tabs its story rests on.
 
 ### Tab names
 `<token> <Title>` — the check's roster token as the roster spells it, one space, then a
@@ -81,8 +84,18 @@ The primary table has no heading; the band is its heading.
    4 (`BAND`), body from row 5, subtotals in `Subtotal`, the footing row in `Total`.
    The id is the first column after the margin; amounts right; the status column last.
    Every cell of the table — header, body, subtotal, total — carries the style's hairline
-   on all four sides (`grid()`); Notes and To reperform rows carry none. One AutoFilter
-   per tab, on this header.
+   on all four sides (`grid()`); Notes and To reperform rows carry none.
+
+**Every table is an Excel table.** A tab holding several tables cannot freeze one header
+for all of them, so the band is the only frozen row and each table carries its own header
+instead: `finish()` (and `link_workbook.py` again on the assembled workbook) makes every
+table block an Excel table — its own range, its own filter buttons, and its header shown in
+place of the column letters while the reader scrolls inside it. A block is a header row
+(bold on a fill, opening after a blank row or a Section heading) and the rows under it to
+the next blank row or heading; a closing Total row stays outside it, so a sort or a filter
+never moves the total. A table's header labels are distinct — each names one column, and
+the table takes its column names from them (`header()` refuses a repeat). No sheet-level
+AutoFilter where a tab has a table.
 2. **Analysis** — the decomposition of a failed tie or an unexplained difference: one row
    per component, `id | component | amount | disposition | evidence`, and a residual row
    whose disposition reads `unexplained`. `HeaderPlain` header.
@@ -165,6 +178,12 @@ is Coverage), not the list of open items (Open Items), and not the background of
 - A chart draws on the cells of such a table, on this tab.
 - A check that did not run, or ran degraded, appears here only where it limits the
   answer. The full list is on Basis of Preparation.
+- A check invariant that fails, or a data-integrity exception that undermines a trend
+  the story shows, is stated here beside the figure it limits — never only on the check's
+  tab.
+- One basis per measure. Where check tabs carry a measure on two bases (past due gross
+  and net of unapplied cash), this tab names the one it uses and copies the walk between
+  them.
 
 **The match tabs** — written by `scripts/match_tabs.py`, never by hand, for every
 reconciliation, whether it matched with `resolve.py`'s `resolve()` or with joins read back
@@ -182,8 +201,8 @@ tab states `No item grain:` (check-recon § 3).
   rule that matched it and its match group, what it matched to, the difference a rule
   tolerated (on the group's first row only, so the column sums to the difference lines),
   and why an unmatched item is unmatched (no candidate, or more than one). It
-  is sorted by status in the summary's order, so each status is one block of rows, and its
-  AutoFilter sits on the header.
+  is sorted by status in the summary's order, so each status is one block of rows, and it
+  is an Excel table filtered from its own header.
 - `<token> Reconciling items` (`<token> Recon items` where the name would pass 31
   characters) is the reconciliation, each line a figure, net and gross (its positive and
   negative items apart, adding to the net): the left items per books; less those in
@@ -224,7 +243,13 @@ examined | what was not examined, and why`, one row per rostered check, colored 
 
 **Open Items** — three tables under three `Section` headings — review calls, questions
 for management, data requests — the first with the `BAND` header, the other two
-`HeaderPlain`. Each `id | matter | size | what closes it | owner | raised by`. The last column holds the review finding's id; its header is the reader's words, not the record's field name (§ 3 Language). A `Q.`
+`HeaderPlain`. Each `id | matter | size | what closes it | owner | raised by`. Review
+calls are the review findings still open to the reader — `carried_to_open_items` or
+`withheld`; a finding the run fixed is the run's own history, in `RUN_SUMMARY.md`, not an
+open item. Where none is open the section reads so in one line. The size is a number in
+the matter's own unit, written as a number (money in the tab's currency, a count with
+`count()`), and never larger than the population it concerns — a flow summed past the
+balance at stake is not the size. The last column holds the review finding's id; its header is the reader's words, not the record's field name (§ 3 Language). A `Q.`
 or `D.` id the check raises is stated on that check's own tab as well, so the row's id
 resolves there and the reader lands on the schedule that raised it; a row whose only link
 is the check's name sends them to the top of a tab to search.
@@ -270,7 +295,8 @@ and `check_workbook.py` GATE 4 verifies the stored workbook against the same val
 helper's contract is its docstring and signature in the module; the rules they implement
 are § 3 to § 5 above. `finish(ws, table_last_row, ledger=False)` sets the per-sheet
 settings of the style's § 9 — the primary table's rules, row heights, the `B4` freeze, gridlines,
-tab color, the filter, print setup and the § 7 footer — after the last row is written.
+tab color, an Excel table per table block (§ 4), print setup and the § 7 footer — after the
+last row is written.
 
 ## 8. Before the tab leaves staging
 
@@ -296,11 +322,12 @@ and refuses a tab at the check's own gate and again at the seal. The author's pa
 covers what a parser cannot judge — the style's § 10 checklist, then:
 
 - B1 title, B2 subtitle, B3 the summary; on a check tab row 4 the one `BAND` header;
-  freeze at `B4` on every tab — the band alone, never a table header row;
+  freeze at `B4` on every tab — the band alone, never a table header row; every table an
+  Excel table with distinct header labels;
 - the tab name is `<token> <Title>`, at most 31 characters; tab color per
   `WORKBOOK_STYLE.md` § 4;
-- at the seal, the strip reads Exec Summary, the match tabs, the lead tabs, Basis of
-  Preparation, the roster, the tail (§ 2);
+- at the seal, the strip reads Exec Summary, the lead tabs, Basis of Preparation, the
+  roster, the tail, each check's match tabs after its own tab (§ 2);
 - no merged cells, no hidden rows or columns, no `General` numeric cell; prose only in
   a description or last column, or an overflowing cell; every wrapped row sized to fit
   (§ 4, § 5);

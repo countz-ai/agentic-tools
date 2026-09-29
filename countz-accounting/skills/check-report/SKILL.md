@@ -30,9 +30,9 @@ of tables it cached, from `cache/manifest.json`.
 
 The tab strip, the band and the content of every run-level tab are `WORKBOOK.md` § 2
 and § 6. Copy each check's tab cell by cell with its resolved formatting — every sheet
-of its tab file, the match tabs included; write the run-level tabs yourself. The match
-tabs follow the Exec Summary; where the Exec Summary tells how much of the population is
-matched, copy the match summary's walk.
+of its tab file, the match tabs included; write the run-level tabs yourself. Each
+check's match tabs follow its own tab (`WORKBOOK.md` § 2); where the Exec Summary tells
+how much of the population is matched, copy the match summary's walk.
 
 **Exec Summary.** Read the recipe's `## Exec summary` (the recipe is at
 `run.json.plan.recipe`) and tell that story from the checks' results, in whatever form
@@ -132,6 +132,18 @@ numbers before writing pages; no other check reads either. Rules a finished deck
 - A table appears once. A narrative page that needs a schedule's figure references the
   cell or states it in a stat tile; it does not copy the rows a schedule page already
   shows.
+- Headline a total by what it rests on. Where most of an amount rests on causes inferred
+  from behavior, the opening states the documented part first and the rest as subject to
+  management's confirmation — never one "supported" figure.
+- A check that failed one of its own invariants, or a data-integrity exception that
+  undermines a trend, is stated on the page that shows the figure it limits, and on the
+  Executive summary where it limits the answer. A trend the run could not rely on is not
+  a finding.
+- One basis per measure. Where the workbook carries a measure on two bases (past due
+  gross and net of unapplied cash), the deck uses one and shows the walk to the other
+  once.
+- State each limitation once — on the page it limits, or on one limitations page — never
+  again on each page it touches.
 
 Then build:
 

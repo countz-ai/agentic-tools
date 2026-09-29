@@ -499,13 +499,21 @@ class Book:
                 return False                  # a Section heading, however long
             return len(s) > 60 or s.endswith((".", "!", "?"))
 
+        def is_header(cells) -> bool:
+            """A header row: two or more labels, each bold on a solid fill. A table
+            stacked under another with no blank row between opens on one."""
+            return is_short_labels(cells) and all(
+                c.font is not None and c.font.b and c.fill is not None
+                and c.fill.fill_type == "solid" for _, c in cells)
+
         def read_table(title, header_row):
             hcells = row_cells[header_row]
             cols = [col for col, _ in hcells]
             headers = [str(c.value).strip() for _, c in hcells]
             rows, kinds = [], []
             rr = header_row + 1
-            while rr <= max_row and rr in row_cells and not is_statement(row_cells[rr]):
+            while rr <= max_row and rr in row_cells and not is_statement(row_cells[rr]) \
+                    and not is_header(row_cells[rr]):
                 cells = {col: c for col, c in row_cells[rr]}
                 line = [self.as_cell(cells[col]) if col in cells
                         else Cell(None, "", False, "", f"{openpyxl.utils.get_column_letter(col)}{rr}")
@@ -803,6 +811,21 @@ def as_blocks(raw, res: Resolver, where: str, book: Book) -> list[dict]:
             raise SpecError(f"{at}: unknown block kind `{kind}` (text, heading, note, bullets, "
                             f"stats, kv, table, lines, result, chart, columns)")
     return out
+
+
+PERIOD_HEADER = re.compile(r"^(?:as of\s+|as at\s+)?(" + "|".join(style.MONTHS)
+                           + r")\s+(?:\d{1,2},\s+)?(\d{4})$", re.I)
+
+
+def axis_period(header: str) -> str:
+    """A month column's header as a chart category: `Jan 2025`, not `As of January 2025` —
+    twelve long labels wrap in their slots and crowd the legend. The header's own words
+    stay on every table; only the axis is shortened."""
+    m = PERIOD_HEADER.match(str(header).strip())
+    if not m:
+        return header
+    month = next(i for i, n in enumerate(style.MONTHS, start=1) if n.lower() == m.group(1).lower())
+    return style.month_short(int(m.group(2)), month)
 
 
 TABLE_KEYS = {"from", "block", "rows", "columns", "max_rows", "title", "ids", "fit", "scale",
@@ -1127,7 +1150,7 @@ def chart_block(v, at: str, res: Resolver, book: Book) -> dict:
             raise SpecError(f"{at}: `{t.source}` has no numeric column headed {', '.join(map(str, missing))}")
     if not cat_idx:
         raise SpecError(f"{at}: the chosen rows carry no numeric columns to chart")
-    categories = [t.headers[i] for i in cat_idx]
+    categories = [axis_period(t.headers[i]) for i in cat_idx]
     series = []
     for row in t.rows:
         label = next((str(c.value).strip() for j, c in enumerate(row)

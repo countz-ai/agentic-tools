@@ -28,10 +28,13 @@ in the figure ledger. Two ways to satisfy it:
 
 GATE 4 — the design. Every tab is built to reference/WORKBOOK.md and
 WORKBOOK_STYLE.md, read from the stored styles: Arial in the five sizes, column A empty,
-exactly one BAND header row and it is row 4, freeze panes at B4, no merged cell, no
+exactly one BAND header row and it is row 4, freeze panes at B4, no merged cell, every
+Excel table's header row reading its column names under a name unique in the workbook and
+clear of the sheet's AutoFilter, no
 numeric cell left in General, no table cell without its hairline border, prose only in a
 wrapped column at least 42 wide or in a cell overflowing an empty row, every row holding
-a wrapped cell sized to fit it, no cell cut mid-sentence, gridlines off on deliverable
+a wrapped cell sized to fit it, no cell cut mid-sentence (nor a label cut mid-word from a
+longer statement the workbook carries), gridlines off on deliverable
 tabs and on for ledgers,
 the tab colour by kind, B1 title, B2 subtitle and B3 the summary. The Exec
 Summary's band is rows 1 to 3 (B3 the position), frozen at B4, with no row-4 header rule
@@ -92,11 +95,11 @@ belongs below the data (check-report SKILL § 1). A table header row is never fr
 the row-4 header belongs to the primary table alone, not to the tables below it.
 
 GATE 5 — the map, on a workbook that has an Exec Summary. The tab strip is the reader's
-path (reference/WORKBOOK.md § 2): Exec Summary first; then the match tabs of every check
-that matched items, each summary before its schedule; then the lead tabs — the check
+path (reference/WORKBOOK.md § 2): Exec Summary first; then the lead tabs — the check
 tabs the Exec Summary's numbers stand on, in the recipe's `lead` order, by default the
 headline family's tab alone; then Basis of Preparation and every other check tab in
-roster order; then Coverage, Open Items, Sources, Evidence. Without `--run-dir` the gate
+roster order; then Coverage, Open Items, Sources, Evidence. A check's match tabs follow
+its own tab, together, each summary before its schedule. Without `--run-dir` the gate
 holds the shape — Exec Summary first, the tail last. With `--run-dir` it reads
 `run.json` (the roster, each check's `params.family`, `plan.recipe`) and the recipe's
 frontmatter, and refuses any other strip, naming the one wanted. A check tab it cannot
@@ -130,6 +133,7 @@ ledger check fails, 2 on a usage error.
 from __future__ import annotations
 
 import argparse
+import bisect
 import html
 import json
 import pathlib
@@ -341,6 +345,37 @@ def sheet_links(z: zipfile.ZipFile, part: str, xml: str):
                         loc.group(1) if loc else None,
                         rels.get(rid.group(1)) if rid else None))
     return out
+
+
+def sheet_tables(z: zipfile.ZipFile, part: str) -> list[tuple[str, str, list[str]]]:
+    """[(display name, ref, column names)] for the Excel tables one worksheet carries."""
+    import html
+    import posixpath
+    rel_part = part.replace("worksheets/", "worksheets/_rels/") + ".rels"
+    if rel_part not in z.namelist():
+        return []
+    out = []
+    for el in REL_EL.findall(z.read(rel_part).decode("utf-8", "replace")):
+        typ, target = ATTR("Type").search(el), ATTR("Target").search(el)
+        if not (typ and target and typ.group(1).endswith("/table")):
+            continue
+        path = posixpath.normpath(posixpath.join(posixpath.dirname(part), target.group(1)))
+        if path.lstrip("/") not in z.namelist():
+            path = path.lstrip("/")
+        xml = z.read(path.lstrip("/")).decode("utf-8", "replace")
+        head = re.search(r"<table\b[^>]*>", xml)
+        name = ATTR("displayName").search(head.group(0)) if head else None
+        ref = ATTR("ref").search(head.group(0)) if head else None
+        cols = [html.unescape(m.group(1))
+                for m in re.finditer(r'<tableColumn\b[^>]*\bname="([^"]*)"', xml)]
+        out.append((name.group(1) if name else "", ref.group(1) if ref else "", cols))
+    return out
+
+
+def _span(ref: str) -> tuple[int, int, int, int]:
+    a, _, b = ref.partition(":")
+    ma, mb = re.match(r"([A-Z]+)(\d+)$", a), re.match(r"([A-Z]+)(\d+)$", b or a)
+    return (col_index(ma.group(1)), int(ma.group(2)), col_index(mb.group(1)), int(mb.group(2)))
 
 
 def is_stem(value: str, m: re.Match) -> bool:
@@ -580,6 +615,7 @@ CUT_MIN = 160
 CUT_CAP = 228
 CUT_END = re.compile(r"""(?:[.!?)\]»”"'’]|\d|%)$""")
 CUT_ELLIPSIS = re.compile(r"(?:…|\.\.\.)$")
+PREFIX_CUT_MIN = 40
 COL_EL = re.compile(r"<col\b([^>]*)/?>")
 ROW_EL = re.compile(r"<row\b([^>]*)>")
 
@@ -612,6 +648,15 @@ def col_index(letters: str) -> int:
     for ch in letters:
         n = n * 26 + ord(ch) - 64
     return n
+
+
+def get_col(n: int) -> str:
+    out = ""
+    while n:
+        n, r = divmod(n - 1, 26)
+        out = chr(65 + r) + out
+    return out
+
 STYLE_CELL = re.compile(r'<c r="([A-Z]+)(\d+)"([^>]*?)(?:/>|>(.*?)</c>)', re.S)
 # GATE 5 — the map (reference/WORKBOOK.md § 2): Exec Summary, the lead tabs, Basis of
 # Preparation, the other check tabs in roster order, then the tail in this order.
@@ -657,6 +702,9 @@ def audit_design(z: zipfile.ZipFile) -> list[str]:
     order = sheet_order(z)
     shared = shared_strings(z)
     fails: list[str] = []
+    table_names: set[str] = set()
+    cut_candidates: list[tuple[str, str, str]] = []
+    all_texts: list[str] = []
 
     def rule(tab, what, cells, ref):
         n = len(cells)
@@ -739,6 +787,26 @@ def audit_design(z: zipfile.ZipFile) -> list[str]:
             rule(tab, "long text cut mid-sentence — split it into a Notes row or the check record, never truncate", cut, "WORKBOOK.md § 4")
         if "<mergeCell " in xml:
             rule(tab, "merged cells", [], "WORKBOOK_STYLE.md § 4")
+        # Excel tables (wbkit.excel_tables): Excel repairs, rather than opens, a table whose
+        # header cells disagree with its column names, whose name repeats in the workbook,
+        # or that overlaps the sheet's own AutoFilter.
+        spans = []
+        for name, tref, cols in sheet_tables(z, part):
+            c1, r1, c2, _ = _span(tref)
+            heads = [texts.get(f"{get_col(c)}{r1}", "") for c in range(c1, c2 + 1)]
+            if [h.strip() for h in heads] != [c.strip() for c in cols]:
+                rule(tab, f"table {name} ({tref}): its header row does not read its column "
+                          f"names — rebuild it with wbkit.excel_tables", [], "WORKBOOK.md § 4")
+            if name.casefold() in table_names:
+                rule(tab, f"table name {name} repeats in the workbook", [], "WORKBOOK.md § 4")
+            table_names.add(name.casefold())
+            spans.append(_span(tref))
+        sheet_filter = re.search(r"<autoFilter\b[^>]*\bref=\"([^\"]+)\"", xml.split("<tableParts")[0])
+        if spans and sheet_filter:
+            f1, fr1, f2, fr2 = _span(sheet_filter.group(1))
+            if any(not (f2 < a or c < f1 or fr2 < b or d < fr1) for a, b, c, d in spans):
+                rule(tab, "the sheet's AutoFilter overlaps an Excel table — each table carries "
+                          "its own filter", [], "WORKBOOK.md § 4")
         rows, cols = frozen_pane(xml)
         if (rows, cols) != (3, 1):              # the band alone; never a table header row
             rule(tab, f"freeze panes at B4 — the title band, never a table header "
@@ -759,6 +827,23 @@ def audit_design(z: zipfile.ZipFile) -> list[str]:
             rule(tab, "B3 holds the summary", [], "WORKBOOK.md § 3")
         if summary and "B3" not in texts:
             rule(tab, "B3 holds the position sentence", [], "WORKBOOK.md § 6")
+        for ref, t in texts.items():
+            if len(t.rstrip()) >= PREFIX_CUT_MIN and not CUT_END.search(t.rstrip()):
+                cut_candidates.append((tab, ref, t.rstrip()))
+            all_texts.append(t.rstrip())
+    # A label cut to a length: its text is the opening of a longer statement the workbook
+    # carries elsewhere. Measured on a sealed revenue run: a leak's name cut at 120
+    # characters mid-word ("…has since remov") beside its whole sentence.
+    all_texts.sort()
+    cut_at: dict[str, list[str]] = {}
+    for tab, ref, t in cut_candidates:
+        i = bisect.bisect_right(all_texts, t)
+        if i < len(all_texts) and all_texts[i].startswith(t) and len(all_texts[i]) > len(t) \
+                and all_texts[i][len(t)].isalnum():
+            cut_at.setdefault(tab, []).append(ref)
+    for tab, refs in cut_at.items():
+        rule(tab, "text cut mid-word from a longer statement the workbook carries — write "
+                  "the whole claim, never truncate", refs, "WORKBOOK.md § 4")
     return fails
 
 
@@ -854,14 +939,24 @@ def wanted_order(run_dir: pathlib.Path, tabs: list[str], pairs=()) -> tuple[list
     family = {c["id"]: (c.get("params") or {}).get("family") for c in checks}
     owner, fails = tab_owners(checks, tabs)
     check_tabs = sorted(owner, key=lambda tab: roster.index(owner[tab]))
-    # a check's match tabs follow the Exec Summary, summary then schedule, in roster order
+    # A check's match tabs follow its own tab — summary, schedule, reconciling items,
+    # rules — wherever that check sits in the strip: with the lead tabs where it is a
+    # lead, in roster order otherwise. The reader reaches a reconciliation's item detail
+    # from the reconciliation, not ahead of the story.
     matched = {t for p in pairs for t in p}
-    match_tabs = [t for p in sorted((p for p in pairs if p[0] in owner),
-                                    key=lambda p: roster.index(owner[p[0]])) for t in p]
-    lead_tabs = [tab for fam in lead for tab in check_tabs
-                 if family[owner[tab]] == fam and tab not in matched]
-    rest = [tab for tab in check_tabs if tab not in lead_tabs and tab not in matched]
-    want = ([EXEC] if EXEC in tabs else []) + match_tabs + lead_tabs + \
+    sets: dict[str, list[str]] = {}
+    for p in pairs:
+        if p[0] in owner:
+            sets.setdefault(owner[p[0]], []).extend(p)
+
+    def group(cid: str) -> list[str]:
+        return [t for t in check_tabs if owner[t] == cid and t not in matched] + sets.get(cid, [])
+
+    owners = list(dict.fromkeys(owner[t] for t in check_tabs))
+    lead_ids = [cid for fam in lead for cid in owners if family[cid] == fam]
+    lead_tabs = [t for cid in lead_ids for t in group(cid)]
+    rest = [t for cid in owners if cid not in lead_ids for t in group(cid)]
+    want = ([EXEC] if EXEC in tabs else []) + lead_tabs + \
         ([BASIS] if BASIS in tabs else []) + rest + [tab for tab in TAIL_TABS if tab in tabs]
     return want, lead, fails
 
@@ -885,23 +980,21 @@ def audit_order(z: zipfile.ZipFile, run_dir: pathlib.Path | None = None) -> list
     texts = {tab: sheet_cells(z.read(part).decode("utf-8", "replace"), shared)[0]
              for part, tab in order}
     pairs, _ = match_pairs(texts)
-    matched = [t for p in pairs for t in p]
-    after = tabs[1:1 + len(matched)]
-    if matched and (set(after) != set(matched) or
-                    any([after.index(t) for t in p] != list(range(after.index(p[0]),
-                                                                  after.index(p[0]) + len(p)))
-                        for p in pairs)):
-        fails.append(f"the match tabs follow {EXEC}, each summary, then its schedule, its "
-                     f"reconciling items and its assumptions: {' · '.join(matched)}; the strip "
-                     f"reads {strip} (WORKBOOK.md § 2)")
+    for p in pairs:                             # each set together, in its own order
+        at = [tabs.index(t) for t in p]
+        if at != list(range(at[0], at[0] + len(p))):
+            fails.append(f"a reconciliation's match tabs sit together — summary, schedule, "
+                         f"reconciling items, rules: {' · '.join(p)}; the strip reads {strip} "
+                         f"(WORKBOOK.md § 2)")
     want, lead, unnamed = (None, [], []) if run_dir is None else wanted_order(run_dir, tabs, pairs)
     fails.extend(unnamed)
     if want is not None:
         if want != tabs and not unnamed:
             fails.append(f"tab strip reads {strip}; the map wants {' · '.join(want)} — "
-                         f"{EXEC}, the match tabs, the lead tabs (families: "
+                         f"{EXEC}, the lead tabs (families: "
                          f"{', '.join(lead) or 'none'}), "
-                         f"{BASIS}, the other checks in roster order, the tail "
+                         f"{BASIS}, the other checks in roster order — each check's match "
+                         f"tabs after its own tab — the tail "
                          f"(WORKBOOK.md § 2)")
         return fails
     return fails
@@ -1255,13 +1348,13 @@ def main() -> int:
             print(f"    {f}")
         if len(order_fails) > a.max_report:
             print(f"    … and {len(order_fails) - a.max_report} more")
-        print(f"\n  Fix: order the tabs {EXEC}, the match tabs, the lead tabs (the recipe's `lead`, else its")
-        print(f"  headline family), {BASIS}, the other check tabs in roster order, then Coverage,")
-        print("  Open Items, Sources, Evidence (WORKBOOK.md § 2). Pass --run-dir and the gate")
-        print("  names the strip it wants.")
+        print(f"\n  Fix: order the tabs {EXEC}, the lead tabs (the recipe's `lead`, else its")
+        print(f"  headline family), {BASIS}, the other check tabs in roster order — each check's")
+        print("  match tabs after its own tab — then Coverage, Open Items, Sources, Evidence")
+        print("  (WORKBOOK.md § 2). Pass --run-dir and the gate names the strip it wants.")
     elif EXEC in rep.get("tabs", []):
-        print(f"{a.workbook.name}: the tab strip is the reader's path — {EXEC}, the match "
-              f"tabs, the lead tabs, {BASIS}, the roster, the tail.")
+        print(f"{a.workbook.name}: the tab strip is the reader's path — {EXEC}, the lead "
+              f"tabs, {BASIS}, the roster, the tail, each check's match tabs after its own.")
     if match_fails:
         print(f"{a.workbook.name}: {len(match_fails)} match-tab failure(s) — a summary line is "
               f"not its schedule filtered on its status.\n")

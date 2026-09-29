@@ -311,7 +311,7 @@ write the message yourself and reference the figures.
 
 ## 5. The gate
 
-`check_report.py` holds six mechanical things and nothing about the story:
+`check_report.py` holds seven mechanical things and nothing about the story:
 
 - **The figures.** Every number on a slide is backed by a workbook numeric cell within
   the rounding tolerance of the precision shown, a number stated in a workbook text cell,
@@ -336,6 +336,11 @@ write the message yourself and reference the figures.
   `message` and at least one stat tile, table or chart. On a recipe run the second page is
   headed as the recipe's `metrics.title` and carries a figure block, and the first
   schedule sits at most one page after it.
+- **The reader's words.** No ledger id (`Q.r4.ar_movement`, `LK.terms_not_enforced`) and no
+  step token past a cell's opening (`as R4 measured it`, `(q1)`) on a page or in a table
+  cell; the footers name tabs and are not read. A token shaped like a period (`Q1`) is
+  read in lower case only. A copied row label carrying one is the owning check's to
+  rewrite.
 
 The author's pass is the brief (§ 1): the plan was written before the pages, the deck
 tells the workbook's story to a reader outside accounting in the voice of `DOCTRINE.md`,

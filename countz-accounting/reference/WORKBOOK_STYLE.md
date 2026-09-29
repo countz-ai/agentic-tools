@@ -129,7 +129,9 @@ then Notes (9 italic SLATE): source line, method line, any caveat
   table header row: the primary table's header on row 4 is not the header of the tables
   below it, and a header pinned over a table it does not describe misleads the reader.
   Never freeze deeper than 3 rows or 2 columns — a deep freeze fills a laptop screen and
-  blocks scrolling.
+  blocks scrolling. Each table carries its own header instead, as an Excel table: its
+  filter buttons, and its header in place of the column letters while the reader scrolls
+  inside it (`WORKBOOK.md` § 4).
 - **Gridlines OFF** on deliverable tabs (`ws.sheet_view.showGridLines = False`). ON for
   raw-data and ledger tabs where the reader scans rows.
 - **One `BAND` per sheet.** The primary table's header. Secondary tables on the same
@@ -270,8 +272,9 @@ workbook against the same values. The names, for reading a tab script:
 
 Per sheet, `finish()` in the same module sets: gridlines off (on for a ledger), freeze
 panes `B4`, column A width 2, row 1 height 24 and row 4 height 20, the tab color
-(`ACCENT`; `SLATE` for a ledger), print titles `1:3`, landscape fit to one page wide,
-0.5 margins, horizontal centring, and the § 7 footer.
+(`ACCENT`; `SLATE` for a ledger), an Excel table per table block with no table style (the
+cell styles are the look), print titles `1:3`, landscape fit to one page wide, 0.5
+margins, horizontal centring, and the § 7 footer.
 
 ### xlsxwriter
 
@@ -303,6 +306,8 @@ F = {
 }
 # every table format above (header, body, input, amount, pct, subtotal, total, status)
 # also carries {"border": 1, "border_color": P["hairline"]}; note/section/title do not.
+# per table: ws.add_table(hdr_row, 1, last_body_row, last_col,
+#   {"columns": [{"header": h} for h in labels], "style": None})   # its own filter; Total row outside
 # per sheet: ws.hide_gridlines(2); ws.freeze_panes("B4"); ws.set_column("A:A", 2);
 #   ws.set_row(0, 24); ws.set_row(3, 20); ws.set_tab_color(P["accent"]);
 #   ws.repeat_rows(0, 2); ws.set_landscape(); ws.fit_to_pages(1, 0); ws.set_margins(0.5, 0.5, 0.5, 0.5);
@@ -317,7 +322,8 @@ Open the produced workbook (or dump its XML) and confirm, per deliverable tab:
 
 1. Every cell font is Arial; sizes used ⊆ {9, 10, 11, 12, 14}.
 2. Exactly one `BAND`-filled row on the sheet.
-3. Freeze pane is `B4` — no table header row frozen; gridlines hidden.
+3. Freeze pane is `B4` — no table header row frozen; gridlines hidden; every table an
+   Excel table (`ws.tables`), none overlapping a sheet AutoFilter.
 4. Column A width 2 and empty.
 5. Amount columns use a three-part format with parentheses and `"–"`; no red negatives.
 6. Total row has a double bottom border; subtotals have `MIST` fill; every table cell

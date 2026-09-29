@@ -538,7 +538,8 @@ def match_tabs(wb, res, left: pl.DataFrame, right: pl.DataFrame, *, check: str, 
     r_ += 2
     section(ws, r_, "Matched, by rule")
     r_ += 1
-    header(ws, r_, ["id", "Rule", Ns, AMOUNT_HEADER, Os, AMOUNT_HEADER + " ", "Difference"],
+    header(ws, r_, ["id", "Rule", Ns, f"{AMOUNT_HEADER}, {nouns[1]}", Os,
+                     f"{AMOUNT_HEADER}, {other_nouns[1]}", "Difference"],
            ["id", "description", "count", "amount", "count", "amount", "amount"], primary=False)
     h_ = r_
     for k, b in enumerate(by_rule.iter_rows(named=True), start=1):

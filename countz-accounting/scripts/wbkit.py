@@ -45,7 +45,7 @@ __all__ = [
     # styles and helpers
     "grid", "styles", "S", "STATUS", "STATUS_KINDS", "register_status", "WIDTH", "WRAP",
     "band", "header", "section", "ident", "text", "amount", "count", "status", "table", "KINDS", "fit_rows",
-    "finish", "get_column_letter", "Alignment",
+    "finish", "excel_tables", "table_blocks", "get_column_letter", "Alignment",
 ]
 
 # --- WORKBOOK_STYLE.md § 9 ------------------------------------------------------------
@@ -152,7 +152,13 @@ def band(ws, title, subtitle, summary=None):
 def header(ws, row, labels, widths, primary=True, currency=None):
     """The table header. `currency` names the currency of the money (`amount`) columns:
     one code for all of them (`"eur"`), or `{label: code}` per column; each such header
-    reads `Balance (€)`. Omitted, the band's subtitle states the tab's one currency."""
+    reads `Balance (€)`. Omitted, the band's subtitle states the tab's one currency.
+    Labels are distinct within the table: each names one column to the reader, and an
+    Excel table (`excel_tables`) takes its column names from them."""
+    seen = [str(v).strip().casefold() for v in labels]
+    if dup := sorted({v for v in seen if seen.count(v) > 1}):
+        raise ValueError(f"header row {row}: labels repeat {dup} — name what each column "
+                         f"holds (`Amount, invoices` / `Amount, bank lines`)")
     for i, (label, width) in enumerate(zip(labels, widths), start=2):
         unit = currency.get(label) if isinstance(currency, dict) else \
             (currency if width == "amount" else None)
@@ -276,6 +282,124 @@ def fit_rows(ws, first_row=5):
             ws.row_dimensions[row[0].row].height = 13 * lines + 2
 
 
+def _rgb(cell) -> str:
+    f = cell.fill
+    if f is None or f.fill_type != "solid" or f.fgColor is None:
+        return ""
+    return str(f.fgColor.rgb or "")[-6:].upper() if f.fgColor.type == "rgb" else "theme"
+
+
+def _is_header_cell(cell) -> bool:
+    """A table header cell as stored: a bold label on a solid fill (BAND or MIST, or an
+    earlier palette's). Read from the resolved font and fill, not the named style, so a
+    tab copied cell by cell into the assembled workbook reads as the tab file it came from."""
+    return (isinstance(cell.value, str) and bool(cell.value.strip())
+            and bool(cell.font and cell.font.b) and bool(_rgb(cell)))
+
+
+def table_blocks(ws, first_row=4):
+    """Every table on the tab as `(header_row, first_col, last_col, last_body_row)`.
+
+    A header is a run of two or more header cells from column B that opens a block: on
+    row 4, after a blank row or a Section heading, or anywhere as a row of labels alone —
+    a table stacked under another with no blank row between still starts afresh. A
+    subtotal carries the same fill but sits under body rows beside its figures, so it
+    never opens one. The block runs to the first blank row, Section heading or next
+    header; a closing Total row (double bottom rule) stays outside it, so sorting or
+    filtering the table never moves the total."""
+    def empty(r, c1, c2):
+        return all(ws.cell(row=r, column=c).value in (None, "") for c in range(c1, c2 + 1))
+
+    def heading(r, c2):                         # a Section heading opens the next block
+        b = ws.cell(row=r, column=2)
+        return (bool(b.font and b.font.b) and not _rgb(b) and b.value not in (None, "")
+                and empty(r, 3, max(c2, 3)))
+
+    def total(r, c1, c2):
+        return any((b := ws.cell(row=r, column=c).border) is not None and b.bottom is not None
+                   and b.bottom.style == "double" for c in range(c1, c2 + 1))
+
+    def span(r):                                # the header's last column, or None
+        if not _is_header_cell(ws.cell(row=r, column=2)):
+            return None
+        c2 = 2
+        while c2 < ws.max_column and _is_header_cell(ws.cell(row=r, column=c2 + 1)):
+            c2 += 1
+        return c2 if c2 > 2 else None
+
+    def labels_only(r):
+        return all(not isinstance(ws.cell(row=r, column=c).value, (int, float))
+                   for c in range(2, ws.max_column + 1))
+
+    def opens(r):
+        c2 = span(r)
+        if c2 and (r == first_row or empty(r - 1, 3, c2) or labels_only(r)):
+            return c2
+        return None
+
+    blocks, r, last_row = [], first_row, ws.max_row
+    while r <= last_row:
+        c2 = opens(r)
+        if not c2:
+            r += 1
+            continue
+        end = r
+        while (end < last_row and not empty(end + 1, 2, c2) and not heading(end + 1, c2)
+               and not opens(end + 1)):
+            end += 1
+        body_end = end
+        while body_end > r and total(body_end, 2, c2):
+            body_end -= 1
+        if body_end > r:
+            blocks.append((r, 2, c2, body_end))
+        r = end + 1
+    return blocks
+
+
+def _table_name(title: str, n: int, taken: set) -> str:
+    import re
+    stem = re.sub(r"[^A-Za-z0-9_]+", "_", title).strip("_") or "Tab"
+    name = f"T_{stem}_{n}"[:250]
+    while name.casefold() in taken:
+        n += 1
+        name = f"T_{stem}_{n}"[:250]
+    taken.add(name.casefold())
+    return name
+
+
+def excel_tables(ws, taken=None) -> list[str]:
+    """Make every table on the tab an Excel table: its own range, its own filter
+    buttons, and its header shown in place of the column letters while the reader
+    scrolls inside it. A tab holding several tables cannot freeze one header for all
+    of them (the band is the only frozen row); a table object carries its own.
+
+    Replaces the tab's existing tables and its sheet-level AutoFilter, which must not
+    overlap a table. `taken` is the workbook's set of table names (case-folded) — table
+    names are unique across a workbook. A block whose header is not a set of distinct
+    labels is left as plain cells: Excel repairs, rather than opens, a table whose
+    header cells disagree with its column names. Returns the names written."""
+    from openpyxl.worksheet.table import Table, TableColumn
+    from openpyxl.worksheet.filters import AutoFilter
+    taken = set() if taken is None else taken
+    for name in list(ws.tables):
+        del ws.tables[name]
+    written = []
+    for n, (hr, c1, c2, last) in enumerate(table_blocks(ws), start=1):
+        labels = [ws.cell(row=hr, column=c).value for c in range(c1, c2 + 1)]
+        if len({str(v).strip().casefold() for v in labels}) != len(labels):
+            continue
+        ref = f"{get_column_letter(c1)}{hr}:{get_column_letter(c2)}{last}"
+        t = Table(displayName=_table_name(ws.title, n, taken), ref=ref,
+                  autoFilter=AutoFilter(ref=ref))
+        t.tableColumns = [TableColumn(id=i, name=str(v)) for i, v in enumerate(labels, start=1)]
+        t.tableStyleInfo = None                 # the kit's cell styles are the look
+        ws.add_table(t)
+        written.append(t.displayName)
+    if written:
+        ws.auto_filter = AutoFilter()
+    return written
+
+
 def finish(ws, table_last_row, ledger=False, header_row=4, freeze="B4"):
     """The per-sheet settings of WORKBOOK_STYLE.md § 9, after the last row is written."""
     grid(ws, header_row, table_last_row, 2, ws.max_column)   # the primary table's rules
@@ -283,7 +407,8 @@ def finish(ws, table_last_row, ledger=False, header_row=4, freeze="B4"):
     ws.freeze_panes = freeze
     ws.sheet_view.showGridLines = ledger
     ws.sheet_properties.tabColor = SLATE if ledger else ACCENT
-    ws.auto_filter.ref = f"B{header_row}:{get_column_letter(ws.max_column)}{table_last_row}"
+    if not excel_tables(ws):                    # no table object: the sheet filter on the header
+        ws.auto_filter.ref = f"B{header_row}:{get_column_letter(ws.max_column)}{table_last_row}"
     ws.print_title_rows = "1:3"                                # the band; never a table header
     ws.page_setup.orientation, ws.page_setup.fitToWidth, ws.page_setup.fitToHeight = "landscape", 1, 0
     ws.sheet_properties.pageSetUpPr.fitToPage = True

@@ -208,6 +208,40 @@ def read_slide(z: zipfile.ZipFile, part: str) -> dict:
             "footer_source": next((t for n, t in shapes if n == "footer-source"), "")}
 
 
+# GATE 7 — the reader's words. A slide is written to the company's executives, never in
+# the run's machine vocabulary (WORKBOOK.md § 3 Language, DOCTRINE.md § Voice): no ledger
+# id (`Q.r4.ar_movement`, `LK.terms_not_enforced`) in a sentence or a cell, and no step
+# token mid-text (`as R4 measured it`). Footers name tabs by design and are not read.
+MACHINE_ID = re.compile(r"(?<![\w.])(?:F|P|E|T|RI|S|X|C|D|Q|H|LK|A)\.[a-z][a-z0-9_]*(?:\.[\w<>-]+)*")
+RUN_TAB_NAMES = {"exec summary", "basis of preparation", "coverage", "open items", "sources",
+                 "evidence"}
+# A token shaped like a period (`Q1`, `H2`) is read in lower case only: in upper case it is
+# the quarter or the half a sentence names.
+PERIOD_LIKE = re.compile(r"^[qh]\d$", re.I)
+
+
+def step_tokens(tabs: list[str]) -> list[str]:
+    """The roster tokens the workbook's check tabs open with (`r4 Position and DSO`)."""
+    out = set()
+    for t in tabs:
+        if t.strip().lower() in RUN_TAB_NAMES or " " not in t.strip():
+            continue
+        tok = t.split()[0]
+        if re.fullmatch(r"[A-Za-z]{1,3}\d[\w]*", tok):
+            out.add(tok)
+    return sorted(out, key=len, reverse=True)
+
+
+def machine_words(text: str, tokens: list[str]) -> list[str]:
+    hits = [m.group(0) for m in MACHINE_ID.finditer(text)]
+    for tok in tokens:
+        flags = 0 if PERIOD_LIKE.match(tok) else re.I
+        for m in re.finditer(rf"(?<![\w.]){re.escape(tok)}(?![\w.])", text, flags):
+            if m.start() > 0:                  # a cell OPENING with the token names a tab
+                hits.append(m.group(0))
+    return hits
+
+
 # --- the workbook as stored --------------------------------------------------------
 CELL_REF = re.compile(r"^([A-Z]+)(\d+)$")
 
@@ -687,6 +721,19 @@ def audit(deck: pathlib.Path, workbook: pathlib.Path, run_dir: pathlib.Path | No
             if shape_name in PROSE_SHAPES and text.strip() and not SENTENCE_END.search(text.strip()):
                 fails.append(f"slide {n}: {shape_name} `{text.strip()[:50]}` does not end with a full stop — "
                              f"a complete sentence")
+    # GATE 7 — the reader's words.
+    tokens = step_tokens(tabs)
+    jargon: dict[int, list[str]] = {}
+    for n, s in enumerate(slides, 1):
+        texts_here = [t for nm, t in s["shapes"] if nm not in SKIP_SHAPES]
+        texts_here += [c for _, rows in s["tables"] for row in rows for c in row]
+        for t in texts_here:
+            jargon.setdefault(n, []).extend(machine_words(t, tokens))
+    for n, words in sorted(jargon.items()):
+        if words:
+            shown = ", ".join(sorted(set(words))[:4])
+            fails.append(f"slide {n}: the run's own vocabulary on the page ({shown}) — state what was "
+                         f"done and found in the reader's words; ids and step tokens stay in the workbook")
     # GATE 5 — the recipe's schedules, on a plan-driven run whose recipe declares them;
     # GATE 6 — the opening, on every deck, with the key-metrics page held to the recipe.
     schedules = metrics = None
