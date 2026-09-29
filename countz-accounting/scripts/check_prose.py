@@ -14,6 +14,11 @@ markdown lines) and requires each to agree with an admitted value within the rou
 tolerance of the precision displayed (DOCTRINE.md § Number conventions: "$6.3M" tolerates 0.05M,
 "44.6 days" tolerates 0.05).
 
+Money is read with scripts/style.py's grammar, the one figures.fmt writes with: any
+currency in its table by symbol or ISO code (`$9.4M`, `€5,000,000`, `A$1.2B`, `CHF 1,204`,
+`5,000 EUR`), a scale suffix in any case or spelled (`$9.4m`, `$81K`, `$1.2 billion`).
+A number is backed by its magnitude: a written sign is not checked.
+
 Scanned: string cells of .xlsx targets; lines of any other (text) target. Digits only —
 a magnitude spelled out in words is the review's to catch by reading, not this gate's.
 Admitted: numbers on value-bearing keys (value, control_total, total_n, lo, hi, ...) in
@@ -35,16 +40,19 @@ import re
 import sys
 import zipfile
 
-NUM = r"\d[\d,]*(?:\.\d+)?"
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import style  # noqa: E402  sibling: the grammar figures.fmt writes with
+
+NUM = style.NUM
 ANY_NUM = re.compile(f"-?{NUM}")
-# One alternative per display convention. Bare-number forms guard their left edge so a
-# token cannot start mid-number, and the days form also refuses a range/plus prefix.
+# One alternative per display convention, money first. Bare-number forms guard their left
+# edge so a token cannot start mid-number, and the days form also refuses a range/plus
+# prefix.
 TOKEN = re.compile(
-    rf"\$\s?(?P<money>{NUM})\s*(?P<suffix>[KMB]\b|thousand\b|million\b|billion\b)?"
+    rf"(?P<m>{style.MONEY_TOKEN})"
     rf"|(?<![\d.,\-–+$])(?P<days>{NUM})[\s-]days?\b"
     rf"|(?<![\d.,])(?P<pct>{NUM})\s?%"
     rf"|(?<![\d.,])(?P<mult>{NUM})x\b")
-SCALE = {"K": 1e3, "thousand": 1e3, "M": 1e6, "million": 1e6, "B": 1e9, "billion": 1e9}
 # A ledger line admits the first number after each of these keys; anything else on the
 # line (row anchors, dates, cell refs) stays out of the admitted set.
 VALUE_KEY = re.compile(
@@ -80,7 +88,8 @@ def sheet_names(z: zipfile.ZipFile) -> dict[str, str]:
 def texts(target: pathlib.Path):
     """Yield (location, text) for every prose surface in the target, as stored."""
     if target.suffix.lower() != ".xlsx":
-        for i, line in enumerate(target.read_text(errors="replace").splitlines(), 1):
+        for i, line in enumerate(target.read_text(encoding="utf-8",
+                                                  errors="replace").splitlines(), 1):
             yield f"{target.name}:{i}", line
         return
     with zipfile.ZipFile(target) as z:
@@ -118,27 +127,48 @@ def texts(target: pathlib.Path):
 def admitted_values(run_dir: pathlib.Path, allow: list[pathlib.Path]) -> list[tuple[float, str]]:
     out: list[tuple[float, str]] = []
     for y in sorted((run_dir / "workpapers").glob("*.yaml")):
-        for line in y.read_text(errors="replace").splitlines():
+        for line in y.read_text(encoding="utf-8", errors="replace").splitlines():
             for k in VALUE_KEY.finditer(line):
                 n = ANY_NUM.search(line[k.end():])
                 if n:
                     out.append((float(n.group(0).replace(",", "")), y.name))
     for f in allow:
-        for n in ANY_NUM.finditer(f.read_text(errors="replace")):
+        for n in ANY_NUM.finditer(f.read_text(encoding="utf-8", errors="replace")):
             out.append((float(n.group(0).replace(",", "")), f.name))
     return out
 
 
 def tokenize(text: str):
-    """Yield (token_text, value, tolerance, variants) per metric number in the text."""
+    """Yield (token_text, value, tolerance, variants) per metric number in the text;
+    `value` is the magnitude."""
     for m in TOKEN.finditer(text):
-        raw = m.group("money") or m.group("days") or m.group("pct") or m.group("mult")
-        scale = SCALE.get((m.group("suffix") or "").strip(), 1.0) if m.group("money") else 1.0
+        if m.group("m"):
+            raw = m.group("money") or m.group("money2")
+            scale = style.scale_of(m.group("suffix") or m.group("suffix2"))
+        else:
+            raw = m.group("days") or m.group("pct") or m.group("mult")
+            scale = 1.0
         decimals = len(raw.split(".")[1]) if "." in raw else 0
         value = float(raw.replace(",", "")) * scale
         tol = 0.5 * scale * 10 ** -decimals
         variants = (1.0, 100.0) if m.group("pct") else (1.0,)   # a ledger 0.174 backs "17.4%"
         yield m.group(0).strip(), value, tol, variants
+
+
+def scan(targets, admitted):
+    """(metric numbers seen, unbacked) over every target's prose."""
+    total, unbacked = 0, []
+    for target in targets:
+        for loc, text in texts(target):
+            for token, value, tol, variants in tokenize(text):
+                total += 1
+                if any(abs(abs(av) * f - value) <= tol for av, _ in admitted for f in variants):
+                    continue
+                gap, near, src = min((abs(abs(av) * f - value), av, s)
+                                     for av, s in admitted for f in variants)
+                unbacked.append({"target": target.name, "location": loc, "token": token,
+                                 "nearest": near, "nearest_in": src, "off_by": gap})
+    return total, unbacked
 
 
 def main() -> int:
@@ -166,17 +196,7 @@ def main() -> int:
               file=sys.stderr)
         return 2
 
-    total, unbacked = 0, []
-    for target in a.targets:
-        for loc, text in texts(target):
-            for token, value, tol, variants in tokenize(text):
-                total += 1
-                if any(abs(abs(av) * f - value) <= tol for av, _ in admitted for f in variants):
-                    continue
-                gap, near, src = min((abs(abs(av) * f - value), av, s)
-                                     for av, s in admitted for f in variants)
-                unbacked.append({"target": target.name, "location": loc, "token": token,
-                                 "nearest": near, "nearest_in": src, "off_by": gap})
+    total, unbacked = scan(a.targets, admitted)
     if a.json:
         import json
         print(json.dumps({"metric_numbers": total, "unbacked": unbacked}, indent=2))

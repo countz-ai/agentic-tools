@@ -60,6 +60,8 @@ Where a deliverable has landed, its layout and its cells are held to
 `REPORT.md` § 3 and `REPORT.md` § 4. Read the section that governs the surface you are
 judging.
 
+Whether a cover title/subtitle names the company is yours to judge; a hit is an advisory `prose` finding on `out/report.yaml`.
+
 ## Findings
 
 ```yaml

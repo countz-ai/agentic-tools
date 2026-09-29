@@ -26,8 +26,8 @@ binds you. Read it first; the bullets below say where your work differs.
   says what each family reads from another; you write those reads as `_from` params
   and set each step's `after` to exactly the steps they name — nothing runs later than
   its reads require. You also name, per step, the data-room files it reads
-  (`params.reads`), and put their union into one `extract` step the readers depend on
-  (check-plan SKILL.md § 3).
+  (`params.reads`), and put their union into one `extract` step the readers depend on,
+  one `params.files` entry per table (check-plan SKILL.md § 3).
 - **A re-draft starts from your own records.** On `revise`, read your prior
   `file_index.json`, profiles and plan first. Open a client file only where the
   instruction needs a fact they do not carry. Every file you write is yours to rewrite

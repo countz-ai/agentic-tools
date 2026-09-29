@@ -79,7 +79,7 @@ def read_transcript(path: pathlib.Path) -> tuple[dict[str, dict], datetime | Non
     by_id: dict[str, tuple[str, dict]] = {}
     first = last = None
     records = 0
-    with path.open() as fh:
+    with path.open(encoding="utf-8") as fh:
         for line in fh:
             try:
                 rec = json.loads(line)
@@ -145,7 +145,7 @@ def transcripts_for(session_id: str,
             meta = {}
             if meta_path.is_file():
                 try:
-                    meta = json.loads(meta_path.read_text())
+                    meta = json.loads(meta_path.read_text(encoding="utf-8"))
                 except json.JSONDecodeError:
                     pass
             out.append((meta.get("agentType") or sub.stem, sub, meta))
@@ -153,7 +153,7 @@ def transcripts_for(session_id: str,
 
 
 def collect(run_dir: pathlib.Path, rates: dict) -> dict:
-    state = json.loads((run_dir / "run.json").read_text())
+    state = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
     session_ids = [s["session_id"] for s in state.get("inputs", {}).get("sessions", [])]
 
     dispatch_rows, totals, unpriced = [], {}, set()
@@ -297,7 +297,7 @@ def main() -> int:
     if not (a.run_dir / "run.json").is_file():
         print(f"{a.run_dir}: no run.json — not an countz-accounting run directory", file=sys.stderr)
         return 2
-    rep = collect(a.run_dir, json.loads(a.rates.read_text()))
+    rep = collect(a.run_dir, json.loads(a.rates.read_text(encoding="utf-8")))
     print(json.dumps(rep, indent=2) if a.json else render(rep))
     return 0
 

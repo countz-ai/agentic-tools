@@ -11,6 +11,8 @@ dependencies = [
     "openpyxl",
     "pyyaml",
     "python-pptx",
+    "pypdf>=6.19.0",
+    "highspy",
 ]
 
 [tool.uv]

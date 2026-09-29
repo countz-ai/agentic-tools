@@ -91,7 +91,7 @@ def main() -> int:
     if len(sys.argv) < 3:
         raise SystemExit("usage: section.py <file> <heading> [<heading> ...]")
     path = locate(sys.argv[1])
-    lines = path.read_text().splitlines()
+    lines = path.read_text(encoding="utf-8").splitlines()
     heads = headings(lines)
     names = sys.argv[2:]
     if len(names) > 1 and resolves(heads, " ".join(names)):

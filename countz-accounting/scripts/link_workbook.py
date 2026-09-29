@@ -37,12 +37,17 @@ What gets wired, in this order:
      pointer to that tab. Two tabs on one fold, no link.
   6. Every AMOUNT on the Exec Summary links to the cell it was copied from. The Exec
      Summary mints no figure, so each number there has an original on a check's tab; the
-     table's title names that tab, and the amount is found by the row's leading label and
-     the column's header, both copied verbatim. An amount that matches nothing is
-     reported and left — check_workbook.py refuses an unlinked number on the Exec
-     Summary, because the fix is copying the label, not linking. These cells take the
-     link color and no underline: under a figure, an underline is the accounting rule
+     table's title declares that tab (`from: <tab>`), and the amount is found by the row's
+     leading label and the column's header, both copied verbatim. An amount that matches
+     nothing is reported and left — check_workbook.py refuses an unlinked number on the
+     Exec Summary, because the fix is copying the label, not linking. These cells take
+     the link color and no underline: under a figure, an underline is the accounting rule
      that reads "sum above".
+
+  7. On a match summary (scripts/match_tabs.py), each line's status words link to that
+     status's rows on its match schedule: the link selects the block, which the schedule
+     holds together because it is sorted by status. A hyperlink cannot apply a filter; the
+     selected block is the filter's rows, and check_workbook.py holds the line to them.
 
 Every link carries the cell's own text as its `display` attribute, so a consumer that
 renders the anchor from link metadata instead of the cell shows the same readable text.
@@ -91,7 +96,7 @@ EXEC = "Exec Summary"
 RUN_TABS = {"exec_summary", "basis_of_preparation", "coverage", "open_items", "sources", "evidence"}
 # Which ledger tab an id prefix resolves on. Every other prefix homes where it is stated.
 LEDGER = {"F": SOURCES, "P": SOURCES, "E": EVIDENCE}
-LINK_COLOR = "0F756D"   # WORKBOOK_STYLE.md § 1a `ACCENT`; the cell keeps its own font
+LINK_COLOR = "0A5F6A"   # WORKBOOK_STYLE.md § 1a `ACCENT`; the cell keeps its own font
 # The navigable form of a row: the whole cell is a check id ("q6_ebitda_bridge", the
 # Coverage and Basis of Preparation table form), or the id opens the cell ahead of a separator
 # ("Q6 · the EBITDA bridge", the prose form).
@@ -224,21 +229,26 @@ def resolve(exact_cells, line_homes, tokens, sheets):
     return targets, dead, internal, homes
 
 
-# A table on the Exec Summary declares the tab it was copied from by naming that tab in
-# its title. Sheet names are distinctive ("q6_ebitda_bridge"), so a substring match is
-# unambiguous; a title naming two tabs declares neither.
+# A table on the Exec Summary declares the tab it was copied from with an explicit marker
+# in its title: `from: <tab>` — the tab's full name or its token (`EBITDA bridge · from:
+# q6`), running to the end of the title or a closing bracket (REPORT.md § 2). The marker is
+# the plugin's own syntax, so the declaration never rests on an English word in a title.
+# A marker naming no tab, or two, declares nothing.
 LABEL_COLS = 4
+SOURCE_MARKER = re.compile(r"(?:^|[\s(\[·—–-])from:\s*(?P<tab>[^)\]]+?)\s*(?:[)\]]|$)")
+
+
+def _tab_named(name: str, sheets) -> list[str]:
+    name = name.strip().strip("`'\"")
+    return [t for t in sheets if t != EXEC and (t == name or normalize(t) == normalize(name)
+                                                 or normalize(t.split(" ")[0]) == normalize(name))]
 
 
 def declared_source(text: str, sheets) -> str | None:
-    # A tab is named `<token> <Title>` (reference/WORKBOOK.md § 2), so a title that names
-    # the token alone ("copied from the q6_ebitda_bridge tab") declares that tab too.
-    # A declaration says "tab" ("copied from the q6_ebitda_bridge tab"); a row whose
-    # leading label merely IS a tab's token declares nothing.
-    if re.search(r"\btab\b", text) is None:
+    m = SOURCE_MARKER.search(text or "")
+    if not m:
         return None
-    hits = [t for t in sheets if t != EXEC
-            and (t in text or re.search(rf"(?<![\w.]){re.escape(t.split(' ')[0])}(?![\w.])", text))]
+    hits = _tab_named(m.group("tab"), sheets)
     return hits[0] if len(hits) == 1 else None
 
 
@@ -275,6 +285,53 @@ def sheet_grid(ws):
         if nums:
             numerics[r] = nums
     return headers_at, labels, row_texts, numerics
+
+
+# A match summary and its schedule, by the marker their B1 carries after the token;
+# mirrors match_tabs.py and check_workbook.py — change all three.
+SUMMARY_MARK = " · Match summary"
+SCHEDULE_MARK = " · Match schedule"
+
+
+def match_targets(wb):
+    """targets[(summary, C<row>)] = (schedule, "B<first>:<last col><last>") for every line
+    of every match summary whose status the schedule carries."""
+    sums, schs = {}, {}
+    for ws in wb.worksheets:
+        b1 = ws["B1"].value
+        if not isinstance(b1, str):
+            continue
+        if SUMMARY_MARK in b1:
+            sums[b1.split(SUMMARY_MARK)[0].strip()] = ws.title
+        elif SCHEDULE_MARK in b1:
+            schs[b1.split(SCHEDULE_MARK)[0].strip()] = ws.title
+    targets = {}
+    for tok, summ in sums.items():
+        sched = schs.get(tok)
+        if sched is None:
+            continue
+        sh = wb[sched]
+        col = {c.value: c.column for c in sh[4] if isinstance(c.value, str)}.get("Status")
+        if col is None:
+            continue
+        last = sh.cell(4, sh.max_column).column_letter
+        blocks = {}
+        r = 5
+        while True:
+            word = sh.cell(r, col).value
+            if not isinstance(word, str) or not word.strip():
+                break                     # the Total row, or the table's end
+            blocks.setdefault(word, [r, r])[1] = r
+            r += 1
+        ws = wb[summ]
+        r = 5
+        while any(ws.cell(r, c).value is not None for c in range(2, 8)):
+            word = ws.cell(r, 3).value
+            if word in blocks:
+                a, b = blocks[word]
+                targets[(summ, f"C{r}")] = (sched, f"B{a}:{last}{b}")
+            r += 1
+    return targets
 
 
 #: Where a navigation link lands: the tab's title cell. Column A is an empty margin and
@@ -394,6 +451,9 @@ def main() -> int:
     # The Exec Summary's copied tables: every amount back to the cell it was copied from.
     walk, missed = walk_targets(wb)
     targets.update(walk)
+    # A match summary's lines: each opens its status's rows on the schedule.
+    matches = match_targets(wb)
+    targets.update(matches)
 
     if not a.dry_run:
         # Every link in this workbook is placed here, so a re-run owns them all: clear
@@ -426,7 +486,8 @@ def main() -> int:
            "family_links": fam, "navigation": nav, "walk_amounts": len(walk),
            "unmatched_walk_amounts": [{"cell": c, "row": l, "column": h}
                                       for c, l, h in missed],
-           "other": len(targets) - up - back - nav - len(walk),
+           "match_lines": len(matches),
+           "other": len(targets) - up - back - nav - len(walk) - len(matches),
            "dead_ends": sorted(dead), "internal_refs": sorted(internal),
            "dry_run": a.dry_run}
     if a.json:
@@ -436,7 +497,7 @@ def main() -> int:
     print(f"{a.workbook.name}: {verb} {len(targets)} links over {len(tokens)} ids — "
           f"{up} to {SOURCES}/{EVIDENCE}, {back} back out, {fam} family stems, "
           f"{rep['other'] - fam} to stated homes, {nav} check-tab navigation, "
-          f"{len(walk)} {EXEC} amounts.")
+          f"{len(walk)} {EXEC} amounts, {len(matches)} match-summary lines.")
     if missed:
         print(f"  {len(missed)} {EXEC} amount(s) matched no source cell — the row's "
               f"label and the column's header must be COPIED from the tab the table's "

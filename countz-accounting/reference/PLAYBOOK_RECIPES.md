@@ -26,7 +26,8 @@ order from them, and a recipe never states one.
 
 The plan also schedules the data room's parsing. Every file a step reads is named in
 its `params.reads`; the union of those reads is parsed once by an `extract` step the
-plan adds ahead of them (`PLAYBOOKS.md` § The file), and every reader names it in
+plan adds ahead of them, through its worker's own script and `scripts/cache.py`
+(`PLAYBOOKS.md` § The file), and every reader names it in
 `params.cache_from`. What no step reads is never parsed.
 
 ### The source-class ladder
@@ -107,7 +108,10 @@ classification, and what every wave owes the user.
   they give one: a fiscal year, a quarter, the months of a close.
 - **Each option the recipe `declares`**: put its line to the user and record the choice.
   Where they do not choose, take the answer its line carries (`RUN_CONTRACT.md`
-  § Parameters).
+  § Parameters). `arr_policy` is the exception: it is a file, not a one-line choice. Ask
+  whether the company has an approved ARR policy (`ARR_POLICY.md` § Where a policy
+  lives). A policy in the library for this company is offered by name. The rest is
+  settled after registration (§ 2).
 - **The company** whose books the run is over, in the user's words. It names the run
   folder.
 - **Where the output goes**: a folder you may write into. Do not guess paths.
@@ -157,6 +161,13 @@ Sources arriving after the plan is drafted: run the same script with `<run_dir>`
 of `--output-root`, `--skill` and `--company`, then re-dispatch `check-plan` with
 `revise=` naming them.
 
+**The ARR policy.** Where the recipe declares `arr_policy`, pin an approved policy before
+the plan: the one the user named, or the library's for this company, with
+`setup_run.py <run_dir> --session ${CLAUDE_SESSION_ID} --sources '[]' --arr-policy
+<path>`. Where there is none, or `--arr-policy` refuses the file, invoke the
+`create-arr-policy` skill with `run_dir` and `company`; it settles, saves and pins the
+policy.
+
 The script also writes `<run_dir>/engagement-preview.md`: the parameters, each source's
 location and the data room's directory shape, from directory metadata only. Before
 dispatching the plan, run `scripts/preview.py <run_dir>` and send what it prints
@@ -203,7 +214,8 @@ execute the lines it prints in order: `RECORD:`, `LAUNCH:`, `NEXT:`, then the `T
 lines (`record`, any `RETRY:`, the script again). On `ESCALATE:` (exit code 3) or any
 other failure, invoke the `playbook-next` skill with the same arguments, execute its
 imperatives, then return to the script. Repeat until `DONE:`. Relay any skipped or failed
-steps it names.
+steps it names. Where the recipe declares `arr_policy`, each `record` is followed by
+`ARR_POLICY.md` § Applying the policy, step 6, before the script runs again.
 
 ### 5. Review and report
 

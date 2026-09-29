@@ -24,29 +24,35 @@ Layout:
   definition; the one step that reads client files before any check runs), `worker`
   (runs one step), `critic` (adversarial review), `playbook-engine` (the playbook
   engine's escalation path: decides waves where `scripts/playbook_next.py` cannot,
-  distills saved playbooks; opens no client file)
+  distills saved playbooks; opens no client file), `scrubber` (rewrites the one text that
+  crosses to the connector, and reads it back blind; opens no client file)
 - `skills/` — the inline launchers (`tieout`, `recon`, `countz-analysis`,
-  one shim per recipe), the internal inline relay `playbook`, plus the forked workers
-  (`create-recipe`, `check-plan`, `check-extract`, `check-tie`, `check-recon`,
+  one shim per recipe, and `create-arr-policy`, which settles the ARR policy a run that
+  computes ARR requires), the internal inline relay `playbook`, plus the forked workers
+  (`create-recipe`, `extract-arr-policy`, `check-plan`, `check-extract`, `check-tie`, `check-recon`,
   `check-completeness`, `check-vouch`, `check-cutoff`, `check-analyze`, `check-review`,
   `check-report`, `playbook-next`, `playbook-save`)
 - `reference/` — `CONDUCT.md` (the standing rules every agent reads first: the reader,
   the bounds on a figure, how to read a plugin document and a client file, the libraries,
   the events, the return value), `DOCTRINE.md` (the standard), `EVIDENCE.md` (citations,
   figures, the id namespace), `VALIDATION.md` (the whole review scope and the finding
-  shape), `RUN_CONTRACT.md` (run dir,
+  shape), `SCRUB.md` (what the one text sent to the connector may carry),
+  `RUN_CONTRACT.md` (run dir,
   state, the step record, the per-wave duties), `PLAYBOOKS.md` (the playbook file format and
   library), `RECIPE_FORMAT.md` (what a recipe document must contain),
   `PLAYBOOK_RECIPES.md` (the rules every recipe runs under, and the relay
   procedure), `WORKBOOK.md` + `WORKBOOK_STYLE.md` (the workbook's one design:
   where things go, how cells look),
-  `OBSERVABILITY.md` + `rates.json`
+  `OBSERVABILITY.md` + `rates.json`, `ARR_POLICY.md` (the ARR policy: its model, its
+  file, where it lives and how a run reads it)
 - Playbooks — user-saved ones land in `$HOME/.countz-accounting/playbooks/`; a
   plan-driven run drafts its own at `<run_dir>/plan/<name>.json`. New packaged capability
   is a playbook recipe (plus its shim skill — `reference/RECIPE_FORMAT.md`) composing the
   check kinds; a new kind is a worker skill — its procedure and its item tables — plus a `KINDS` row and
   params contract in `scripts/check_playbook.py`.
-- `scripts/` — `setup_run.py` (mechanical workspace registration — mints the run
+- `scripts/` — `arr_policy.py` (the ARR policy's one home: the catalog of purposes,
+  positions, conventions and the 31 decisions, and the commands that resolve, render,
+  approve and check a company's policy), `setup_run.py` (mechanical workspace registration — mints the run
   directory `<skill>-<company>.<stamp>` with its `run.json`, or folds new sources into a
   run named by its path; the relay runs it, never a dispatch), `run_state.py` (the
   relay's pen for `run.json`: check registration, playbook binding, plan approval, wave
@@ -62,14 +68,24 @@ Layout:
   line ceilings cannot be lifted), `check_workbook.py` + `check_prose.py` +
   `check_report.py` (deliverable gates), `recipe_format.py` + `validate_recipe.py` (the
   recipe shape contract and its CLI, the one gate on a generated recipe),
-  `scrub_ask.py` (the gate on the one text that crosses to the connector), `section.py` (prints a named section of a
+  `section.py` (prints a named section of a
   plugin document, so a section-scoped citation costs its section and not its whole file),
   `wbkit.py` (the workbook kit every tab script imports — the style constants, the
-  named styles and the block helpers, written once), `extract.py` (the `extract` step:
-  parses the data-room files the plan's steps read into `<run_dir>/cache/` as typed
-  parquet with a manifest, and the `read()` / `scan()` every consumer loads through),
+  named styles and the block helpers, written once), `cache.py` (the run's cache:
+  `write()` / `note()` for the extract step's script, `read()` / `verify()` for consumers),
   `evidence.py` (`span`: a citation measured on the file or the cache manifest — header,
-  rows, columns, row count, control total — never typed),
+  rows, columns, row count, control total — never typed), `figures.py` (the `Ledger`
+  every step mints its figures, populations, citations and ties through — each field
+  checked when minted, every reference resolved when written — and the formatter that
+  interpolates figures into prose), `periods.py` (the run's period set: keys, windows,
+  labels and the fiscal-year rule, from `params.columns` and `params.fiscal_year_end`),
+  `step_record.py` (a step's lifecycle: `step_start`, the staged tab placed behind its
+  gates, and the step record written with `step_end` — args from the brief, `consumed`
+  from the step's citations, `produced` from its own files),
+  `style.py` (how a number or a date is written — the currency table, US forms, scale
+  suffixes — and the token grammar the gates read them back with),
+  `matching.py`, `resolve.py`, `match_tabs.py`, `items.py` (`agents/worker.md` § Shared modules),
+  `rework.py` (a fix pass: snapshot, ledger diff),
   `build_report.py` (renders `out/report.pptx`
   from `report.yaml` and the sealed workbook — the deck mints nothing;
   `reference/REPORT.md`), `usage_report.py` (duration + estimated cost), `gather_debug.py`

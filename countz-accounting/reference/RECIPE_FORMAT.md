@@ -51,6 +51,16 @@ user does not choose, the option's line carries the answer to use and the plan s
 which it took. A line that says *no default* is asked again (`RUN_CONTRACT.md`
 § Parameters).
 
+**`arr_policy`** is the one declared key with a fixed meaning: a recipe that computes
+annual recurring revenue, recurring-revenue retention, churn or an ARR bridge declares
+it. Its line says *no default*. Its body names the decision ids its sections turn on and
+states no ARR default of its own, and no rule for computing one: how every decision's
+value becomes a figure is `ARR_POLICY.md` § Computing ARR, which the recipe cites. It also says, in so many words, that every step
+carrying `params.arr_policy` applies it, and the review holds it to it, per
+`ARR_POLICY.md` § Applying the policy. The recipe is what routes the worker and the
+critic to the policy, and `validate_recipe.py` refuses a recipe that declares
+`arr_policy` without that sentence.
+
 `headline` names a family whose section declares one check. `check-report` finds that
 check in `run.json.checks` by `params.family` and builds the Exec Summary on its walk.
 
@@ -133,8 +143,9 @@ headed otherwise. `schedules` is a non-empty list, one mapping per schedule:
 | `block` | optional; a titled block on the tab; the primary table otherwise |
 | `where` | optional; `{"verdict": "supported"}` or a list of values — a row carrying a value in that column stays when it matches; a row with the column empty stays regardless |
 | `through` | optional; the label of the row the schedule ends at, inclusive |
-| `periods` | optional; `all` — every period column of the tab; `latest` — the last; `none` |
-| `scale` | optional; `thousands` or `millions` |
+| `periods` | optional; `all` — every period column of the tab; `latest` — the latest by date; `none`. A period column is one naming a period the plan declares (`params.columns`) |
+| `scale` | optional; `units`, `thousands`, `millions` or `billions` — stated once in the table's title in the money columns' currency (`EBITDA bridge ($ in thousands)`), never in each column header |
+| `currency` | optional; a lower-case ISO 4217 code `scripts/style.py` defines (`eur`); the book's currency otherwise |
 | `dense` | optional; `true` sets the table at the dense size (REPORT.md § 2) |
 | `ids` | optional; `true` keeps the id column |
 

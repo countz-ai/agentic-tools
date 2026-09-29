@@ -57,11 +57,14 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import pathlib
 import re
+import shlex
 import shutil
 import subprocess
 import sys
+import unicodedata
 from datetime import datetime, timezone
 
 from usage_report import transcripts_for
@@ -175,7 +178,7 @@ def extract(path: pathlib.Path, session_id: str, meta: dict, fallback: str,
     the first occurrence names the call. A call with no matching result is kept with
     `result` null - a call that never returned is what a stuck dispatch looks like.
     """
-    records = [r for r in (_load(line) for line in path.open()) if r]
+    records = [r for r in (_load(line) for line in path.open(encoding="utf-8")) if r]
     prompts = [_text((r.get("message") or {}).get("content"))
                for r in records
                if r.get("type") == "user" and not _has_tool_result(r)]
@@ -323,7 +326,7 @@ def snapshot_instructions(debug: pathlib.Path) -> dict:
     pj = PLUGIN_ROOT / ".claude-plugin" / "plugin.json"
     if pj.is_file():
         try:
-            version = json.loads(pj.read_text()).get("version")
+            version = json.loads(pj.read_text(encoding="utf-8")).get("version")
         except json.JSONDecodeError:
             pass
     manifest = {"plugin_root": str(PLUGIN_ROOT), "plugin_version": version,
@@ -374,7 +377,7 @@ def gather_file_history(debug: pathlib.Path, transcripts: list[pathlib.Path],
     root = pathlib.Path.home() / ".claude" / "file-history"
     index: dict[str, dict] = {}
     for tpath in transcripts:
-        for line in tpath.open():
+        for line in tpath.open(encoding="utf-8"):
             if '"trackedFileBackups"' not in line:
                 continue
             rec = _load(line)
@@ -407,8 +410,97 @@ def gather_file_history(debug: pathlib.Path, transcripts: list[pathlib.Path],
     return list(index.values())
 
 
+def _norm(p: str) -> str:
+    """A path as matching compares it: NFC (a macOS name typed NFD matches its NFC
+    registration), `/` separators (a Windows path, doubled backslashes as JSON writes
+    them), `.`/`..` collapsed, no trailing slash."""
+    q = unicodedata.normalize("NFC", str(p)).replace("\\\\", "/").replace("\\", "/")
+    return os.path.normpath(q).replace("\\", "/") if q else q
+
+
+def _forms(p: str) -> set[str]:
+    """The typed and the resolved form of a path, both normalized: `/tmp/x` and
+    `/private/tmp/x`, a symlinked cloud-drive folder and its target."""
+    out = {_norm(p)}
+    try:
+        out.add(_norm(str(pathlib.Path(p).expanduser().resolve())))
+    except (OSError, RuntimeError):
+        pass
+    return out
+
+
+def _strings(v) -> list[str]:
+    """Every string value in a tool input, at any depth."""
+    if isinstance(v, str):
+        return [v]
+    if isinstance(v, dict):
+        return [s for x in v.values() for s in _strings(x)]
+    if isinstance(v, list):
+        return [s for x in v for s in _strings(x)]
+    return []
+
+
+def _command_paths(cmd: str) -> list[str]:
+    """The path-like words of a shell command, a relative one joined to the directory a
+    preceding `cd` in the same command moved to (`cd "<room>" && head -5 gl.csv`)."""
+    try:
+        words = shlex.split(cmd, posix=True)
+    except ValueError:
+        words = cmd.split()
+    out: list[str] = []
+    cwd: str | None = None
+    for k, w in enumerate(words):
+        if k and words[k - 1] == "cd":
+            cwd = w if os.path.isabs(os.path.expanduser(w)) or cwd is None \
+                else os.path.join(cwd, w)
+            out.append(cwd)
+            continue
+        if w in ("&&", ";", "||", "|") or w.startswith("-"):
+            continue
+        out.append(w if os.path.isabs(os.path.expanduser(w)) or cwd is None
+                   else os.path.join(cwd, w))
+    return out
+
+
+def _source_forms(sources: list[dict]) -> list[tuple[str, set[str], str | None]]:
+    """(label, path forms, basename of a file source) per registered source. The label
+    is the resolved path, as the record has always named it."""
+    out = []
+    for s in sources:
+        try:
+            raw = str(s["path"])
+            label = str(pathlib.Path(raw).expanduser().resolve())
+        except (KeyError, TypeError, OSError):
+            continue
+        is_file = pathlib.Path(label).is_file()
+        out.append((label, _forms(raw) | _forms(label),
+                    unicodedata.normalize("NFC", pathlib.Path(label).name) if is_file else None))
+    return out
+
+
+def _hits(inp: dict, tool: str | None, forms) -> list[str]:
+    cands: set[str] = set()
+    for v in _strings(inp):
+        cands |= _forms(v) if len(v) < 4096 and "\n" not in v else set()
+        for w in (_command_paths(v) if tool == "Bash" or "\n" in v or " " in v else []):
+            cands |= _forms(w)
+    names = {pathlib.PurePosixPath(c).name for c in cands}
+    hit = set()
+    for label, fs, base in forms:
+        if any(c == f or c.startswith(f.rstrip("/") + "/") for c in cands for f in fs) \
+                or any(f in _norm(v) for v in _strings(inp) for f in fs) \
+                or (base and base in names):
+            hit.add(label)
+    return sorted(hit)
+
+
 def client_reads(calls: list[dict], sources: list[dict], tdir: pathlib.Path) -> list[dict]:
     """Every tool call that named a registered source path, with what came back.
+
+    A call names a source when any path in its input — typed or resolved (a symlink,
+    `/tmp` vs `/private/tmp`), NFC-normalized, with `/` or `\\` separators, or a relative
+    path under a `cd` in the same Bash command — is the source or lies under it, or when
+    it names a file source by its file name. Matching errs toward reporting a read.
 
     `bounded` is read from the call where the tool states its bound - a Read carrying
     `limit` or `pages`, a Bash line that runs peek.py - and null where the transcript
@@ -416,17 +508,12 @@ def client_reads(calls: list[dict], sources: list[dict], tdir: pathlib.Path) -> 
     Claude Code offloaded it, else the inline length, against WHOLE_READ_CHARS. The
     rule this measures is CONDUCT.md § Reading client files.
     """
-    roots: list[str] = []
-    for s in sources:
-        try:
-            roots.append(str(pathlib.Path(s["path"]).expanduser().resolve()))
-        except (KeyError, TypeError, OSError):
-            continue
+    forms = _source_forms(sources)
     out: list[dict] = []
     for c in calls:
         inp = c.get("input") or {}
         blob = json.dumps(inp, ensure_ascii=False)
-        hit = sorted({r for r in roots if r in blob})
+        hit = _hits(inp, c.get("tool"), forms)
         if not hit:
             continue
         tool = c.get("tool")
@@ -453,7 +540,7 @@ def client_reads(calls: list[dict], sources: list[dict], tdir: pathlib.Path) -> 
 def _write_jsonl(path: pathlib.Path, rows: list[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
-    with tmp.open("w") as fh:
+    with tmp.open("w", encoding="utf-8") as fh:
         for r in rows:
             fh.write(json.dumps(r) + "\n")
     tmp.replace(path)
@@ -462,13 +549,13 @@ def _write_jsonl(path: pathlib.Path, rows: list[dict]) -> None:
 def _write_json(path: pathlib.Path, obj) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(obj, indent=2) + "\n")
+    tmp.write_text(json.dumps(obj, indent=2) + "\n", encoding="utf-8")
     tmp.replace(path)
 
 
 def _append_event(run_dir: pathlib.Path, event: str, **fields) -> None:
     line = {"ts": _now(), "event": event, **fields}
-    with (run_dir / "events.jsonl").open("a") as f:
+    with (run_dir / "events.jsonl").open("a", encoding="utf-8") as f:
         f.write(json.dumps(line) + "\n")
 
 
@@ -486,7 +573,7 @@ def main() -> int:
         print(f"gather_debug: {run_dir} carries no run.json - not a run directory",
               file=sys.stderr)
         return 2
-    state = json.loads((run_dir / "run.json").read_text())
+    state = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
     session_ids = [s["session_id"] for s in state.get("inputs", {}).get("sessions", [])]
     if not session_ids:   # run_id names the directory, never a session - nothing to look up
         print("gather_debug: run.json records no session id - the run was registered "

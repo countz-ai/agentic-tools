@@ -91,7 +91,7 @@ def _file_hash(path: pathlib.Path) -> str:
 
 
 def _load_json(path: pathlib.Path):
-    return json.loads(path.read_text())
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _human_bytes(n) -> str:
@@ -109,7 +109,7 @@ def _human_bytes(n) -> str:
 def _write_text(path: pathlib.Path, text: str) -> pathlib.Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(text)
+    tmp.write_text(text, encoding="utf-8")
     tmp.replace(path)
     return path
 
@@ -335,7 +335,7 @@ def main() -> int:
     if dirty:
         state_path.parent.mkdir(parents=True, exist_ok=True)
         tmp = state_path.with_name(state_path.name + ".tmp")
-        tmp.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n")
+        tmp.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         tmp.replace(state_path)
     return 0
 

@@ -30,6 +30,10 @@ import pathlib
 import re
 import sys
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import periods  # noqa: E402  sibling, stdlib here: the period-key grammar, the fiscal
+#                                 calendar and the cutoff window
+
 # kind -> the worker skill that performs it. The playbook engine resolves dispatches
 # through this map; a kind absent here is not dispatchable anywhere in the plugin.
 KINDS = {
@@ -42,25 +46,27 @@ KINDS = {
     "extract": "check-extract",
 }
 
-# The one kind that computes no figure: `extract` parses the data-room files the plan's
-# steps read into `<run_dir>/cache/` (scripts/extract.py), once, ahead of the steps that
-# read them. Its `params.files` is the list to parse; a consumer names the extract step in
-# `params.cache_from` and the ids it reads in `params.reads`. Review skips it; the report
-# lists it on Coverage.
+# The one kind that computes no figure: `extract` parses the tables the plan's steps read
+# out of the data-room files into `<run_dir>/cache/` (its own script, written at run time,
+# landing each table through scripts/cache.py), once, ahead of the steps that read them.
+# Its `params.files` lists the tables to parse, one entry per table; a consumer names the
+# extract step in `params.cache_from` and the ids it reads in `params.reads`. Review skips
+# it; the report lists it on Coverage.
 EXTRACT = "extract"
-FILE_KEYS = {"id", "path", "source", "file_role", "header_row", "rows", "sheet", "types",
-             "control", "delimiter"}
-ROWS = re.compile(r"^\d+:\d+(?:\s*,\s*\d+:\d+)*$")
+# `what` is the table in words from the planner's profile ("the By-stream table, header at
+# row 40"); it is required when two entries share a file (and sheet), so each says which
+# table it is. How the table is read is the extract step's to measure, not the plan's.
+FILE_KEYS = {"id", "path", "source", "file_role", "sheet", "what", "control"}
 
 # kind -> the params contract check_params enforces. `required`: keys every step or
 # check of the kind must carry; `one_of`: key groups of which at least one must be
 # fully present. What each key MEANS lives in the kind's SKILL.md; this table only
 # refuses a declaration the dispatched step would refuse anyway, at validation time
-# instead of mid-run. A kind absent here has no required params.
+# instead of mid-run. A kind absent here has no required params. A `cutoff` step's window
+# is refused by scripts/periods.py `cutoff_spec`, which the cutoff worker computes it with.
 PARAMS = {
     "vouch": {"one_of": [["items_from"],
                          ["items_file", "items_sheet", "items_range"]]},
-    "cutoff": {"required": ["period_end", "window_days"]},
     "extract": {"required": ["files"]},
 }
 
@@ -75,7 +81,11 @@ PARAMS = {
 FAMILY_STEP_MAX = 4
 
 SCHEMA = "countz-accounting/playbook@1"
-SLUG = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
+SLUG = re.compile(r"[a-z0-9][a-z0-9_-]*")
+# A step id is the check id its files are named by (`checks/<check>-<table>.csv`,
+# `workpapers/figures-<check>.yaml`). `-` separates check and table, so a check id takes
+# none (e.g. `a5` + `bridge-items` would read as `a5-bridge` + `items`).
+CHECK_ID = re.compile(r"[a-z0-9][a-z0-9_]*")
 # A playbook is run again, over another company and another period, so its title names the
 # work alone. A period in it — `FY2023`, `2023-09-30`, `September 2023` — dates the file.
 PERIOD_TOKEN = re.compile(
@@ -108,31 +118,60 @@ def check_params(kind: str, params, *, after: list | None = None,
     if groups and not any(all(params.get(k) for k in g) for g in groups):
         alts = " or ".join("+".join(g) for g in groups)
         bad.append(f"kind `{kind}` requires params naming its item source: {alts}")
-    wd = params.get("window_days")
-    if wd is not None and (isinstance(wd, bool)
-                           or not isinstance(wd, (int, float)) or wd <= 0):
-        bad.append(f"`params.window_days` must be a positive number of days each side, "
-                   f"got {wd!r}")
-    pe = params.get("period_end")
-    if pe is not None and (not isinstance(pe, str) or not pe.strip()):
-        bad.append(f"`params.period_end` must be a date string, got {pe!r}")
+    if kind == "cutoff":
+        try:
+            periods.cutoff_spec(params)
+        except ValueError as exc:
+            bad.append(f"kind `{kind}`: {exc}")
+    else:
+        pe = params.get("period_end")         # an as-of date outside a cutoff, as collected
+        if pe is not None and (not isinstance(pe, str) or not pe.strip()):
+            bad.append(f"`params.period_end` must be a date string, got {pe!r}")
     ents = params.get("entities")
     if ents is not None and (not isinstance(ents, list) or not ents
                              or not all(isinstance(e, str) and e.strip() for e in ents)):
         bad.append(f"`params.entities` must be a non-empty list of entity ids, got "
                    f"{ents!r}")
+    # Validated at plan time: scripts/periods.py would otherwise stop the step at its
+    # first timezone-aware column.
+    tz = params.get("timezone")
+    if tz is not None:
+        try:
+            periods._zone(tz, "`params.timezone`")
+        except ValueError as exc:
+            bad.append(str(exc))
     sr = params.get("split_reason")
     if sr is not None and (not isinstance(sr, str) or not sr.strip()):
         bad.append(f"`params.split_reason` must be the measured fact that split the "
                    f"family, got {sr!r}")
+    bad.extend(check_periods(params))
+    # A tie's declared bounds, as scripts/figures.py `Ledger.tie` reads them: `tolerance`
+    # absolute in the tie's unit, `pct_tolerance` a fraction of the reference side. Only a
+    # number is judged here; plans also carry described tolerances (`{kind, amount, ...}`).
+    for key in ("tolerance", "pct_tolerance"):
+        tol = params.get(key)
+        if isinstance(tol, (int, float)) and not isinstance(tol, bool) and tol < 0:
+            bad.append(f"`params.{key}` must be non-negative, got {tol!r}")
+    ptol = params.get("pct_tolerance")
+    if isinstance(ptol, (int, float)) and not isinstance(ptol, bool) and ptol >= 1:
+        bad.append(f"`params.pct_tolerance` is a fraction of the reference side - 0.005 is "
+                   f"0.5% - got {ptol!r}")
     bad.extend(check_files(kind, params))
+    ps = params.get("prior_script")
+    if ps is not None:
+        if kind != EXTRACT:
+            bad.append("`params.prior_script` belongs to an `extract` step only")
+        elif not isinstance(ps, str) or not ps.endswith(".py") or ps.startswith("/") \
+                or ".." in pathlib.PurePosixPath(ps).parts:
+            bad.append(f"`params.prior_script` is a .py path relative to the playbook file, "
+                       f"got {ps!r}")
     reads = params.get("reads")
     if reads is not None:
         if kind == EXTRACT:
             bad.append("an `extract` step reads no cache; `params.reads` belongs on the "
                        "steps that read what it writes")
         elif not isinstance(reads, list) or not reads \
-                or not all(isinstance(r, str) and SLUG.match(r) for r in reads):
+                or not all(isinstance(r, str) and SLUG.fullmatch(r) for r in reads):
             bad.append(f"`params.reads` must be a non-empty list of cache file ids (slugs), "
                        f"got {reads!r}")
         elif not params.get("cache_from"):
@@ -146,7 +185,7 @@ def check_params(kind: str, params, *, after: list | None = None,
                        f"never another step")
             continue
         refs = val if isinstance(val, list) else [val]
-        if not refs or not all(isinstance(r, str) and SLUG.match(r) for r in refs):
+        if not refs or not all(isinstance(r, str) and SLUG.fullmatch(r) for r in refs):
             bad.append(f"`params.{key}` must be a check id slug or a list of them, "
                        f"got {val!r}")
             continue
@@ -160,8 +199,56 @@ def check_params(kind: str, params, *, after: list | None = None,
     return bad
 
 
+def check_periods(params: dict) -> list[str]:
+    """Problems with `params.columns` (the period set, EVIDENCE.md § 0 slugs),
+    `params.fiscal_year_end` (any calendar form scripts/periods.py reads) and
+    `params.column_labels`."""
+    bad: list[str] = []
+    fye = params.get("fiscal_year_end")
+    cals: dict = {}
+    if fye is not None:
+        try:
+            cals = periods.calendars(fye)
+        except ValueError as exc:
+            bad.append(f"`params.fiscal_year_end`: {exc}")
+    cols = params.get("columns")
+    if cols is None:
+        return bad
+    if not isinstance(cols, list) or not cols or not all(isinstance(c, str) for c in cols):
+        return bad + [f"`params.columns` must be a non-empty list of period keys, got {cols!r}"]
+    if len(set(cols)) != len(cols):
+        bad.append(f"`params.columns` repeats a period: {cols}")
+    for c in cols:
+        try:
+            periods.check_key(c)                 # the grammar; the year end is checked
+        except ValueError as exc:                # across steps in validate()
+            bad.append(f"`params.columns`: {exc}")
+            continue
+        if periods.needs_fiscal_year(c):
+            for ent, cal in cals.items():        # a key the calendar cannot place
+                try:
+                    periods.Period.parse(c, cal)
+                except ValueError as exc:
+                    who = f" for entity `{ent}`" if ent else ""
+                    bad.append(f"`params.columns`{who}: {exc}")
+    labels = params.get("column_labels")
+    if labels is not None:
+        if not isinstance(labels, dict) or not all(
+                isinstance(k, str) and isinstance(v, str) and v.strip()
+                for k, v in labels.items()):
+            bad.append(f"`params.column_labels` must map period keys to headings, "
+                       f"got {labels!r}")
+        else:
+            stray = sorted(set(labels) - set(cols))
+            if stray:
+                bad.append(f"`params.column_labels` names keys outside `params.columns`: "
+                           f"{stray}")
+    return bad
+
+
 def check_files(kind: str, params: dict) -> list[str]:
-    """Problems with an `extract` step's `params.files` (scripts/extract.py's spec)."""
+    """Problems with an `extract` step's `params.files`: one entry per table,
+    `{id, path, source?, file_role, sheet?, what?, control?}`."""
     files = params.get("files")
     if kind != EXTRACT:
         return ["`params.files` belongs to an `extract` step only"] if files is not None else []
@@ -169,13 +256,14 @@ def check_files(kind: str, params: dict) -> list[str]:
         return []                     # `required` already reported it
     bad: list[str] = []
     seen: set[str] = set()
+    tables: dict[tuple, list[int]] = {}
     for i, f in enumerate(files):
         at = f"`params.files[{i}]`"
         if not isinstance(f, dict):
             bad.append(f"{at} is not an object")
             continue
         fid = f.get("id")
-        if not isinstance(fid, str) or not SLUG.match(fid):
+        if not isinstance(fid, str) or not SLUG.fullmatch(fid):
             bad.append(f"{at} has no valid `id` (a slug), got {fid!r}")
         elif fid in seen:
             bad.append(f"{at} repeats id `{fid}`")
@@ -183,23 +271,27 @@ def check_files(kind: str, params: dict) -> list[str]:
             seen.add(fid)
         if not isinstance(f.get("path"), str) or not f["path"].strip():
             bad.append(f"{at} has no `path`")
+        else:
+            tables.setdefault((f.get("source"), f["path"].strip(), f.get("sheet")),
+                              []).append(i)
+        if not isinstance(f.get("file_role"), str) or not f["file_role"].strip():
+            bad.append(f"{at} has no `file_role`")
+        for k in ("sheet", "what", "control"):
+            v = f.get(k)
+            if v is not None and (not isinstance(v, str) or not v.strip()):
+                bad.append(f"{at}: `{k}` must be a non-empty string, got {v!r}")
         for k in sorted(set(f) - FILE_KEYS):
-            bad.append(f"{at}: unknown key `{k}` (keys: {', '.join(sorted(FILE_KEYS))})")
-        hr = f.get("header_row")
-        if hr is not None and (isinstance(hr, bool) or not isinstance(hr, int) or hr < 1):
-            bad.append(f"{at}: `header_row` is a 1-based line number, got {hr!r}")
-        if f.get("types") is not None and not isinstance(f["types"], dict):
-            bad.append(f"{at}: `types` maps a column name to a dtype name")
-        rows = f.get("rows")
-        if rows is not None:
-            if not isinstance(rows, str) or not ROWS.match(rows.strip()):
-                bad.append(f"{at}: `rows` is \"first:last\" ranges, comma-separated, of "
-                           f"1-based inclusive data records, got {rows!r}")
-            elif not isinstance(hr, int) or isinstance(hr, bool):
-                bad.append(f"{at}: `rows` needs `header_row` - a block is anchored by both")
-            elif int(rows.split(":")[0]) != hr + 1:
-                bad.append(f"{at}: `rows` starts at {rows.split(':')[0]}, not under "
-                           f"header_row {hr}")
+            bad.append(f"{at}: unknown key `{k}` (keys: {', '.join(sorted(FILE_KEYS))}) - "
+                       f"how a table is read is the extract step's to measure")
+    for (_, path, sheet), idx in tables.items():
+        if len(idx) > 1:
+            unnamed = [i for i in idx if not (isinstance(files[i].get("what"), str)
+                                               and files[i]["what"].strip())]
+            if unnamed:
+                where = f"{path}" + (f" [{sheet}]" if sheet else "")
+                bad.append(f"`params.files` {idx}: {len(idx)} tables on {where} - each needs "
+                           f"`what`, the table in words from the profile (missing on "
+                           f"{unnamed})")
     return bad
 
 
@@ -215,7 +307,7 @@ def from_refs(params) -> set[str]:
 def validate(path: pathlib.Path, skills_dir: pathlib.Path | None) -> list[str]:
     bad: list[str] = []
     try:
-        doc = json.loads(path.read_text())
+        doc = json.loads(path.read_text(encoding="utf-8"))
     except Exception as exc:
         return [f"{path}: not valid JSON ({exc})"]
     if not isinstance(doc, dict):
@@ -224,7 +316,7 @@ def validate(path: pathlib.Path, skills_dir: pathlib.Path | None) -> list[str]:
     if doc.get("schema") != SCHEMA:
         bad.append(f"{path}: schema is {doc.get('schema')!r}, expected {SCHEMA!r}")
     name = doc.get("name")
-    if not name or not SLUG.match(str(name)):
+    if not name or not SLUG.fullmatch(str(name)):
         bad.append(f"{path}: `name` must be a lowercase slug, got {name!r}")
     elif path.stem != name:
         bad.append(f"{path}: file is named {path.stem!r} but declares name {name!r} - "
@@ -246,7 +338,7 @@ def validate(path: pathlib.Path, skills_dir: pathlib.Path | None) -> list[str]:
         srcs = []
     for s in srcs:
         slot = (s or {}).get("slot") if isinstance(s, dict) else None
-        if not slot or not SLUG.match(str(slot)):
+        if not slot or not SLUG.fullmatch(str(slot)):
             bad.append(f"{path}: source entry {s!r} has no valid `slot`")
             continue
         if slot in slots:
@@ -267,8 +359,9 @@ def validate(path: pathlib.Path, skills_dir: pathlib.Path | None) -> list[str]:
             bad.append(f"{path}: step entry {st!r} is not an object")
             continue
         sid = st.get("id")
-        if not sid or not SLUG.match(str(sid)):
-            bad.append(f"{path}: step entry has no valid `id`: {st!r}")
+        if not sid or not CHECK_ID.fullmatch(str(sid)):
+            bad.append(f"{path}: step entry has no valid `id` ([a-z0-9][a-z0-9_]*, no `-`: "
+                       f"the step id names the check's files): {st!r}")
             continue
         if sid in ids:
             bad.append(f"{path}: step id `{sid}` is declared twice")
@@ -294,6 +387,11 @@ def validate(path: pathlib.Path, skills_dir: pathlib.Path | None) -> list[str]:
             bad.append(f"{path}: step `{sid}` has a non-list `after`")
 
     by_id = {st["id"]: st for st in steps if isinstance(st, dict) and st.get("id")}
+    for st in by_id.values():
+        ps = (st.get("params") or {}).get("prior_script") if isinstance(st.get("params"), dict) else None
+        if isinstance(ps, str) and not (path.parent / ps).is_file():
+            bad.append(f"{path}: step `{st['id']}` names `params.prior_script` {ps}, which is "
+                       f"not beside the playbook file")
     for st in steps:
         if not isinstance(st, dict) or not st.get("id"):
             continue
@@ -332,6 +430,41 @@ def validate(path: pathlib.Path, skills_dir: pathlib.Path | None) -> list[str]:
                     bad.append(f"{path}: step `{st['id']}` reads {lost}, which "
                                f"`{params['cache_from']}` does not parse - add the file to "
                                f"its `params.files` or drop the read")
+
+    # One fiscal calendar per entity per run, declared wherever a period column needs
+    # one: scripts/periods.py reads it from the step, else from any step that declares it.
+    # Two steps that place the same entity's months in different fiscal years disagree.
+    cal_of: dict = {}                          # entity (None = the run) -> {calendar: [steps]}
+    needs_fye: list[str] = []
+    for st in steps:
+        if not isinstance(st, dict) or not st.get("id"):
+            continue
+        params = st.get("params") or {}
+        if not isinstance(params, dict):
+            continue
+        if params.get("fiscal_year_end") is not None:
+            try:
+                for ent, cal in periods.calendars(params["fiscal_year_end"]).items():
+                    cal_of.setdefault(ent, {}).setdefault(cal, []).append(st["id"])
+            except ValueError:
+                pass                  # check_params reported it
+        cols = params.get("columns")
+        if isinstance(cols, list) and any(periods.needs_fiscal_year(c) for c in cols):
+            needs_fye.append(st["id"])
+    for ent, by_cal in sorted(cal_of.items(), key=lambda kv: kv[0] or ""):
+        if len(by_cal) > 1:
+            who = f" for entity `{ent}`" if ent else ""
+            bad.append(f"{path}: steps disagree on the fiscal year end{who}: "
+                       + "; ".join(", ".join(v) for v in by_cal.values()))
+    if None in cal_of and len(cal_of) > 1:
+        bad.append(f"{path}: some steps declare one fiscal year end for the run and others "
+                   f"a `by_entity` map - declare the map on every step")
+    if needs_fye and not cal_of:
+        bad.append(f"{path}: steps {', '.join(needs_fye)} report fiscal columns (a year, "
+                   f"quarter, half, period or YTD) but no step declares "
+                   f"`params.fiscal_year_end` (\"MM-DD\", e.g. \"09-30\", or a calendar "
+                   f"spec) - scripts/periods.py cannot place a month in a fiscal year "
+                   f"without it")
 
     # A family fanned out one step per entity: refused above FAMILY_STEP_MAX unless every
     # step of that family names the measured fact that split it.
@@ -392,7 +525,7 @@ def list_libraries(dirs: list[pathlib.Path], skills_dir: pathlib.Path | None) ->
                 rows.append(f"  {f.stem:<24} {d}  INVALID ({len(problems)} problem(s); "
                             f"run check_playbook.py {f})")
                 continue
-            doc = json.loads(f.read_text())
+            doc = json.loads(f.read_text(encoding="utf-8"))
             kinds = ",".join(sorted({s.get("check", "?") for s in doc.get("steps", [])}))
             shadow = f"  (shadowed by {seen[doc['name']]})" if doc["name"] in seen else ""
             if doc["name"] not in seen:

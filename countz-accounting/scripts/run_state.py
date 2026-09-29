@@ -27,7 +27,7 @@ Subcommands:
         steps as checks, append the `plan_approved` event.
 
     dispatch <run_dir> --checks id1,id2 [--mode fresh|fix] [--extra '<one-line JSON>']
-    dispatch <run_dir> --step plan|recipe|review|report --args '<one-line JSON>'
+    dispatch <run_dir> --step plan|recipe|arr_policy|review|report --args '<one-line JSON>'
     dispatch <run_dir> --briefs <brief.md> ...
         Open a wave: allocate seqs from next_seq, append one dispatch row per member
         (state "dispatched"), write every member's brief to dispatch/<NNNN>-<step>.md —
@@ -54,6 +54,12 @@ Subcommands:
         FAILED: line is for the relay to put to the user. A minted retry wave opens
         with its own SAY: line.
 
+    record-scrub <run_dir> --json '<one-line JSON>' | @<file>
+        Record the scrubbed pre-run ask (reference/SCRUB.md): {"send", "rounds"}.
+        Refuses no rounds, more than three, or a last round that is not `clean`.
+        Writes <run_dir>/scrub.json, deletes an @<file> draft inside <run_dir>, appends
+        `ask_scrubbed`, and prints `SEND:<TAB><text>`: the bytes the relay sends.
+
     debug <run_dir> [--off]
         Turn the run's debug mode on or off (OBSERVABILITY.md § 3). While it is on,
         `record` ends every wave with a GATHER: line the relay runs before the sync,
@@ -69,6 +75,7 @@ import datetime
 import json
 import pathlib
 import re
+import shlex
 import sys
 
 import check_playbook  # sibling: the one home of KINDS, SLUG and definition validation
@@ -79,7 +86,7 @@ RUN_SCHEMA = "countz-accounting/run@1"
 # Steps that are not checks, and the skill each dispatches. Check kinds resolve through
 # check_playbook.KINDS.
 STEP_SKILLS = {"plan": "check-plan", "recipe": "create-recipe", "review": "check-review",
-               "report": "check-report"}
+               "report": "check-report", "arr_policy": "extract-arr-policy"}
 
 BRIEF = """\
 # countz-accounting dispatch {nnnn} — {step}
@@ -93,11 +100,26 @@ another file.
 1. Read `{agent}` — your standing instructions.
 2. Read `{plug}/skills/{skill}/SKILL.md` — your procedure.
 
+An argument whose value starts with `"` is one JSON string: read it with its escapes
+decoded (`\\n` is a line break).
+
 Your arguments:
 
     run_dir={run_dir}
     seq={seq}
 {args}"""
+
+# The argument block, read back by `parse_brief_args` (here and in step_record.py): the
+# lines after ARGS_HEAD, one `    <key>=<value>` per line, the key ARG_KEY. A value holding
+# a line break, starting with `"`, carrying leading or trailing whitespace, or spelled
+# `(none)` is written as a JSON string. A list of non-empty plain strings with no comma is
+# comma-joined; any other list is compact JSON. `run_dir`, `seq` and `check` are the
+# template's own keys.
+ARGS_HEAD = "Your arguments:"
+ARG_KEY = re.compile(r"[A-Za-z0-9_]+")
+ARG_LINE = re.compile(r"    ([A-Za-z0-9_]+)=(.*)")
+TEMPLATE_KEYS = ("run_dir", "seq", "check")
+LINE_BREAKS = ("\n", "\r", "\v", "\f", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029")
 
 # The order a check dispatch's arguments render in, before anything --extra adds; a
 # step dispatch (plan / review / report) renders its --args in the order given.
@@ -139,7 +161,7 @@ def recipe_families(run: dict) -> dict[str, str]:
     if not path:
         return {}
     try:
-        text = pathlib.Path(path).read_text()
+        text = pathlib.Path(path).read_text(encoding="utf-8")
     except OSError:
         return {}
     return {fid.lower(): title for fid, title in FAMILY_HEADER.findall(text)}
@@ -175,6 +197,8 @@ def step_say(step: str, args: dict) -> str:
     if step == "recipe":
         return ("Writing the recipe from your answers." if args.get("answers")
                 else "Reading the data room to draft the questions the recipe needs answered.")
+    if step == "arr_policy":
+        return "Reading the company's documents for the rules it computes ARR by."
     if step == "review":
         ids = args.get("checks") or []
         if isinstance(ids, str):
@@ -191,7 +215,7 @@ def _now() -> str:
 
 def _append_event(run_dir: pathlib.Path, event: str, **fields) -> None:
     line = {"ts": _now(), "event": event, **fields}
-    with (run_dir / "events.jsonl").open("a") as f:
+    with (run_dir / "events.jsonl").open("a", encoding="utf-8") as f:
         f.write(json.dumps(line) + "\n")
 
 
@@ -208,7 +232,7 @@ def load_run(run_dir: pathlib.Path) -> dict:
     path = run_dir / "run.json"
     if not path.is_file():
         raise Refuse(f"{run_dir}: no run.json - register the run first (setup_run.py)")
-    run = json.loads(path.read_text())
+    run = json.loads(path.read_text(encoding="utf-8"))
     if run.get("schema") != RUN_SCHEMA:
         raise Refuse(f"run.json schema {run.get('schema')!r} is not {RUN_SCHEMA}")
     return run
@@ -218,7 +242,7 @@ def save_run(run_dir: pathlib.Path, run: dict) -> None:
     run["updated_at"] = _now()
     path = run_dir / "run.json"
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(run, indent=2) + "\n")
+    tmp.write_text(json.dumps(run, indent=2) + "\n", encoding="utf-8")
     tmp.replace(path)
 
 
@@ -240,7 +264,7 @@ def skill_agent(skill: str) -> pathlib.Path:
     instructions the Skill call would load. Falls back to the worker."""
     path = PLUGIN_ROOT / "skills" / skill / "SKILL.md"
     try:
-        text = path.read_text() if path.is_file() else ""
+        text = path.read_text(encoding="utf-8") if path.is_file() else ""
     except OSError:
         text = ""
     head = text[4:].split("\n---", 1)[0] if text.startswith("---\n") else ""
@@ -250,11 +274,55 @@ def skill_agent(skill: str) -> pathlib.Path:
 
 def render_brief(run_dir: pathlib.Path, seq: int, step: str, skill: str,
                  check_id: str | None, args: dict) -> str:
+    """The brief's text. Refuses an argument key outside ARG_KEY or in TEMPLATE_KEYS."""
+    bad = [k for k in args if not isinstance(k, str) or not ARG_KEY.fullmatch(k)
+           or k in TEMPLATE_KEYS]
+    if bad:
+        raise Refuse(f"argument key(s) {bad}: a key is [A-Za-z0-9_]+ and not one of "
+                     f"{', '.join(TEMPLATE_KEYS)} - the brief carries those itself")
     lines = [f"    check={check_id}\n"] if check_id else []
     lines += [f"    {k}={_arg(v)}\n" for k, v in args.items()]
     return BRIEF.format(nnnn=f"{seq:04d}", step=step, plug=PLUGIN_ROOT,
-                        agent=skill_agent(skill), skill=skill, run_dir=run_dir, seq=seq,
-                        args="".join(lines))
+                        agent=skill_agent(skill), skill=skill, run_dir=_arg(str(run_dir)),
+                        seq=seq, args="".join(lines))
+
+
+def parse_brief_args(text: str) -> dict[str, str | None]:
+    """A brief's argument block as `{key: value}`, the inverse of `_arg`: a bare `(none)`
+    is None; a value written as a JSON string is decoded back to that string; any other
+    value is as written, less surrounding whitespace (a comma-joined list and compact
+    JSON stay text).
+    Raises ValueError on a brief with no ARGS_HEAD line, a line after it that is not
+    `    <key>=<value>` (a value that spans lines), a key given twice, or a value starting
+    with `"` that is not one JSON string."""
+    lines = text.split("\n")
+    if ARGS_HEAD not in lines:
+        raise ValueError(f"no `{ARGS_HEAD}` line - not a dispatch brief")
+    at = lines.index(ARGS_HEAD)
+    out: dict[str, str | None] = {}
+    for n, line in enumerate(lines[at + 1:], at + 2):
+        if not line.strip():
+            continue
+        m = ARG_LINE.fullmatch(line.rstrip("\r"))
+        if not m:
+            raise ValueError(f"line {n} {line[:60]!r} is not `    <key>=<value>` - every "
+                             f"argument is one line; a value holding a line break is "
+                             f"written as a JSON string")
+        k, v = m.group(1), m.group(2).strip()
+        if k in out:
+            raise ValueError(f"line {n}: argument `{k}` is given twice")
+        if v.startswith('"'):
+            try:
+                v = json.loads(v)
+            except ValueError:
+                v = None
+            if not isinstance(v, str):
+                raise ValueError(f"line {n}: `{k}` starts with `\"` but is not one JSON "
+                                 f"string")
+        elif v == "(none)":
+            v = None
+        out[k] = v
+    return out
 
 
 def write_row_brief(run_dir: pathlib.Path, row: dict) -> pathlib.Path:
@@ -265,7 +333,7 @@ def write_row_brief(run_dir: pathlib.Path, row: dict) -> pathlib.Path:
     body = render_brief(run_dir, row["seq"], row["step"], row["skill"],
                         row.get("check_id"), row.get("args") or {})
     tmp = path.with_suffix(".md.tmp")
-    tmp.write_text(body)
+    tmp.write_text(body, encoding="utf-8")
     tmp.replace(path)
     return path
 
@@ -287,16 +355,37 @@ def brief_rel(seq: int, step: str) -> str:
     return f"dispatch/{seq:04d}-{step}.md"
 
 
-def _flat(v) -> str:
-    return v if isinstance(v, str) else json.dumps(v, separators=(",", ":"))
+def _q(p) -> str:
+    """A path as a printed command carries it: unchanged when it is shell-safe, quoted
+    when it holds a space or a shell character (`OneDrive - Firm/Clients`)."""
+    return shlex.quote(str(p))
+
+
+def _plain(s: str) -> bool:
+    """A string an argument line carries bare: it reads back as written."""
+    return (s == s.strip() and not s.startswith('"') and s != "(none)"
+            and not any(b in s for b in LINE_BREAKS))
+
+
+def _jstr(s: str) -> str:
+    """A string as one JSON string on one line (json leaves U+0085/2028/2029 raw)."""
+    return (json.dumps(s, ensure_ascii=False).replace("\x85", "\\u0085")
+            .replace("\u2028", "\\u2028").replace("\u2029", "\\u2029"))
 
 
 def _arg(v) -> str:
-    """One argument value as the brief prints it: an empty value is `(none)` (the worker
-    skills read that spelling), a list is comma-joined, anything else is flat."""
+    """One argument value as the brief prints it, always on one line: an empty value is
+    `(none)` (the worker skills read that spelling); a plain string as written, any other
+    string as a JSON string; a list of plain strings with no comma comma-joined; anything
+    else compact JSON (ARGS_HEAD's rule, read back by parse_brief_args)."""
     if v is None or v == {} or v == []:
         return "(none)"
-    return ",".join(v) if isinstance(v, list) else _flat(v)
+    if isinstance(v, str):
+        return v if _plain(v) else _jstr(v)
+    if isinstance(v, list) and all(isinstance(x, str) and x and _plain(x) and "," not in x
+                                   for x in v):
+        return ",".join(v)
+    return json.dumps(v, separators=(",", ":"))
 
 
 def _args_text(args: dict) -> str:
@@ -304,16 +393,16 @@ def _args_text(args: dict) -> str:
     for k, v in args.items():
         if v is None or v == {} or v == []:
             continue
-        parts.append(f"{k}={','.join(v) if isinstance(v, list) else _flat(v)}")
+        parts.append(f"{k}={_arg(v)}")
     return " ".join(parts)
 
 
 def next_line(run_dir: pathlib.Path, row: dict, brief: pathlib.Path | None,
               label: str = "NEXT") -> str:
-    line = (f"{label}: Skill {row['skill']} run_dir={run_dir} seq={row['seq']}"
+    line = (f"{label}: Skill {row['skill']} run_dir={_q(run_dir)} seq={row['seq']}"
             + (f" check={row['check_id']}" if row.get("check_id") else "")
             + (f" {t}" if (t := _args_text(row.get("args") or {})) else ""))
-    return line + (f" brief={brief}" if brief else "")
+    return line + (f" brief={_q(brief)}" if brief else "")
 
 
 def gather_line(run_dir: pathlib.Path, run: dict) -> str | None:
@@ -325,8 +414,8 @@ def gather_line(run_dir: pathlib.Path, run: dict) -> str | None:
     """
     if not run.get("inputs", {}).get("debug"):
         return None
-    return (f"GATHER: python3 {pathlib.Path(__file__).resolve().parent}/gather_debug.py "
-            f"{run_dir}   # debug mode - run it BEFORE sync_run.py")
+    return (f"GATHER: python3 {_q(pathlib.Path(__file__).resolve().parent / 'gather_debug.py')} "
+            f"{_q(run_dir)}   # debug mode - run it BEFORE sync_run.py")
 
 
 def check_row(run: dict, check_id: str) -> dict | None:
@@ -349,8 +438,9 @@ def register_checks(run: dict, entries: list[dict],
     added = []
     for e in entries:
         cid, kind = e.get("id"), e.get("kind")
-        if not cid or not check_playbook.SLUG.match(str(cid)):
-            raise Refuse(f"check id {cid!r} is not a slug")
+        if not cid or not check_playbook.CHECK_ID.fullmatch(str(cid)):
+            raise Refuse(f"check id {cid!r} is not a check id ([a-z0-9][a-z0-9_]*, no `-`: "
+                         f"it names the check's files)")
         if check_row(run, cid):
             raise Refuse(f"check id {cid!r} is already registered")
         if kind not in check_playbook.KINDS:
@@ -394,7 +484,7 @@ def validate_definition(path: pathlib.Path) -> dict:
     if problems:
         raise Refuse(f"{path.name}: {len(problems)} problem(s) - a broken definition "
                      f"goes to the user, not around this gate:\n  " + "\n  ".join(problems))
-    return json.loads(path.read_text())
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 # ---------------------------------------------------------------- subcommands
@@ -594,16 +684,22 @@ def parse_brief(path: pathlib.Path) -> dict:
     m = re.fullmatch(r"(\d{4})-([a-z]+)\.md", path.name)
     if not m or not path.is_file():
         raise Refuse(f"{path}: not a dispatch brief (dispatch/<NNNN>-<step>.md)")
-    text = path.read_text()
+    text = path.read_text(encoding="utf-8")
     sk = re.search(r"skills/([a-z-]+)/SKILL\.md", text)
-    kv = dict(re.findall(r"^    (\w+)=(.*)$", text, re.M))
-    if not sk or "check" not in kv or int(kv.get("seq", -1)) != int(m.group(1)):
+    try:
+        kv = parse_brief_args(text)
+    except ValueError as exc:
+        raise Refuse(f"{path}: {exc}")
+    if not sk or not kv.get("check") or kv.get("seq") != str(int(m.group(1))):
         raise Refuse(f"{path}: does not carry the brief template's skill and args")
-    args = {"sources": [s for s in kv.get("sources", "").split(",") if s],
-            "goal": None if kv.get("goal") in (None, "(none)") else kv["goal"],
-            "params": {} if kv.get("params") in (None, "(none)")
-            else json.loads(kv["params"]),
-            "mode": kv.get("mode", "fresh")}
+    try:
+        params = {} if kv.get("params") is None else json.loads(kv["params"])
+    except ValueError as exc:
+        raise Refuse(f"{path}: params is not JSON: {exc}")
+    args = {"sources": [s for s in (kv.get("sources") or "").split(",") if s],
+            "goal": kv.get("goal"),
+            "params": params,
+            "mode": kv.get("mode") or "fresh"}
     return {"path": path, "seq": int(m.group(1)), "step": m.group(2),
             "skill": sk.group(1), "check": kv["check"], "args": args}
 
@@ -620,7 +716,7 @@ def classify_record(run_dir: pathlib.Path, row: dict) -> tuple[str, dict | None,
     unparseable - the fallback keys on that."""
     rel = row.get("record") or f"steps/{row['seq']:04d}-{row['step']}.json"
     try:
-        rec = json.loads((run_dir / rel).read_text())
+        rec = json.loads((run_dir / rel).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return "died", None, "step record absent or unparseable"
     if rec.get("seq") != row["seq"] or rec.get("step") != row["step"]:
@@ -713,7 +809,71 @@ def cmd_record(a) -> int:
     if (g := gather_line(run_dir, run)):
         print(g)
     if retries:
-        print(f"THEN: python3 {pathlib.Path(__file__).resolve()} record {run_dir}")
+        print(f"THEN: python3 {_q(pathlib.Path(__file__).resolve())} record {_q(run_dir)}")
+    return 0
+
+
+SCRUB_ROUNDS_MAX = 3
+
+
+def _json_arg(v: str):
+    """A --json value: the JSON itself, or `@<path>` to a file holding it."""
+    if v.startswith("@"):
+        return json.loads(pathlib.Path(v[1:]).read_text(encoding="utf-8"))
+    return json.loads(v)
+
+
+def cmd_record_scrub(a) -> int:
+    run_dir = a.run_dir.resolve()
+    load_run(run_dir)
+    rec = _json_arg(a.json)
+    if not isinstance(rec, dict):
+        raise Refuse("record-scrub --json must be an object: {send, rounds}")
+    send = rec.get("send")
+    if not isinstance(send, str) or not send.strip():
+        raise Refuse("record-scrub: `send` is the scrubbed description, a non-empty string")
+    rounds = rec.get("rounds")
+    if not isinstance(rounds, list) or not rounds:
+        raise Refuse("record-scrub: `rounds` lists every scrub + blind-check round, at least one")
+    if len(rounds) > SCRUB_ROUNDS_MAX:
+        raise Refuse(f"record-scrub: {len(rounds)} rounds - SCRUB.md stops the exception "
+                     f"after {SCRUB_ROUNDS_MAX}; send nothing and author the recipe locally")
+    cats: set[str] = set()
+    removed_n = flags_n = 0
+    for i, r in enumerate(rounds, 1):
+        if not isinstance(r, dict):
+            raise Refuse(f"record-scrub: round {i} is not an object")
+        verdict = r.get("verdict")
+        if verdict not in ("clean", "flagged"):
+            raise Refuse(f"record-scrub: round {i} verdict {verdict!r} - clean or flagged, "
+                         f"as the blind read returned it")
+        removed, flags = r.get("removed") or [], r.get("flags") or []
+        for what, items in (("removed", removed), ("flags", flags)):
+            if not isinstance(items, list):
+                raise Refuse(f"record-scrub: round {i} `{what}` is a list")
+        cats.update(str(it["category"]) for it in removed
+                    if isinstance(it, dict) and it.get("category"))
+        if verdict == "flagged" and not flags:
+            raise Refuse(f"record-scrub: round {i} is flagged with no flags")
+        if verdict == "clean" and flags:
+            raise Refuse(f"record-scrub: round {i} is clean yet carries flags")
+        removed_n += len(removed)
+        flags_n += len(flags)
+    if rounds[-1]["verdict"] != "clean":
+        raise Refuse("record-scrub: the last blind read is not `clean` - nothing crosses "
+                     "until one is")
+    out = run_dir / "scrub.json"
+    tmp = out.with_name(out.name + ".tmp")
+    tmp.write_text(json.dumps({"recorded_at": _now(), "send": send, "rounds": rounds},
+                              indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    tmp.replace(out)
+    if a.json.startswith("@"):  # the draft duplicates scrub.json; drop it from the run
+        draft = pathlib.Path(a.json[1:]).resolve()
+        if draft.parent == run_dir and draft != out:
+            draft.unlink(missing_ok=True)
+    _append_event(run_dir, "ask_scrubbed", rounds=len(rounds), removed_n=removed_n,
+                  categories=sorted(cats), flags_n=flags_n, sent_chars=len(send))
+    print(f"SEND:\t{send}")
     return 0
 
 
@@ -776,6 +936,11 @@ def main() -> int:
     p = sub.add_parser("record")
     p.add_argument("run_dir", type=pathlib.Path)
     p.set_defaults(fn=cmd_record)
+
+    p = sub.add_parser("record-scrub")
+    p.add_argument("run_dir", type=pathlib.Path)
+    p.add_argument("--json", required=True)
+    p.set_defaults(fn=cmd_record_scrub)
 
     p = sub.add_parser("debug")
     p.add_argument("run_dir", type=pathlib.Path)

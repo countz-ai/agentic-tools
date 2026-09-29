@@ -46,7 +46,8 @@ server (`get_recipe_for_countz_analysis`) and runs everything else locally.
 
 `get_countz_config` takes no arguments. Nothing from a run — no path, no figure,
 no file name — goes to the server; the one text that may cross is the scrubbed pre-run
-ask, on a catalog miss only ([OBSERVABILITY.md](OBSERVABILITY.md) § 4).
+ask, on a catalog miss only, scrubbed by an agent under [SCRUB.md](SCRUB.md)
+([OBSERVABILITY.md](OBSERVABILITY.md) § 4).
 
 ## The files, and who writes each
 
@@ -56,7 +57,7 @@ ask, on a catalog miss only ([OBSERVABILITY.md](OBSERVABILITY.md) § 4).
 | `<run_dir>/engagement-preview.md` | `scripts/setup_run.py`, on every registration: the collected parameters, each source's location, and a metadata-only directory summary of every folder source (3 levels, file counts, KB) | the user, via preview, right after registration and before the first dispatch |
 | `<run_dir>/file_index.json` | the plan step: every registered file with its relevance verdict (`relevant: true`, `"context"` for a file kept for later explanation, or `false`). Plan-driven runs only | dispatched steps, `scripts/preview.py` |
 | `<run_dir>/sources/<id>.md` (+ `<id>.entities.json` where the source stacks several accounts, statements or entities) | the plan step, for each source its roster binds. Plan-driven runs only | the check steps |
-| `<run_dir>/cache/<id>.parquet` + `<run_dir>/cache/manifest.json` | the `extract` step, through `scripts/extract.py`: the data-room files the plan's steps read, parsed once into typed parquet, and the manifest — per file its source path, bytes and sha256, header row, columns with letters and dtypes, row count and control total. Plan-driven runs whose plan scheduled an extraction | the steps that name it in `params.cache_from` (`scripts/extract.py read`), `scripts/evidence.py span` for their citations. Excluded from `run_sync.tar.gz`: rebuilt by re-running the step, cited by nothing |
+| `<run_dir>/cache/<id>.parquet` + `<run_dir>/cache/manifest.json` | the `extract` step's script (`workpapers/extract-<check>.py`), through `scripts/cache.py`: each table the plan's steps read, parsed once into typed parquet, and the manifest (schema `cache@3`) — per table its source file, sha256 and bytes, header and row coordinates in the file, columns with where each sits and how it was parsed, row count, control total and any stated total, and the parquet's own sha256 (`parquet_sha256`) that `cache.py --verify` re-checks; tables seen and not extracted under `not_extracted`. `cache.py` refuses a manifest of another schema. Plan-driven runs whose plan scheduled an extraction | the steps that name it in `params.cache_from` (`scripts/cache.py read`), `scripts/evidence.py select` for their citations. Excluded from `run_sync.tar.gz`: rebuilt by re-running the step's script, cited by nothing |
 | `<run_dir>/recipes/<recipe-name>.md` | `scripts/setup_run.py --recipe` (a served recipe, byte for byte) or the `create-recipe` step (a generated one, validated by `scripts/validate_recipe.py`); written once, never edited | the plan, review and report steps, through `run.json.plan.recipe` |
 | `<run_dir>/plan.md` + `<run_dir>/plan/<name>.json` | the plan step, once per draft; a revised draft rewrites both | the user (via preview), the relay, the playbook engine (the definition it executes) |
 | `<run_dir>/steps/<NNNN>-<step>.json` | the step that produced it, once, at its end | the relay (`run_state.py record`), the playbook engine, the review step |
@@ -120,9 +121,10 @@ dispatches: []                      # ORDERED, append-only; one entry per dispat
 next_seq: 8                         # the next unused seq; seqs are never reused
 ```
 
-`checks[].id` is a slug the run mints (`tie_gl_tb`, `recon_cash`); it names the check's
-files and its tab. `checks[].goal` is kept verbatim; `playbook-save` distills it into the
-saved playbook.
+`checks[].id` is an id the run mints (`tie_gl_tb`, `recon_cash`), `[a-z0-9][a-z0-9_]*`;
+it names the check's files and its tab. It takes no `-`, which separates the check id
+from the table name in `checks/<check>-<table>.csv`. `checks[].goal` is kept verbatim;
+`playbook-save` distills it into the saved playbook.
 
 ### Parameters — the standing answers
 
@@ -139,6 +141,7 @@ Where an option is still unset when the run executes:
 | a transaction reader (an M&A buyer, a seller preparing to be bought, a deal desk, a lender) | declared by the user only. A data room named `diligence`, a folder of deal files or a CIM in the room is not a declaration |
 | quality of earnings | sell-side |
 | an option whose line says *no default* | ask again; the run waits |
+| `arr_policy` | never defaulted: settled and pinned before the plan (`ARR_POLICY.md` § How a run carries it) |
 
 ## The relay's pen — scripts/run_state.py
 
@@ -177,11 +180,20 @@ around.
 - `debug <run_dir> [--off]` turns the run's debug mode on or off after registration.
   `setup_run.py --debug` turns it on at registration.
 
+**The brief's argument block.** After the line `Your arguments:`, one line per argument,
+`    key=value` (four spaces), the key `[A-Za-z0-9_]+`. A value holding a line break,
+starting with `"`, carrying leading or trailing whitespace, or spelled `(none)` is
+written as one JSON string. A bare `(none)` is an empty value. A list of non-empty plain
+strings with no comma is comma-joined; any other value is compact JSON. `run_state.py`
+writes every brief this way, and `parse_brief_args` reads the block back for it and for
+`step_record.py`. `dispatch --briefs` refuses a block holding any other line, a key
+twice, or a value starting with `"` that is not one JSON string.
+
 ## The step record
 
 `<run_dir>/steps/<NNNN>-<step>.json`, `NNNN` the zero-padded seq from the dispatch args.
-Steps: `plan`, `recipe`, `extract`, `tie`, `recon`, `completeness`, `vouch`, `cutoff`,
-`analyze`, `review`, `report`.
+Steps: `plan`, `recipe`, `arr_policy`, `extract`, `tie`, `recon`, `completeness`,
+`vouch`, `cutoff`, `analyze`, `review`, `report`.
 
 ```yaml
 schema: "countz-accounting/step@1"
@@ -202,12 +214,26 @@ blockers: [{what: "...", effect: "..."}] # what stopped the work or narrowed it:
                                     # source you could not reach, a dependency that did
                                     # not land; one entry each, with its effect
 findings: []                        # review only; see VALIDATION.md
-cache_defects: []                   # [{id, what, fix: {rows|types|header_row|control}}]:
-                                    # a cache id whose block the step found wrong, and
-                                    # the spec keys that correct it (agents/worker.md
+cache_defects: []                   # [{id, what, fix}]: a cache id whose table the
+                                    # step found wrong, and in words what the extract
+                                    # script must do differently (agents/worker.md
                                     # § Your procedure)
 notes: ""
 ```
+
+**Write it with `scripts/step_record.py`.** `start(run_dir, seq)` appends `step_start`;
+`finish(run_dir, seq, conclusion=..., blockers=..., notes=..., consumed={...})` writes
+the record and appends `step_end` in one act. It reads `step`, `check_id` and `args`
+from the step's own brief (`dispatch/<NNNN>-<step>.md`) and `started_at` from its
+`step_start`; it builds `consumed` from the step's citations
+(`workpapers/evidence-<check>.yaml`, each resolved to its file) plus the brief, the plan
+and the recipe, and `produced` from the check's own files written since the start. The
+step passes only what no file records: the conclusion, the blockers, the notes, a read
+no citation covers (another check's record, a source profile) and, on a non-check step,
+what it produced. It refuses a record the relay could not classify, an `error` that is
+neither null nor a non-empty message, an extra field naming one the record derives
+(`schema`, `step`, `check_id`, `args`, `started_at`, ...), and a `produced` path that
+does not exist under the run directory.
 
 `error` is read before `outcome`. A step never marks itself successful; it reports, and
 `run_state.py record` classifies. A gate that refused is `outcome: blocked` with the
@@ -276,10 +302,10 @@ After every wave, in this order:
 
 ## Review and report
 
-Before the review: a step record carrying `cache_defects` names a cache block the step
-found wrong and the spec keys that correct it. Re-dispatch the extract step that owns
-the id with `--mode fix` and `fix_input` holding those entries — it applies them as
-overrides and rewrites the block — then every step whose `params.reads` names the id,
+Before the review: a step record carrying `cache_defects` names a cache table the step
+found wrong and what the extract script must do differently. Re-dispatch the extract
+step that owns the id with `--mode fix` and `fix_input` holding those entries — it edits
+its script, re-runs it, and records the control total before and after — then every step whose `params.reads` names the id,
 with `--mode fix` and `fix_input` naming the id, before the review runs. The step that
 found the defect computed from the source and needs no re-run.
 
@@ -289,8 +315,8 @@ figure, and its record is the cache manifest every consumer's citations re-state
 (severity, target, observation); with debug mode off the preview does not show them. The
 user rules on each:
 
-- **fix**: re-dispatch the named checks with `--mode fix`. Each fix verifies its own
-  change by diff; that closes the finding and ends the round. No re-review follows a fix.
+- **fix**: re-dispatch the named checks with `--mode fix`. Each fix snapshots its
+  check first and verifies its own change by diff (`${CLAUDE_PLUGIN_ROOT}/scripts/rework.py`); that closes the finding and ends the round. No re-review follows a fix.
 - **proceed**: the findings are carried into the deliverable as stated limitations.
 
 A further round, when the user directs one, is a fresh `check-review` with `carry_from`
@@ -301,7 +327,7 @@ proceeded past silently: the affected figure is withheld and the deliverable say
 Then `check-report` (`dispatch --step report`). Re-dispatch it whenever later checks or
 fixes land after a seal; the report step reassembles from all current records.
 
-The relay relays. It does not open client files, compute figures, or summarise a step's
+The relay relays. It does not open client files, compute figures, or summarize a step's
 output. The preview puts the deliverables in front of the user; the review's findings
 are put to them from its record.
 

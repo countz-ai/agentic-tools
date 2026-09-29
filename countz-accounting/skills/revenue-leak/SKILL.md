@@ -5,7 +5,7 @@ description: >-
   collections record layered on where it exists: draft a plan for your
   confirmation, tie the aging to the books, roll the receivable forward, measure DSO
   against the best-possible DSO the terms set, test each candidate cause of delay as a
-  claim the data can refute, trace cash application, give every open item its behaviour
+  claim the data can refute, trace cash application, give every open item its behavior
   group and, where recorded, its cause, owner and next action, and hand the reader the
   billed-to-collected bridge and the DSO bridge to the supported target, every leak
   priced in days and dollars, every refuted cause reported, every figure re-performable.
@@ -43,7 +43,7 @@ two.
 **Ask for the collections record as a source.** Anything stating why items are late, who
 owns the next action and what was promised — an activity log, a dispute log, promises to
 pay, an escalation list, the collections policy with its ladder. Say what it adds: a
-cause the record states stands as documented, where a cause drawn from behaviour alone
+cause the record states stands as documented, where a cause drawn from behavior alone
 stands as indicative with the question that would settle it. Its absence changes no
 check; do not press for it.
 

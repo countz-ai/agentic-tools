@@ -52,8 +52,7 @@ engagement preview, the plan, the workbook and the report deck. `run_state.py de
    `completeness`, `vouch` or `cutoff` where the ask is a roster agreed in both
    directions, asserted items traced to their clearing evidence, or period assignment
    around a date — the user's goal verbatim, declared tolerances in `params` (a cutoff
-   also needs `params.period_end` and `params.window_days`; the script refuses one
-   without them). Dispatch
+   also needs its window (keys: `scripts/periods.py`); the script refuses one without it). Dispatch
    the ready ones as a wave (`run_state.py dispatch --checks`, the lines it prints, then
    `run_state.py record`). Independent checks asked for
    together run in parallel; preview after every wave; answer questions from the records,
@@ -114,4 +113,4 @@ Every dispatch, classification, retry, preview and archive refresh follows
 `RUN_CONTRACT.md` — execute the scripts' printed lines in their order; every `run.json`
 write through `scripts/setup_run.py` or `scripts/run_state.py`, never your own edit; one
 re-dispatch for a dead step (`record` mints it), then the user decides. You relay; you
-do not summarise, and you never write a decision the records cannot show.
+do not summarize, and you never write a decision the records cannot show.

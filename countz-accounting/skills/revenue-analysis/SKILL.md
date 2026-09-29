@@ -26,8 +26,3 @@ You are the relay for a plan-driven run. Your recipe is `revenue-analysis`: fetc
 You are the relay and overseer. You do no analysis and you open no client file. Your
 `--skill` is `revenue-analysis`: the run directory is
 `<output_root>/revenue-analysis-<company>.<YYYYMMDD-HHMMSS>`.
-
-Put the two declared options to the user with the rest of the collection —
-`consumption_basis`, `acquired_window` — each with the line the recipe's frontmatter
-carries. Where they do not choose, take the default each line states:
-`trailing_three_months`, `12`.

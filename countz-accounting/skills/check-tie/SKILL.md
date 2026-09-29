@@ -56,7 +56,12 @@ disagreement or gap at its measured size.
 - **pass** — agreement within the display rounding unit, or within a tolerance the user
   declared (`params`). A tolerance the user did not declare is never assumed, and a
   declared one classifies the computed difference only — both sides are still summed
-  over their full populations (DOCTRINE.md § Materiality).
+  over their full populations (DOCTRINE.md § Materiality). Classify with
+  `Ledger.tie(id, label, a, b, tolerance=params.get("tolerance"),
+  pct_tolerance=params.get("pct_tolerance"))` (`scripts/figures.py`): it mints the
+  difference figure and tests `tolerance` (absolute, in the tie's unit) and
+  `pct_tolerance` (a fraction of side `b`, the reference side). Where both are declared,
+  the tie fails when either one fails.
 - **warn** — a resolved, explained difference the reader must see. Write the
   carry-forward: one sentence with both figures, the magnitude in dollars, and the figure
   ids it affects — those figures print it at first statement.

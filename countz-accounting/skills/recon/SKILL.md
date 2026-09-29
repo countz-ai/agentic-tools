@@ -64,7 +64,7 @@ statements) register as several checks and run as one parallel wave.
 Exactly as the `tieout` skill states it: a `check-recon` wave (`run_state.py dispatch`
 → the lines it prints, in their order → `run_state.py record`), then review and report
 per `RUN_CONTRACT.md § Review and report` — preview and archive refresh after every
-wave per its `§ Every wave`. No summarising; the records speak.
+wave per its `§ Every wave`. No summarizing; the records speak.
 
 ## 5. When it ends
 

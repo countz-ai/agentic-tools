@@ -14,6 +14,10 @@ from __future__ import annotations
 import json
 import pathlib
 import re
+import sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from style import CURRENCIES, SCALES  # noqa: E402
 
 REQUIRED = ["Population", "Source classes", "Granularity", "The families",
             "Exec summary", "Report", "What the plan notes rather than checks"]
@@ -33,10 +37,9 @@ REPORT = "Report"
 REPORT_KEYS = {"metrics", "schedules"}
 METRICS_KEYS = {"title"}
 SCHEDULE_KEYS = {"title", "from", "columns", "block", "where", "through", "periods", "scale",
-                 "dense", "ids"}
+                 "currency", "dense", "ids"}
 SCHEDULE_REQUIRED = ("title", "from", "columns")
 PERIODS = {"all", "latest", "none"}
-SCALES = {"thousands", "millions"}
 FENCE = re.compile(r"^```json\s*\n(.*?)^```\s*$", re.S | re.M)
 
 
@@ -65,7 +68,7 @@ def kinds_from(check_playbook: pathlib.Path) -> set[str]:
     file is absent, in which case the kind rule is not applied."""
     if not check_playbook.is_file():
         return set()
-    m = re.search(r"^KINDS\s*=\s*\{(.*?)^\}", check_playbook.read_text(), re.S | re.M)
+    m = re.search(r"^KINDS\s*=\s*\{(.*?)^\}", check_playbook.read_text(encoding="utf-8"), re.S | re.M)
     return set(re.findall(r'"([a-z]+)":', m.group(1))) if m else set()
 
 
@@ -164,7 +167,10 @@ def _report_defects(text: str, fams: dict[str, str]) -> list[tuple[str, str]]:
         if sc.get("periods") is not None and sc["periods"] not in PERIODS:
             bad.append(("report.schedule", f"{at}: `periods` is {' | '.join(sorted(PERIODS))}"))
         if sc.get("scale") is not None and sc["scale"] not in SCALES:
-            bad.append(("report.schedule", f"{at}: `scale` is {' | '.join(sorted(SCALES))}"))
+            bad.append(("report.schedule", f"{at}: `scale` is {' | '.join(SCALES)}"))
+        if sc.get("currency") is not None and str(sc["currency"]).lower() not in CURRENCIES:
+            bad.append(("report.schedule", f"{at}: `currency` is a lower-case ISO 4217 code "
+                                           f"scripts/style.py defines (`usd`, `eur`, ...)"))
         for k in ("dense", "ids"):
             if sc.get(k) is not None and not isinstance(sc[k], bool):
                 bad.append(("report.schedule", f"{at}: `{k}` is true or false"))
@@ -194,6 +200,14 @@ def validate(text: str, kinds: set[str] | None = None) -> list[tuple[str, str]]:
                                         f"(lower-case letters, digits, single hyphens)"))
     for k in sorted(set(fm) - FRONTMATTER_KEYS):
         bad.append(("frontmatter.unknown_key", f"unknown frontmatter key `{k}`"))
+    # The recipe is what routes a worker and the critic to the ARR policy: they read it
+    # whole, and nothing generic points them there (RECIPE_FORMAT.md § The document).
+    flat = " ".join(text.split())
+    if "arr_policy" in (fm.get("declares") or {}) and not (
+            "params.arr_policy" in flat and "Applying the policy" in flat):
+        bad.append(("arr_policy.route", "declares `arr_policy` but its body never says that "
+                                        "a step carrying `params.arr_policy` applies it per "
+                                        "ARR_POLICY.md § Applying the policy"))
     heads = re.findall(r"^## (.+?)\s*$", text, re.M)
     pos = [heads.index(h) if h in heads else None for h in REQUIRED]
     for h, at in zip(REQUIRED, pos):
