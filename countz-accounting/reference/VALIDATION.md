@@ -21,7 +21,7 @@ finding.
 
 ## The validation scope
 
-After the mechanical gates, validate eight things, in this order.
+After the mechanical gates, validate nine things, in this order.
 
 1. **Foot the tables.** Every table in the checks' records and tabs sums to the totals it
    displays. Where two tables state the same quantity, e.g. a statement total restated in
@@ -44,7 +44,8 @@ After the mechanical gates, validate eight things, in this order.
    balance.
 6. **Test the empty results.** A population, class or list a check closed as empty is a
    `search` finding where the data room holds records that could have answered it. The
-   defect is the search, not the absence.
+   defect is the search, not the absence. A population emptied by a threshold the worker
+   chose, rather than one the company's records or the user set, counts as closed empty.
 7. **Judge the objective.** The run's goal is supported by what the checks establish, or
    it is not. Where it is not, the deliverable states which families ran, at what grain,
    over what coverage. A deliverable that reads as complete over a population no check
@@ -54,6 +55,13 @@ After the mechanical gates, validate eight things, in this order.
    skill's numbered sections — its procedure — with `section.py`. Stop there: `mode: fix`
    and `Record` are the worker's, not yours. A step the procedure requires and the record
    does not show is a `judgment` finding.
+9. **Follow what was handed on.** Checks in one wave run side by side, so a pattern one
+   check's record leaves to another, and a line of inquiry a check proposed without
+   testing, reaches no check on its own. Each is tested by some check; routed as a `Q.`
+   or a `D.` with the reason the data room cannot test it; or sized below materiality
+   and not systematic (DOCTRINE.md § Materiality). One that is none of these is a
+   `search` finding, `fix_kind: rerun_check`, `fix_check` the check that named it, with
+   `fix_input` stating the test to run.
 
 Where a deliverable has landed, its layout and its cells are held to
 `${CLAUDE_PLUGIN_ROOT}/reference/WORKBOOK.md` and `WORKBOOK_STYLE.md`, and the deck to

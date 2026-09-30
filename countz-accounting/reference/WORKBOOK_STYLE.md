@@ -31,7 +31,7 @@ unless stated.
 | `INK`      | `1C2130` | `--color-text` | All body text and computed numbers. Not pure black.                  | 16.0 |
 | `SLATE`    | `5E616A` | `--color-text-muted` | Subtitle, notes, footnotes, source lines, secondary labels, ledger-tab color. | 6.2 |
 | `HAIRLINE` | `D8D8D9` | `--color-border` | Every border: under headers, above subtotals, table rules. Never darker. | — |
-| `MIST`     | `EDEBE3` | `--color-surface-inset` | Fill of subtotal rows and of plain (non-band) header rows.   | — |
+| `MIST`     | `EDEBE3` | `--color-surface-inset` | Fill of subtotal rows.                                        | — |
 | `WHITE`    | `FFFFFF` | `--color-surface` | Ground. Text on `BAND`.                                            | — |
 
 ### 1c. Semantic (meaning only, never decoration)
@@ -71,7 +71,7 @@ Scale (points). No sheet uses more than four sizes; nothing below 9.
 | `Title`     | 14   | bold        | `INK`    | B1: sheet title (e.g. "Cash tie-out — Dec 2025").          |
 | `Subtitle`  | 10   | regular     | `SLATE`  | B2: entity · period · basis · unit ("Acme Corp · FY2025 · accrual · USD"). |
 | `Section`   | 11   | bold        | `ACCENT` | A heading above each table when a sheet holds more than one. |
-| `Header`    | 10   | bold        | `WHITE` on `BAND` (primary table) / `INK` on `MIST` (other tables) | Column headers. |
+| `Header`    | 10   | bold        | `WHITE` on `BAND`, every table | Column headers. |
 | `Body`      | 10   | regular     | `INK`    | Text cells, computed numbers.                              |
 | `BodyInput` | 10   | regular     | `INPUT`  | Numbers and text transcribed from a client file.           |
 | `Subtotal`  | 10   | bold        | `INK`    | Subtotal rows, on `MIST` fill.                             |
@@ -121,8 +121,9 @@ row 4 = Header row     (row height 20; BAND fill + white bold on the primary tab
 rows 5.. = body
   subtotal rows: MIST fill, bold, HAIRLINE top border
   total row:     bold, thin top border, DOUBLE bottom border, no fill
-row after table = blank
-then Notes (9 italic SLATE): source line, method line, any caveat
+two rows after the table (its Total included) = blank
+then each further block: Section heading, one blank row, its table
+  (a block of lines — Notes, To reperform — starts right under its heading)
 ```
 
 - **Freeze panes at B4** (title, subtitle, summary + the margin column). Never freeze a
@@ -134,8 +135,9 @@ then Notes (9 italic SLATE): source line, method line, any caveat
   inside it (`WORKBOOK.md` § 4).
 - **Gridlines OFF** on deliverable tabs (`ws.sheet_view.showGridLines = False`). ON for
   raw-data and ledger tabs where the reader scans rows.
-- **One `BAND` per sheet.** The primary table's header. Secondary tables on the same
-  sheet use `INK` bold on `MIST`.
+- **Every table header is `BAND`.** The primary table on row 4 and every table below
+  it read alike, so the reader knows a header by its color wherever the table sits.
+  `BAND` fills a header row and nothing else.
 - **Borders**: `HAIRLINE` on every side of every table cell — header, body, subtotal,
   total — so the table reads as a grid with gridlines off and survives print. On top of
   that: `HAIRLINE` under every header row, above every subtotal, thin top + double bottom
@@ -234,7 +236,8 @@ blue do not appear.
 - Yellow-filled input cells; input is signalled by `INPUT` blue font, nothing else.
 - Dark (`INK`) borders between cells, outline boxes heavier than the hairline, borders
   on prose cells — and the opposite fault, a table with no border at all.
-- More than one `BAND` per sheet; teal fills on subtotals.
+- `BAND` on anything but a table header — teal fills on subtotals or totals; a table
+  header in any other fill.
 - Rainbow tab colors, a different color per tab.
 - Merged cells anywhere.
 - Font size below 9, more than four sizes on a sheet, any font other than Arial.
@@ -264,16 +267,19 @@ workbook against the same values. The names, for reading a tab script:
   `FMT_DAYS`, `FMT_COUNT`, `FMT_DATE`, `FMT_PERIOD`, `FMT_TEXT` — § 3;
 - helpers beyond placement: `count(cell, n)` (a count in `FMT_COUNT`),
   `header(..., currency=)` (a money column's currency in its header),
+  `section(ws, row, text)` (returns the header row, one blank row below) and
+  `next_block(last_row)` (the next heading's row, two blank rows below a table),
   `register_status(word, kind)` (a recipe's status word and its state);
 - `styles()`: the named styles `Title`, `Subtitle`, `Section`, `Header` (the `BAND`),
-  `HeaderPlain` (`MIST`), `Body`, `BodyInput`, `Subtotal`, `Total`, `Note`, `Link`,
+  `HeaderPlain` (the same look, kept for scripts that name it), `Body`, `BodyInput`, `Subtotal`, `Total`, `Note`, `Link`,
   `KeyFigure`, `StatusBreak`, `StatusReview`, `StatusTied`, registered as `cz_*` on the
   workbook; `S = styles()` at import.
 
 Per sheet, `finish()` in the same module sets: gridlines off (on for a ledger), freeze
 panes `B4`, column A width 2, row 1 height 24 and row 4 height 20, the tab color
-(`ACCENT`; `SLATE` for a ledger), an Excel table per table block with no table style (the
-cell styles are the look), print titles `1:3`, landscape fit to one page wide, 0.5
+(`ACCENT`; `SLATE` for a ledger), an Excel table per table block in `TableStyleLight1` with
+stripes off (the cell styles are the look; a table naming no style is dropped by Google
+Sheets on import), print titles `1:3`, landscape fit to one page wide, 0.5
 margins, horizontal centring, and the § 7 footer.
 
 ### xlsxwriter
@@ -289,7 +295,7 @@ F = {
   "subtitle":  wb.add_format({**base, "font_color": P["slate"]}),
   "section":   wb.add_format({**base, "font_size": 11, "bold": True, "font_color": P["accent"]}),
   "header":    wb.add_format({**base, "bold": True, "font_color": P["white"], "bg_color": P["band"], "bottom": 1, "bottom_color": P["hairline"], "valign": "vcenter"}),
-  "header_plain": wb.add_format({**base, "bold": True, "bg_color": P["mist"], "bottom": 1, "bottom_color": P["hairline"]}),
+  "header_plain": wb.add_format({**base, "bold": True, "font_color": P["white"], "bg_color": P["band"], "bottom": 1, "bottom_color": P["hairline"]}),
   "body":      wb.add_format({**base}),
   "input":     wb.add_format({**base, "font_color": P["input"]}),
   "amount":    wb.add_format({**base, "num_format": '#,##0;(#,##0);"–"'}),
@@ -307,7 +313,8 @@ F = {
 # every table format above (header, body, input, amount, pct, subtotal, total, status)
 # also carries {"border": 1, "border_color": P["hairline"]}; note/section/title do not.
 # per table: ws.add_table(hdr_row, 1, last_body_row, last_col,
-#   {"columns": [{"header": h} for h in labels], "style": None})   # its own filter; Total row outside
+#   {"columns": [{"header": h} for h in labels], "style": "Table Style Light 1",
+#    "banded_rows": False})   # its own filter; Total row outside; a named style, or Sheets drops it
 # per sheet: ws.hide_gridlines(2); ws.freeze_panes("B4"); ws.set_column("A:A", 2);
 #   ws.set_row(0, 24); ws.set_row(3, 20); ws.set_tab_color(P["accent"]);
 #   ws.repeat_rows(0, 2); ws.set_landscape(); ws.fit_to_pages(1, 0); ws.set_margins(0.5, 0.5, 0.5, 0.5);
@@ -321,7 +328,7 @@ F = {
 Open the produced workbook (or dump its XML) and confirm, per deliverable tab:
 
 1. Every cell font is Arial; sizes used ⊆ {9, 10, 11, 12, 14}.
-2. Exactly one `BAND`-filled row on the sheet.
+2. Every table header row is `BAND`-filled, row 4 among them, and `BAND` fills nothing else.
 3. Freeze pane is `B4` — no table header row frozen; gridlines hidden; every table an
    Excel table (`ws.tables`), none overlapping a sheet AutoFilter.
 4. Column A width 2 and empty.

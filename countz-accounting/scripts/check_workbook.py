@@ -28,7 +28,7 @@ in the figure ledger. Two ways to satisfy it:
 
 GATE 4 — the design. Every tab is built to reference/WORKBOOK.md and
 WORKBOOK_STYLE.md, read from the stored styles: Arial in the five sizes, column A empty,
-exactly one BAND header row and it is row 4, freeze panes at B4, no merged cell, every
+the primary table's BAND header on row 4 and BAND on header labels only, freeze panes at B4, no merged cell, every
 Excel table's header row reading its column names under a name unique in the workbook and
 clear of the sheet's AutoFilter, no
 numeric cell left in General, no table cell without its hairline border, prose only in a
@@ -347,8 +347,9 @@ def sheet_links(z: zipfile.ZipFile, part: str, xml: str):
     return out
 
 
-def sheet_tables(z: zipfile.ZipFile, part: str) -> list[tuple[str, str, list[str]]]:
-    """[(display name, ref, column names)] for the Excel tables one worksheet carries."""
+def sheet_tables(z: zipfile.ZipFile, part: str) -> list[tuple[str, str, list[str], str]]:
+    """[(display name, ref, column names, style name)] for the Excel tables one worksheet
+    carries; the style is empty where the table names none."""
     import html
     import posixpath
     rel_part = part.replace("worksheets/", "worksheets/_rels/") + ".rels"
@@ -368,7 +369,9 @@ def sheet_tables(z: zipfile.ZipFile, part: str) -> list[tuple[str, str, list[str
         ref = ATTR("ref").search(head.group(0)) if head else None
         cols = [html.unescape(m.group(1))
                 for m in re.finditer(r'<tableColumn\b[^>]*\bname="([^"]*)"', xml)]
-        out.append((name.group(1) if name else "", ref.group(1) if ref else "", cols))
+        style = re.search(r'<tableStyleInfo\b[^>]*\bname="([^"]+)"', xml)
+        out.append((name.group(1) if name else "", ref.group(1) if ref else "", cols,
+                    style.group(1) if style else ""))
     return out
 
 
@@ -769,8 +772,12 @@ def audit_design(z: zipfile.ZipFile) -> list[str]:
         if col_a:
             rule(tab, "column A is the empty margin", col_a, "WORKBOOK_STYLE.md § 4")
         band_rows = sorted({int(re.sub(r"[A-Z]+", "", c)) for c in band_cells})
-        if band_rows != [4] and not summary:
-            rule(tab, f"one BAND header row, on row 4 (found rows {band_rows or 'none'})", [], "WORKBOOK_STYLE.md § 4")
+        if 4 not in band_rows and not summary:
+            rule(tab, f"the primary table's BAND header on row 4 (found rows {band_rows or 'none'})", [], "WORKBOOK_STYLE.md § 4")
+        band_figures = [c for c in band_cells if c not in texts]
+        if band_figures:
+            rule(tab, "BAND fill on a figure — BAND is a table header's fill, never a subtotal's or a total's",
+                 band_figures, "WORKBOOK_STYLE.md § 4")
         if general:
             rule(tab, "numeric cell in General format", general, "WORKBOOK_STYLE.md § 3")
         if unruled:
@@ -790,17 +797,41 @@ def audit_design(z: zipfile.ZipFile) -> list[str]:
         # Excel tables (wbkit.excel_tables): Excel repairs, rather than opens, a table whose
         # header cells disagree with its column names, whose name repeats in the workbook,
         # or that overlaps the sheet's own AutoFilter.
-        spans = []
-        for name, tref, cols in sheet_tables(z, part):
-            c1, r1, c2, _ = _span(tref)
+        spans, unstyled_tables, crowded_above, crowded_below = [], [], [], []
+        last_row = max(by_row) if by_row else 0
+        for name, tref, cols, style in sheet_tables(z, part):
+            c1, r1, c2, r2 = _span(tref)
+            # Spacing (WORKBOOK.md § 4): the row above a header below the band is blank —
+            # Google Sheets draws the table's menus there — and two blank rows follow the
+            # table, its Total rows included, before anything else on the tab.
+            if r1 != 4 and (r1 - 1) in by_row:
+                crowded_above.append(tref)
+            end = r2
+            while (end + 1) in by_row:
+                end += 1
+            if end < last_row and ((end + 1) in by_row or (end + 2) in by_row):
+                crowded_below.append(tref)
             heads = [texts.get(f"{get_col(c)}{r1}", "") for c in range(c1, c2 + 1)]
             if [h.strip() for h in heads] != [c.strip() for c in cols]:
                 rule(tab, f"table {name} ({tref}): its header row does not read its column "
                           f"names — rebuild it with wbkit.excel_tables", [], "WORKBOOK.md § 4")
+            if not style:
+                unstyled_tables.append(tref)
             if name.casefold() in table_names:
                 rule(tab, f"table name {name} repeats in the workbook", [], "WORKBOOK.md § 4")
             table_names.add(name.casefold())
             spans.append(_span(tref))
+        if crowded_above:
+            rule(tab, "a table header with the row above it filled — leave one blank row "
+                      "between a Section heading and its table (wbkit.section returns the "
+                      "header's row)", crowded_above, "WORKBOOK.md § 4")
+        if crowded_below:
+            rule(tab, "a table followed within two rows by the next block — leave two blank "
+                      "rows under every table, its Total included (wbkit.next_block)",
+                 crowded_below, "WORKBOOK.md § 4")
+        if unstyled_tables:
+            rule(tab, "Excel table naming no table style — Google Sheets imports it as plain "
+                      "cells; build it with wbkit.excel_tables", unstyled_tables, "WORKBOOK_STYLE.md § 9")
         sheet_filter = re.search(r"<autoFilter\b[^>]*\bref=\"([^\"]+)\"", xml.split("<tableParts")[0])
         if spans and sheet_filter:
             f1, fr1, f2, fr2 = _span(sheet_filter.group(1))

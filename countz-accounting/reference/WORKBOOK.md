@@ -75,9 +75,18 @@ to the waterfall*, not *as a2_management_arr footed it*.
 
 ## 4. The blocks of a check tab
 
-Below the band, in this order, each block opened by a `Section` heading in column B and
-closed by one blank row. A block the check does not have is omitted — no empty headings.
-The primary table has no heading; the band is its heading.
+Below the band, in this order, each block opened by a `Section` heading in column B. A
+block the check does not have is omitted — no empty headings. The primary table has no
+heading; the band is its heading.
+
+**Spacing.** One blank row between a `Section` heading and the table header under it:
+Google Sheets draws a table's menus (rename, views) in the row above its header, and a
+heading there is covered. The primary table is the exception — its header is row 4, under
+the frozen band, where Sheets draws no menus. Two blank rows under every table, its Total
+rows included, before whatever follows, so a heading reads with the table below it and
+never with the one above. A block of lines (Notes, To reperform) starts on the row under
+its heading. The kit writes this: `section()` returns the header's row and
+`next_block(last_row)` the next heading's; `check_workbook.py` refuses either gap filled.
 
 1. **The primary table** — the check's own schedule: tie schedule, reconciliation
    statement, roster, window, vouch schedule, adjustment schedule, bridge. Header on row
@@ -98,7 +107,7 @@ the table takes its column names from them (`header()` refuses a repeat). No she
 AutoFilter where a tab has a table.
 2. **Analysis** — the decomposition of a failed tie or an unexplained difference: one row
    per component, `id | component | amount | disposition | evidence`, and a residual row
-   whose disposition reads `unexplained`. `HeaderPlain` header.
+   whose disposition reads `unexplained`.
 3. **Exceptions** — one row per `X.` id: `id | item | amount | what would clear it |
    owner`. The amount is the exception's size in the schedule's unit. An `X.` id resolves
    on the tab and nowhere else, so a row whose amount a reader will want to re-perform
@@ -223,7 +232,7 @@ earlier.
 Tables, not paragraphs, in this order:
 
 1. Sources and periods — the primary table.
-2. Per check, under `HeaderPlain` headers: populations; tolerances with any loosening
+2. Per check: populations; tolerances with any loosening
    and its reason; elections with their bases and rejected sides.
 3. On a plan-driven run: the recipe, the plan's approval, and each family the plan
    dropped or degraded with its reason.
@@ -242,8 +251,7 @@ Tables, not paragraphs, in this order:
 examined | what was not examined, and why`, one row per rostered check, colored per `WORKBOOK_STYLE.md` § 5.
 
 **Open Items** — three tables under three `Section` headings — review calls, questions
-for management, data requests — the first with the `BAND` header, the other two
-`HeaderPlain`. Each `id | matter | size | what closes it | owner | raised by`. Review
+for management, data requests. Each `id | matter | size | what closes it | owner | raised by`. Review
 calls are the review findings still open to the reader — `carried_to_open_items` or
 `withheld`; a finding the run fixed is the run's own history, in `RUN_SUMMARY.md`, not an
 open item. Where none is open the section reads so in one line. The size is a number in
@@ -332,8 +340,7 @@ covers what a parser cannot judge — the style's § 10 checklist, then:
   a description or last column, or an overflowing cell; every wrapped row sized to fit
   (§ 4, § 5);
 - every table has a header in every column, the id first, the status last, a `Total`
-  row where it foots, and the hairline on every side of every cell; secondary tables
-  use `HeaderPlain`;
+  row where it foots, and the hairline on every side of every cell; every header `BAND`;
 - color appears only on status cells, a break row's variance cell, `BodyInput` figures
   and links;
 - Notes then To reperform close a check tab, one line per row.

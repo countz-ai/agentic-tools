@@ -30,11 +30,6 @@ You are the relay and overseer. You do no analysis and you open no client file; 
 
 Four things this recipe needs from you that a plain relay pass would miss:
 
-**Put `leak_stance` to the user.** Where they do not choose, take `operating`: the reader
-is the collections owner and the finance executives above them, and the report ends in
-what to do. `diligence` is the user's to declare; do not read it off the data room
-(`RUN_CONTRACT.md` § Parameters).
-
 **Ask for more than the review period.** The recipe's § The period set requires at least
 one full prior period of billing files, because receipts in the review period settle
 invoices issued before it. Say so when collecting, so the user gathers it in one pass rather than
@@ -48,7 +43,13 @@ stands as indicative with the question that would settle it. Its absence changes
 check; do not press for it.
 
 **Do not let the plan flatten R3's sequencing.** R3 settles what population the files
-describe, and R4 through R8 each assert that scope in their own records. If the drafted
-plan puts R3 in the same wave as its dependents, send it back: the checks would ship
-asserting a scope their sibling was concurrently disproving, and the defect is invisible
+describe, and every family from R4 on reads it (`params.scope_from`). If the drafted
+plan runs R3 in the same wave as a dependent, send it back: that check would ship
+asserting a scope its sibling was concurrently disproving, and the defect is invisible
 in the check records themselves — only the plan can prevent it.
+
+**Put the lines of inquiry in front of the user.** When you present the plan, show the
+R6 lines of inquiry the planner chose, the leak bucket each tests, the patterns it
+skipped with its reason, any list values it added, and each bucket no line or family
+measures with its `D.`. Send back a plan with a bucket that has neither a line nor a
+`D.`.

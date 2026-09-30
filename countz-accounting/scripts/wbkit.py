@@ -45,7 +45,7 @@ __all__ = [
     # styles and helpers
     "grid", "styles", "S", "STATUS", "STATUS_KINDS", "register_status", "WIDTH", "WRAP",
     "band", "header", "section", "ident", "text", "amount", "count", "status", "table", "KINDS", "fit_rows",
-    "finish", "excel_tables", "table_blocks", "get_column_letter", "Alignment",
+    "finish", "excel_tables", "table_blocks", "next_block", "HEADING_GAP", "BLOCK_GAP", "get_column_letter", "Alignment",
 ]
 
 # --- WORKBOOK_STYLE.md § 9 ------------------------------------------------------------
@@ -101,7 +101,9 @@ def styles():
     s["Section"] = NamedStyle("cz_section", font=font(11, bold=True, color=ACCENT))
     s["Header"] = NamedStyle("cz_header", font=font(10, bold=True, color=WHITE), fill=fill(BAND),
                              alignment=Alignment(vertical="center"), border=Border(bottom=hair))
-    s["HeaderPlain"] = NamedStyle("cz_header_plain", font=font(10, bold=True), fill=fill(MIST),
+    # Every table header reads alike (WORKBOOK_STYLE.md § 4); `HeaderPlain` is kept, with
+    # the same look, for tab scripts that name it.
+    s["HeaderPlain"] = NamedStyle("cz_header_plain", font=font(10, bold=True, color=WHITE), fill=fill(BAND),
                                   alignment=Alignment(vertical="center"), border=Border(bottom=hair))
     s["Body"] = NamedStyle("cz_body", font=font())
     s["BodyInput"] = NamedStyle("cz_body_input", font=font(color=INPUT))
@@ -167,14 +169,30 @@ def header(ws, row, labels, widths, primary=True, currency=None):
             if sym not in str(label):
                 label = f"{label} ({sym})"
         c = ws.cell(row=row, column=i, value=label)
-        c.style = S["Header"] if primary else S["HeaderPlain"]
+        c.style = S["Header"]                   # every table's header alike; `primary` is kept for callers
         ws.column_dimensions[get_column_letter(i)].width = WIDTH[width]
         if width in RIGHT:
             c.alignment = Alignment(horizontal="right", vertical="center")
 
 
+# The spacing between blocks (WORKBOOK.md § 4). Google Sheets draws a table's menus in
+# the row above its header, so a heading never sits on that row; and two blank rows under
+# every table keep the next block's heading clear of the table above it.
+HEADING_GAP = 1     # blank rows between a Section heading and the table header under it
+BLOCK_GAP = 2       # blank rows under a table (its Total included), before whatever follows
+
+
 def section(ws, row, text_):
+    """The Section heading on `row`. Returns the row the table under it opens on, one
+    blank row below; a block of lines (Notes, To reperform) starts on `row + 1` instead."""
     ws.cell(row=row, column=2, value=text_).style = S["Section"]
+    return row + 1 + HEADING_GAP
+
+
+def next_block(last_row):
+    """The row of the next block's Section heading after a table whose last row — its
+    Total included — is `last_row`: two blank rows between."""
+    return last_row + 1 + BLOCK_GAP
 
 
 def ident(cell, id_):
@@ -327,9 +345,13 @@ def table_blocks(ws, first_row=4):
             c2 += 1
         return c2 if c2 > 2 else None
 
+    def figure(cell):                           # a number, or a formula that computes one
+        v = cell.value
+        return (isinstance(v, (int, float)) and not isinstance(v, bool)) or cell.data_type == "f" \
+            or (isinstance(v, str) and v.startswith("="))
+
     def labels_only(r):
-        return all(not isinstance(ws.cell(row=r, column=c).value, (int, float))
-                   for c in range(2, ws.max_column + 1))
+        return not any(figure(ws.cell(row=r, column=c)) for c in range(2, ws.max_column + 1))
 
     def opens(r):
         c2 = span(r)
@@ -356,6 +378,9 @@ def table_blocks(ws, first_row=4):
     return blocks
 
 
+TABLE_STYLE = "TableStyleLight1"
+
+
 def _table_name(title: str, n: int, taken: set) -> str:
     import re
     stem = re.sub(r"[^A-Za-z0-9_]+", "_", title).strip("_") or "Tab"
@@ -378,7 +403,7 @@ def excel_tables(ws, taken=None) -> list[str]:
     names are unique across a workbook. A block whose header is not a set of distinct
     labels is left as plain cells: Excel repairs, rather than opens, a table whose
     header cells disagree with its column names. Returns the names written."""
-    from openpyxl.worksheet.table import Table, TableColumn
+    from openpyxl.worksheet.table import Table, TableColumn, TableStyleInfo
     from openpyxl.worksheet.filters import AutoFilter
     taken = set() if taken is None else taken
     for name in list(ws.tables):
@@ -392,7 +417,12 @@ def excel_tables(ws, taken=None) -> list[str]:
         t = Table(displayName=_table_name(ws.title, n, taken), ref=ref,
                   autoFilter=AutoFilter(ref=ref))
         t.tableColumns = [TableColumn(id=i, name=str(v)) for i, v in enumerate(labels, start=1)]
-        t.tableStyleInfo = None                 # the kit's cell styles are the look
+        # The lightest built-in style, stripes off: the kit's cell styles are the look. A
+        # table naming no style opens in Excel but Google Sheets drops it on import
+        # (measured 2026-09-30: of three variants, only the style-less one came back plain).
+        t.tableStyleInfo = TableStyleInfo(name=TABLE_STYLE, showRowStripes=False,
+                                          showColumnStripes=False, showFirstColumn=False,
+                                          showLastColumn=False)
         ws.add_table(t)
         written.append(t.displayName)
     if written:

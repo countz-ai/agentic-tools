@@ -2102,7 +2102,7 @@ def check(root: pathlib.Path) -> list[str]:
                                  capture_output=True, text=True)
             if r7b.returncode != 1 or "design failure" not in r7b.stdout or \
                     "column A is the empty margin" not in r7b.stdout or \
-                    "BAND header row" not in r7b.stdout or \
+                    "BAND header on row 4" not in r7b.stdout or \
                     "no border" not in r7b.stdout:
                 bad.append(f"{rel(cwb)}: an unstyled tab must be refused by GATE 4 with the "
                            f"failed rules named (exit {r7b.returncode}): "

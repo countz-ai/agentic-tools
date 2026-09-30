@@ -74,8 +74,8 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import style as _style  # noqa: E402  sibling: currencies and date forms
 from check_playbook import CHECK_ID  # noqa: E402  the check-id grammar
 from wbkit import (FMT_AMOUNT, FMT_DATE, FMT_PCT, S, STATUS, STATUS_KINDS, Alignment,  # noqa: E402
-                   amount, band, count, finish, grid, header, ident, register_status, section,
-                   status, text)
+                   amount, band, count, finish, grid, header, ident, next_block, register_status,
+                   section, status, text)
 
 __all__ = ["match_tabs", "SUMMARY_MARK", "SCHEDULE_MARK", "RULES_MARK", "RECON_MARK",
            "STATUS_HEADER", "AMOUNT_HEADER"]
@@ -535,9 +535,7 @@ def match_tabs(wb, res, left: pl.DataFrame, right: pl.DataFrame, *, check: str, 
                    ("percent", 1.0 if total_a else 0.0), ("text", W("Every {n}, once."))], "Total")
     last_primary = r_
     # what each rule matched
-    r_ += 2
-    section(ws, r_, "Matched, by rule")
-    r_ += 1
+    r_ = section(ws, next_block(r_), "Matched, by rule")
     header(ws, r_, ["id", "Rule", Ns, f"{AMOUNT_HEADER}, {nouns[1]}", Os,
                      f"{AMOUNT_HEADER}, {other_nouns[1]}", "Difference"],
            ["id", "description", "count", "amount", "count", "amount", "amount"], primary=False)
@@ -549,9 +547,7 @@ def match_tabs(wb, res, left: pl.DataFrame, right: pl.DataFrame, *, check: str, 
                        ("amount", round(b["right_amount"], dec)), ("amount", round(b["difference"], dec))])
     grid(ws, h_, r_, 2, 8)
     # the right items
-    r_ += 2
-    section(ws, r_, f"The {other_nouns[1]}")
-    r_ += 1
+    r_ = section(ws, next_block(r_), f"The {other_nouns[1]}")
     header(ws, r_, ["id", STATUS_HEADER, Os, AMOUNT_HEADER, "Share of amount", "What it means"],
            ["id", "description", "count", "amount", "percent", "note"], primary=False)
     h_ = r_
@@ -564,7 +560,7 @@ def match_tabs(wb, res, left: pl.DataFrame, right: pl.DataFrame, *, check: str, 
     cells(ws, r_, [("id", None), ("text", "Total"), ("count", len(Rr)), ("amount", r_total),
                    ("percent", 1.0 if r_total else 0.0)], "Total")
     grid(ws, h_, r_, 2, 7)
-    r_ += 2
+    r_ = next_block(r_)
     section(ws, r_, "To reperform")
     for k, step in enumerate((
             f"Open {names['schedule']} and filter {STATUS_HEADER} on a line's words; count the rows and "
@@ -617,9 +613,8 @@ def match_tabs(wb, res, left: pl.DataFrame, right: pl.DataFrame, *, check: str, 
     cells(ws4, r_, [("id", None), ("text", f"{Os} per bank"), ("count", rt[1]), ("amount", round(rt[2], dec)),
                     ("amount", round(rt[3], dec)), ("amount", round(rt[4], dec))], "Total")
     last4 = r_
-    r_ += 2
-    section(ws4, r_, "The items not matched" + (f", aged at {_style.date_short(end)}" if end else ""))
-    r_ += 1
+    r_ = section(ws4, next_block(r_), "The items not matched" +
+                 (f", aged at {_style.date_short(end)}" if end else ""))
     header(ws4, r_, ["id", "Side", "Label", "Date", AMOUNT_HEADER, "Age (days)", "Reason"],
            ["id", "description", "description", "period", "amount", "count", "note"], primary=False)
     h_ = r_

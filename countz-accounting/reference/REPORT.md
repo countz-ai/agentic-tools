@@ -235,7 +235,7 @@ a leg."*
 diligence basis, as instructed*. Where the recipe set that parameter by default, say nothing
 about it. Where the recipe says the deliverable does not state a parameter, leave it out.
 
-Do not print a parameter name (`leak_stance`, `maturity_basis`), `the user` for the client,
+Do not print a parameter name (`perspective`, `maturity_basis`), `the user` for the client,
 `this run` for the report, `bucket` for a category, or a test's internal shorthand
 (`direction`, `grain`) in place of what it tests.
 

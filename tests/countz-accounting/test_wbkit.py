@@ -12,7 +12,7 @@ import sys
 # The plugin under test: <repo>/countz-accounting/scripts, from <repo>/tests/countz-accounting.
 SCRIPTS = pathlib.Path(__file__).resolve().parents[2] / "countz-accounting" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
-from wbkit import S, BAND, BREAK_T, FMT_AMOUNT, FMT_COUNT, FMT_DATE, FMT_FX, FONT, TIED_T, amount, band, count, finish, header, ident, register_status, section, status, table, table_blocks, text  # noqa: E402
+from wbkit import S, BAND, BREAK_T, FMT_AMOUNT, FMT_COUNT, FMT_DATE, FMT_FX, FONT, TIED_T, amount, band, count, finish, header, ident, register_status, section, status, table, table_blocks, text, next_block  # noqa: E402
 
 
 def main() -> int:
@@ -63,14 +63,15 @@ def main() -> int:
     band(w2, "k2 · two tables", "Fixture · FY2026 · USD", "Each table filters alone.")
     table(w2, 4, [("id", "id"), ("item", "text"), ("amount", "amount")],
           [["A.1", "one", 10.0], ["A.2", "two", 20.0]])
-    for c, v in ((2, "Subtotal"), (4, 30.0)):
+    # a subtotal of labels and a formula: its figure is computed, so it is no header
+    for c, v in ((2, "S.1"), (3, "Subtotal"), (4, "=SUM(D5:D6)")):
         w2.cell(row=7, column=c, value=v).style = S["Subtotal"]
     w2.cell(row=8, column=2, value="A.3")
     w2.cell(row=8, column=4, value=5.0)
     for c, v in ((2, "Total"), (4, 35.0)):
         w2.cell(row=9, column=c, value=v).style = S["Total"]
-    section(w2, 11, "Second table")
-    table(w2, 12, [("id", "id"), ("reason", "text")], [["B.1", "why"]], primary=False)
+    head2 = section(w2, next_block(9), "Second table")     # two blank rows, heading, one blank
+    table(w2, head2, [("id", "id"), ("reason", "text")], [["B.1", "why"]], primary=False)
     try:
         header(w2, 20, ["Amount", "amount "], ["amount", "amount"])
         dup_refused = False
@@ -102,10 +103,14 @@ def main() -> int:
           and sheet["B5"].value == "F.k1.total" and sheet["C5"].value.startswith("A wrapped"))
     t2 = back["k2 Tables"]
     refs = sorted(t.ref for t in t2.tables.values())
-    ok = ok and dup_refused and blocks == [(4, 2, 4, 8), (12, 2, 3, 13)] \
-        and refs == ["B12:C13", "B4:D8"] and t2.auto_filter.ref is None \
+    ok = ok and dup_refused and (next_block(9), head2) == (12, 14) \
+        and blocks == [(4, 2, 4, 8), (14, 2, 3, 15)] \
+        and refs == ["B14:C15", "B4:D8"] and t2.auto_filter.ref is None \
         and [c.name for c in t2.tables[sorted(t2.tables)[0]].tableColumns] == ["id", "item", "amount"] \
-        and len(sheet.tables) == 2 and len({n.casefold() for n in (*sheet.tables, *t2.tables)}) == 4
+        and len(sheet.tables) == 2 and len({n.casefold() for n in (*sheet.tables, *t2.tables)}) == 4 \
+        and all(t.tableStyleInfo is not None and t.tableStyleInfo.name == "TableStyleLight1"
+                and not t.tableStyleInfo.showRowStripes for t in t2.tables.values()) \
+        and t2["B14"].fill.fgColor.rgb.endswith(BAND)
     print("wbkit: ok" if ok else "wbkit: self-check FAILED")
     return 0 if ok else 1
 

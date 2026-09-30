@@ -283,7 +283,7 @@ outside `after`, and a `reads` id the extract step does not parse.
   declared options as recorded, and every proposed parameter awaiting their
   confirmation, windows first. State each declared option with its source — the user's
   words, or the recipe's default — and without a rationale you supplied for them. Example
-  of that defect: *"`leak_stance: diligence` — the reader is a buyer"*, written on a run
+  of that defect: *"`perspective: buy_side` — the reader is a buyer"*, written on a run
   where the user had said nothing about a buyer. The reader defaults to the company's own
   executives and operators; a transaction reader comes from the user
   (`RUN_CONTRACT.md` § Parameters).

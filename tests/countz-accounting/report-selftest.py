@@ -72,7 +72,7 @@ SCRIPTS = pathlib.Path(__file__).resolve().parents[2] / "countz-accounting" / "s
 
 # --- the kit: scripts/wbkit.py (WORKBOOK_STYLE.md § 9 + WORKBOOK.md § 7) ------------
 sys.path.insert(0, str(SCRIPTS))
-from wbkit import (ACCENT, BAND, FMT_AMOUNT, FMT_TEXT, MIST, S, SLATE, TINT,  # noqa: E402,F401
+from wbkit import (ACCENT, BAND, FMT_AMOUNT, FMT_TEXT, MIST, S, SLATE, TINT, next_block,  # noqa: E402,F401
                    WIDTH, amount, band, finish, fit_rows, grid, header, ident, section,
                    status, text)
 
@@ -110,14 +110,14 @@ def make_run(rd: pathlib.Path, cur: str = "USD", q6_params: dict | None = None) 
          summary=POSITION)
     ws.freeze_panes = "B4"
     text(ws.cell(row=4, column=2), "EBITDA bridge · from: q6 EBITDA bridge", "Section")
-    header(ws, 5, ["line"] + PERIODS, ["description", "period", "period", "period"], primary=False)
-    r = 5
+    header(ws, 6, ["line"] + PERIODS, ["description", "period", "period", "period"], primary=False)
+    r = 6
     for label, vals, st in BRIDGE:
         r += 1
         text(ws.cell(row=r, column=2), label, st)
         for j, v in enumerate(vals):
             amount(ws.cell(row=r, column=3 + j), v, style=st if st != "Body" else None)
-    grid(ws, 5, r, 2, 5)
+    grid(ws, 6, r, 2, 5)
     fit_rows(ws, 4)
     ws.sheet_view.showGridLines = False
     ws.sheet_properties.tabColor = ACCENT
@@ -139,9 +139,7 @@ def make_run(rd: pathlib.Path, cur: str = "USD", q6_params: dict | None = None) 
         status(ws.cell(row=r, column=7), "supported")
         text(ws.cell(row=r, column=8), "walk mechanics" if st != "Body" else "the rung's supported subtotal")
     last = r
-    r += 2
-    section(ws, r, "Exceptions")
-    r += 1
+    r = section(ws, next_block(r), "Exceptions")
     header(ws, r, ["id", "item", "amount", "owner", "what would clear it"],
            ["id", "description", "amount", "status", "note"], primary=False)
     hx = r
@@ -152,7 +150,7 @@ def make_run(rd: pathlib.Path, cur: str = "USD", q6_params: dict | None = None) 
     text(ws.cell(row=r, column=5), "CFO")
     text(ws.cell(row=r, column=6), "Management's revised schedule")
     grid(ws, hx, r, 2, 6)
-    r += 2
+    r = next_block(r)
     section(ws, r, "Notes")
     r += 1
     ident(ws.cell(row=r, column=2), "F.q6.ebit.ltm_2025-07")
@@ -170,13 +168,13 @@ def make_run(rd: pathlib.Path, cur: str = "USD", q6_params: dict | None = None) 
         for j, v in enumerate(row):
             text(ws.cell(row=i, column=2 + j), v)
     grid(ws, 4, 6, 2, 5)
-    section(ws, 8, "Procedures not performed")
-    text(ws.cell(row=9, column=2), "The capex bridge was dropped: the room carries no capitalized-cost accounts.")
-    section(ws, 11, "How to read this workbook")
-    header(ws, 12, ["prefix", "meaning"], ["status", "description"], primary=False)
-    text(ws.cell(row=13, column=2), "F.")
-    text(ws.cell(row=13, column=3), "a figure — resolves on its Sources row")
-    grid(ws, 12, 13, 2, 3)
+    section(ws, next_block(6), "Procedures not performed")
+    text(ws.cell(row=10, column=2), "The capex bridge was dropped: the room carries no capitalized-cost accounts.")
+    hr = section(ws, 12, "How to read this workbook")
+    header(ws, hr, ["prefix", "meaning"], ["status", "description"], primary=False)
+    text(ws.cell(row=hr + 1, column=2), "F.")
+    text(ws.cell(row=hr + 1, column=3), "a figure — resolves on its Sources row")
+    grid(ws, hr, hr + 1, 2, 3)
     finish(ws, 6)
 
     ws = wb.create_sheet("q1 FY2023 statements")
@@ -199,7 +197,7 @@ def make_run(rd: pathlib.Path, cur: str = "USD", q6_params: dict | None = None) 
         amount(ws.cell(row=r, column=10), 0)
         status(ws.cell(row=r, column=11), "tied")
     last = r
-    r += 2
+    r = next_block(r)
     section(ws, r, "Notes")
     text(ws.cell(row=r + 1, column=2), "Population: every line of the income statement, 31 of 31.", "Note")
     r += 3
@@ -228,16 +226,16 @@ def make_run(rd: pathlib.Path, cur: str = "USD", q6_params: dict | None = None) 
     text(ws.cell(row=5, column=6), "CFO")
     text(ws.cell(row=5, column=7), "")
     grid(ws, 4, 5, 2, 7)
-    section(ws, 7, "Data requests")
-    header(ws, 8, ["id", "matter", "size", "what closes it", "owner", "raised by"],
+    hr = section(ws, next_block(5), "Data requests")
+    header(ws, hr, ["id", "matter", "size", "what closes it", "owner", "raised by"],
            ["id", "description", "amount", "note", "status", "id"], primary=False)
-    ident(ws.cell(row=9, column=2), "D.q6.capex")
-    text(ws.cell(row=9, column=3), "D.q6.capex. The capitalized-cost accounts, for the capex bridge.")
-    amount(ws.cell(row=9, column=4), 0)
-    text(ws.cell(row=9, column=5), "The rollforward")
-    text(ws.cell(row=9, column=6), "Controller")
-    text(ws.cell(row=9, column=7), "")
-    grid(ws, 8, 9, 2, 7)
+    ident(ws.cell(row=hr + 1, column=2), "D.q6.capex")
+    text(ws.cell(row=hr + 1, column=3), "D.q6.capex. The capitalized-cost accounts, for the capex bridge.")
+    amount(ws.cell(row=hr + 1, column=4), 0)
+    text(ws.cell(row=hr + 1, column=5), "The rollforward")
+    text(ws.cell(row=hr + 1, column=6), "Controller")
+    text(ws.cell(row=hr + 1, column=7), "")
+    grid(ws, hr, hr + 1, 2, 7)
     finish(ws, 5)
     ws.sheet_properties.tabColor = "8A5A00"
 

@@ -45,6 +45,12 @@ applies when you try to decide whether a finding or a discrepancy is big enough 
 Findings are generated first, then ranked based on materiality. Below materiality
 findings should stay on the schedules but not promoted to get user's attention.
 
+Size is one test of materiality; what a finding signals is the other. A finding below
+materiality is promoted when it points at a systematic defect: it recurs on one
+counterparty, clusters under an approval or tolerance limit, shows a control that did
+not operate, or sits unchanged across periods. Promote it for what it signals, say what
+that is in the sentence that reports it, and rank it by that consequence.
+
 ## Resolving issues
 
 On an expectation mismatch, try to resolve it first. Examples:
