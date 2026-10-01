@@ -255,4 +255,4 @@ table name a lower-case slug, `[a-z0-9][a-z0-9_-]*`. A row's `period` is a perio
 (§ 0) or an ISO date (`YYYY-MM-DD`). `amount` is stored as a float. `items.py` refuses an
 amount a float cannot hold exactly (an integer beyond 2**53, a Decimal or string with
 more significant digits than a float keeps): round it to the precision it closes to, or
-pass the float.
+give the float.

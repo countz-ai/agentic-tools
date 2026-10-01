@@ -34,7 +34,7 @@ the instructions that produced it rather than the checkout on its own disk. Excl
 
 `--transcripts` additionally copies each session's `.jsonl` into `<run>/transcripts/`. It
 is the only record of which instruction files a worker opened. It carries client data, so
-it is opt-in: pass it on a debug run, not on a client sync.
+it is opt-in: use it on a debug run, not on a client sync.
 
 Stdlib only. Exit 0 on success, 2 on refusal (no run.json; --dest target already exists).
 """

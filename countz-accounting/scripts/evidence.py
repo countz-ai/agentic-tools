@@ -157,7 +157,7 @@ def _from_frame(frame, run_dir: pathlib.Path | None, file, source, file_role, sh
     else:
         p = pathlib.Path(str(file or ""))
         if not str(file or "").strip() or not p.is_file():
-            raise ValueError(f"file missing: {file!r} - pass run_dir to resolve a path "
+            raise ValueError(f"file missing: {file!r} - give run_dir to resolve a path "
                              f"relative to its source")
         sid, rel = source, str(p)
     if not isinstance(header_at_, str) or not header_at_.strip():
@@ -356,7 +356,7 @@ def span(what=None, *, run_dir=None, frame=None, file=None, id: str | None = Non
     run_dir = pathlib.Path(run_dir).resolve() if run_dir else None
     if frame is not None:
         if what is not None:
-            raise ValueError("pass `what` (a cache id or a checks/ path) or `frame`, not both")
+            raise ValueError("give `what` (a cache id or a checks/ path) or `frame`, not both")
         e, df, cols = _from_frame(frame, run_dir, file, source, file_role, sheet,
                                   header_at, rows, columns)
         names = list(cols)
@@ -371,7 +371,7 @@ def span(what=None, *, run_dir=None, frame=None, file=None, id: str | None = Non
                 _reperform(run_dir, str(what))
         elif what is not None and pathlib.Path(str(what)).is_file():
             raise ValueError(f"{what}: a data-room file is not parsed here - parse it in "
-                             f"the step and pass `frame=` with its coordinates, or read "
+                             f"the step and give `frame=` with its coordinates, or read "
                              f"the cache by id")
         else:
             raise ValueError(f"{what!r} is neither a cache id in "

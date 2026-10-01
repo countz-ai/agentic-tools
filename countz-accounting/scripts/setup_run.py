@@ -41,8 +41,8 @@ its frontmatter `name` taken, and its bytes copied to `<run_dir>/recipes/<name>.
 unchanged; `run.json.inputs.recipe` records `{name, version, path}`. `--recipe-version`
 is the `recipe_version` the connector served with the body (`<image>+<sha256[:12]>`);
 the sha is recomputed over the file and a mismatch is refused, so a body edited after it
-was served cannot pass as the served one. A recipe packaged by `make zip RECIPES=...`
-passes `bundled+<sha256[:12]>`, as `scripts/bundled_recipe.py` prints it. Without `--recipe-version` the recipe is a
+was served cannot stand in for the served one. A recipe packaged by `make zip RECIPES=...`
+gives `bundled+<sha256[:12]>`, as `scripts/bundled_recipe.py` prints it. Without `--recipe-version` the recipe is a
 generated one (the `create-recipe` step wrote it under `<run_dir>/recipes/` already) and
 the version is minted as `generated+<sha256[:12]>`. A run pins one recipe; a second
 `--recipe` naming a different one is refused. `run_state.py approve-plan` copies name
@@ -527,7 +527,7 @@ def main() -> int:
         run_path = run_dir / "run.json"
         if not run_path.is_file():
             return fail(f"{run_dir} carries no run.json - an existing run is named by its "
-                        f"path, and a new one is minted: leave the path off and pass "
+                        f"path, and a new one is minted: leave the path off and use "
                         f"--output-root, --skill and --company")
         run = json.loads(run_path.read_text(encoding="utf-8"))
         if run.get("schema") != RUN_SCHEMA:
@@ -605,12 +605,12 @@ def main() -> int:
     known = inline_skills()
     if known is not None and a.skill not in known:
         return fail(f"--skill {a.skill!r} is not one of this plugin's launchers "
-                    f"({', '.join(sorted(known))}) - pass the skill the user invoked, "
+                    f"({', '.join(sorted(known))}) - give the skill the user invoked, "
                     f"not the goal")
     if known is None and not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", a.skill):
         return fail(f"--skill {a.skill!r} is not a skill name")
     if not str(a.company).strip():
-        return fail("--company is empty - pass the company's name in the user's words")
+        return fail("--company is empty - give the company's name in the user's words")
     if not incoming:
         return fail("a new run needs at least one source")
     run_dir = mint_run_dir(output_root.resolve(), a.skill, a.company)

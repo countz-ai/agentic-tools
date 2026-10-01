@@ -558,7 +558,7 @@ def cmd_approve_plan(a) -> int:
     row = rows[-1]
     recipe = a.recipe or (row.get("args") or {}).get("recipe")
     if not recipe:
-        raise Refuse("the plan dispatch args carry no recipe - pass --recipe")
+        raise Refuse("the plan dispatch args carry no recipe - use --recipe")
     bound = {sl: sl for sl in (s["slot"] for s in definition["sources"])}
     sources = {s["id"] for s in run.get("sources", [])}
     for sl in bound:
@@ -609,7 +609,7 @@ def cmd_dispatch(a) -> int:
     run = load_run(run_dir)
     picked = sum(bool(x) for x in (a.checks, a.step, a.briefs))
     if picked != 1:
-        raise Refuse("pass exactly one of --checks, --step, --briefs")
+        raise Refuse("give exactly one of --checks, --step, --briefs")
 
     if a.checks:
         ids = [c.strip() for c in a.checks.split(",") if c.strip()]

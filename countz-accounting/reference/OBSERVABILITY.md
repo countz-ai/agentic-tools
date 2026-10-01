@@ -140,7 +140,7 @@ copies the file and the timeline row points at it.
 - **Reasoning the API returned without text.** A thinking block often carries a signature
   and an empty string. A `thinking` row is written only where there is text.
 - **Raw API request and response bodies, retries, rate-limit events.** Start the session
-  as `claude --debug-file <path>` to record API timing and errors; pass that path to
+  as `claude --debug-file <path>` to record API timing and errors; give that path to
   `--cli-debug-log` and the log travels with the run.
 
 ## 4. Where a run's content may go

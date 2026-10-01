@@ -104,7 +104,7 @@ __all__ = ["start", "finish", "place_tab", "brief", "consumed_from_citations", "
 
 SCHEMA = "countz-accounting/step@1"
 OUTCOMES = ("complete", "blocked")
-# Every field of the record; finish() derives the ones a step does not pass, and refuses an
+# Every field of the record; finish() derives the ones a step does not supply, and refuses an
 # extra keyword that would overwrite one.
 RECORD_FIELDS = ("schema", "seq", "step", "check_id", "args", "started_at", "completed_at",
                  "outcome", "error", "conclusion", "produced", "consumed", "blockers",

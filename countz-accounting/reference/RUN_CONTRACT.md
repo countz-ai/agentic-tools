@@ -228,7 +228,7 @@ from the step's own brief (`dispatch/<NNNN>-<step>.md`) and `started_at` from it
 `step_start`; it builds `consumed` from the step's citations
 (`workpapers/evidence-<check>.yaml`, each resolved to its file) plus the brief, the plan
 and the recipe, and `produced` from the check's own files written since the start. The
-step passes only what no file records: the conclusion, the blockers, the notes, a read
+step supplies only what no file records: the conclusion, the blockers, the notes, a read
 no citation covers (another check's record, a source profile) and, on a non-check step,
 what it produced. It refuses a record the relay could not classify, an `error` that is
 neither null nor a non-empty message, an extra field naming one the record derives
@@ -340,7 +340,7 @@ archive itself. The sync lands the run on the user's own machine and nowhere els
 artifact goes to a server (`OBSERVABILITY.md` § 4).
 
 Every mode lands the run under one folder `<short_name>.<datetime>`. The short name
-defaults to the run directory's own `<skill>-<company>`; pass `--name` with the user's own
+defaults to the run directory's own `<skill>-<company>`; set `--name` to the user's own
 words when they give one. A `sync.json` (`run-sync@1`) sits at its top: the run id, every
 session id from `run.json.inputs.sessions`, the plugin name and version the run executed
 under, the source path, the sync time. `scripts/usage_report.py` prices the run from the

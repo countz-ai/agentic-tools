@@ -68,7 +68,7 @@ def ledger_entries(path: pathlib.Path, kind: str, refusals: list[str]) -> list[d
 
     Refuses rather than skips: every entry a ledger holds is meant to reach the Sources
     or Evidence tab, so a shape this walk cannot read is the owning check's defect, not a
-    file to pass over."""
+    file to skip."""
     doc = load_yaml(path)
     if not isinstance(doc, list):
         shape = "a mapping" if isinstance(doc, dict) else f"a {type(doc).__name__}"

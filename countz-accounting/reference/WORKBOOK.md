@@ -222,13 +222,13 @@ tab states `No item grain:` (check-recon § 3).
   and why an unmatched item is unmatched (no candidate, or more than one). It
   is sorted by status in the summary's order, so each status is one block of rows, and it
   is an Excel table filtered from its own header.
-- `<token> Reconciling items` (`<token> Recon items` where the name would pass 31
+- `<token> Reconciling items` (`<token> Recon items` where the name would exceed 31
   characters) is the reconciliation, each line a figure, net and gross (its positive and
   negative items apart, adding to the net): the left items per books; less those in
   transit; less those not matched; each difference a rule tolerated; plus the right items
   not in the book; the right items per bank. Then every item not matched (the ones kept
   out with cash included), with its age at the statement's end (`res.end`).
-- `<token> Match rules` (`<token> Rules` where the name would pass 31 characters) lists the
+- `<token> Match rules` (`<token> Rules` where the name would exceed 31 characters) lists the
   rules in the order they ran, each with its criteria and what it matched.
 
 A hyperlink cannot apply a filter; the link selects the status's block instead, and

@@ -304,7 +304,7 @@ def _stream(df: pl.DataFrame, name: str, scale: int, used: set[str]) -> pl.DataF
         if d.dtype.time_zone is not None:
             raise ValueError(f"{name}: date is a datetime in {d.dtype.time_zone} - its date "
                              f"depends on the zone; take the entity's local date first "
-                             f"(periods.local_date) and pass a Date")
+                             f"(periods.local_date) and give a Date")
         d = d.dt.date()
     elif not (d.dtype == pl.Date or d.dtype == pl.Null):
         raise ValueError(f"{name}: date must be a Date, a Datetime or ISO text, not {d.dtype}")

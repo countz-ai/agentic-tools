@@ -22,7 +22,7 @@ A number is backed by its magnitude: a written sign is not checked.
 Scanned: string cells of .xlsx targets; lines of any other (text) target. Digits only —
 a magnitude spelled out in words is the review's to catch by reading, not this gate's.
 Admitted: numbers on value-bearing keys (value, control_total, total_n, lo, hi, ...) in
-<run_dir>/workpapers/*.yaml, plus EVERY numeric literal in each --allow file — pass the
+<run_dir>/workpapers/*.yaml, plus EVERY numeric literal in each --allow file — give the
 file carrying a declared tolerance a sentence legitimately states.
 Skipped: day-count ranges ("31-60 days", "90+ days") — bucket labels, not stated figures.
 
@@ -184,7 +184,7 @@ def main() -> int:
         run_dir = next((p for p in a.targets[0].resolve().parents
                         if (p / "workpapers").is_dir()), None)
     if run_dir is None or not (run_dir / "workpapers").is_dir():
-        print("no workpapers/ found above the target; pass --run-dir", file=sys.stderr)
+        print("no workpapers/ found above the target; use --run-dir", file=sys.stderr)
         return 2
     for f in [*a.targets, *a.allow]:
         if not f.is_file():

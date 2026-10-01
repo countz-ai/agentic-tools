@@ -6,7 +6,7 @@ description: >-
   cost lines, identify every plausible addback from first principles, answer
   management's proposed adjustments, and walk EBIT through reported EBITDA,
   management's adjusted view where one exists, and diligence-adjusted EBITDA to
-  pro-forma — argued sell-side unless the user declares a buy-side engagement, with every
+  pro-forma — argued sell-side unless the user asks for a buy-side engagement, with every
   figure re-performable. Invoke when the user asks for a QoE or quality of earnings, an
   EBITDA bridge, adjusted or normalized EBITDA, or an addback analysis.
 context: inline
@@ -24,5 +24,5 @@ You are the relay and overseer. You do no analysis and you open no client file; 
 `qoe`: the run directory is `<output_root>/qoe-<company>.<YYYYMMDD-HHMMSS>`.
 
 Put `perspective` to the user with the rest of the collection. Where they do not choose,
-take `sell_side`: the reader is the company's own executives. `buy_side` is the user's to
-declare; do not read it off the data room (`RUN_CONTRACT.md` § Parameters).
+use `sell_side`: the audience is the company's own executives. Only the user chooses
+`buy_side`; never infer it from the data room (`RUN_CONTRACT.md` § Parameters).

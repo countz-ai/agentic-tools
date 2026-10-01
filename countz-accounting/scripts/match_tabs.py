@@ -171,13 +171,13 @@ def _names(wb, token) -> dict:
 def _decimals(res, currency, decimals) -> int:
     dec = res.decimals
     if decimals is not None and decimals != dec:
-        raise ValueError(f"decimals={decimals!r}: the Resolution was matched at {dec}; pass the "
+        raise ValueError(f"decimals={decimals!r}: the Resolution was matched at {dec}; give the "
                          f"same, or leave it out")
     if currency not in _style.CURRENCIES:
         raise ValueError(f"currency {currency!r}: an ISO 4217 code, lower case (scripts/style.py)")
     if (mu := _style.minor_units(currency)) != dec:
         raise ValueError(f"currency {currency!r} is stated to {mu} decimals and the Resolution was "
-                         f"matched at {dec}: pass the currency the streams are in, and match at its "
+                         f"matched at {dec}: give the currency the streams are in, and match at its "
                          f"decimals")
     return dec
 
