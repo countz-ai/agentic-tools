@@ -56,7 +56,7 @@ explicitly to override.
 any calendar. `ytd_2025-12` runs from the fiscal year's start to that month's end, so it
 is read on a `"MM-DD"` calendar only; on declared `years` it is refused (declare the
 window `w<start>_<end>`). `fy_of("2025-09")` places a month in the one fiscal year that
-holds all of it: a month a declared year boundary splits is refused (pass a date).
+holds all of it: a month a declared year boundary splits is refused (give a date).
 
 **Timezones.** `mask()`, `fy_of()`, `month_key()` and `Period.contains()` reduce a datetime
 (a column or a single value) to the entity's local date first. A timezone-aware one needs
@@ -501,17 +501,17 @@ class FiscalCalendar:
     def year_of(self, d) -> _Year:
         """The fiscal year a date falls in. A month (`"YYYY-MM"` or `(year, month)`) must
         fall wholly inside one year: a month a declared year boundary splits, or that runs
-        outside the declared years, is refused - pass a date."""
+        outside the declared years, is refused - give a date."""
         if isinstance(d, tuple) or (isinstance(d, str) and len(d.strip()) == 7):
             y, m = _ym(d)
             try:
                 first, last = self.year_of(dt.date(y, m, 1)), self.year_of(_last_day(y, m))
             except ValueError:
                 raise ValueError(f"month {y:04d}-{m:02d} runs outside the declared fiscal "
-                                 f"years: pass a date") from None
+                                 f"years: give a date") from None
             if first.name != last.name:
                 raise ValueError(f"month {y:04d}-{m:02d} is split between fiscal years "
-                                 f"{first.name} and {last.name}: pass a date")
+                                 f"{first.name} and {last.name}: give a date")
             return last
         d = _iso(d, "date")
         if self.month_end is not None:
@@ -731,9 +731,9 @@ def _slug(name: int) -> str:
 def fy_of(x, fiscal_year_end, *, timezone: str | None = None,
           source_timezone: str | None = None):
     """The fiscal-year slug (`"fy2025"`) a date or month falls in, under any calendar
-    `params.fiscal_year_end` declares (not a `by_entity` map: pass the entity's own). `x`
+    `params.fiscal_year_end` declares (not a `by_entity` map: give the entity's own). `x`
     is a date, a datetime, `"YYYY-MM"` or `(year, month)` (refused when a declared year
-    boundary splits the month: pass a date), `"YYYY-MM-DD"`, or a polars date/datetime
+    boundary splits the month: give a date), `"YYYY-MM-DD"`, or a polars date/datetime
     expression, which returns the expression of the slug under the input column's own name
     (alias it). A datetime, scalar or column, is reduced to the entity's local date first
     (`local_date`, with `timezone` and `source_timezone`): a timezone-aware one with no
@@ -1065,7 +1065,7 @@ class Periods:
             columns = params.get("columns")
             if not columns:
                 raise ValueError(f"check {check!r} declares no params.columns - the plan's "
-                                 f"period set; pass columns=[...]")
+                                 f"period set; give columns=[...]")
         if fiscal_year_end is None:
             fiscal_year_end = params.get("fiscal_year_end")
         if fiscal_year_end is None:

@@ -47,7 +47,7 @@ wrote.
 float, a Decimal, a numpy scalar or a plain decimal string (`-1234.5`, `1e+16`; no
 grouping, underscores, non-ASCII digits or words). A value a float cannot hold exactly
 (an integer beyond 2**53, a Decimal or string with more significant digits than a float
-keeps) is refused: round it to the precision it closes to, or pass the float.
+keeps) is refused: round it to the precision it closes to, or give the float.
 
 **Control totals never cross a currency.** The manifest carries `row_count`, counts per
 side, and `control_total` as `{side: {unit: total}}` over the rows that carry an amount:
@@ -157,7 +157,7 @@ def _amount(v, unit: str | None, where: str) -> float | None:
     if exact is not None and decimal.Decimal(repr(x)) != exact:
         raise ItemsError(f"{where}: amount {v!r} has more digits than a float holds (it "
                          f"would be stored as {x!r}); round it to the precision it closes "
-                         f"to, or pass the float")
+                         f"to, or give the float")
     if unit == "count":
         if x != round(x):
             raise ItemsError(f"{where}: a count of {v!r} is not whole")
@@ -173,7 +173,7 @@ def _period(v, where: str) -> str | None:
     if _empty(v):
         return None
     if isinstance(v, datetime.datetime):
-        raise ItemsError(f"{where}: period {v!r} is a datetime - pass its date or a period "
+        raise ItemsError(f"{where}: period {v!r} is a datetime - give its date or a period "
                          f"key")
     if isinstance(v, datetime.date):
         return v.isoformat()

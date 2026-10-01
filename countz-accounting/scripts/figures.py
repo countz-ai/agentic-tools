@@ -458,11 +458,11 @@ class Ledger:
                     doc = _yaml_load(path)
                     if not isinstance(doc, list):
                         raise ValueError(f"{path}: the ledger is not a YAML list "
-                                         f"(EVIDENCE.md § 0) - pass fresh=True to rebuild it")
+                                         f"(EVIDENCE.md § 0) - set fresh=True to rebuild it")
                     for e in doc:
                         if not isinstance(e, dict) or not isinstance(e.get("id"), str):
                             raise ValueError(f"{path}: entry {e!r} is no `- id:` mapping "
-                                             f"(EVIDENCE.md § 0) - pass fresh=True to rebuild it")
+                                             f"(EVIDENCE.md § 0) - set fresh=True to rebuild it")
                         into[e["id"]] = e
             self.ties = [copy.deepcopy(e["tie"]) for e in self.entries.values()
                          if isinstance(e.get("tie"), dict)]
@@ -925,7 +925,7 @@ def _bound(tid: str, name: str, v):
         kind = str(v.get("kind", "absolute")).lower()
         want = "absolute" if name == "tolerance" else ("relative", "pct", "percent")
         if kind not in (want if isinstance(want, tuple) else (want,)) or "amount" not in v:
-            raise ValueError(f"{tid}: {name} {v!r} - pass the number, or "
+            raise ValueError(f"{tid}: {name} {v!r} - give the number, or "
                              f"{{kind: absolute, amount: n}} for `tolerance`")
         v = v["amount"]
     v = _num(v)

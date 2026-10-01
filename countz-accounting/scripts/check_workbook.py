@@ -1280,7 +1280,7 @@ def main() -> int:
     ap.add_argument("--max-report", type=int, default=15)
     a = ap.parse_args()
     if a.workbook is None and not a.run_dir:
-        print("pass a workbook, or --run-dir to gate the ledgers alone", file=sys.stderr)
+        print("give a workbook, or --run-dir to gate the ledgers alone", file=sys.stderr)
         return 2
     if a.workbook is not None and not a.workbook.is_file():
         print(f"{a.workbook}: not a file", file=sys.stderr)

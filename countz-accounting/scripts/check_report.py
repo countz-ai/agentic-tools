@@ -768,7 +768,7 @@ def main() -> int:
         return 2
     wb = a.workbook or a.deck.with_name("workbook.xlsx")
     if not wb.is_file():
-        print(f"{wb}: not a file — pass --workbook", file=sys.stderr)
+        print(f"{wb}: not a file — use --workbook", file=sys.stderr)
         return 2
     run_dir = a.run_dir
     if run_dir is None:

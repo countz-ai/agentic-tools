@@ -66,7 +66,7 @@ map the key to `batch` or `ref` by what it means. One flow per call: receipts wi
 returned items, or payments with theirs. Reconcile each bank account in its own call.
 Measure the window before choosing it: match once by reference at any date, or on amounts
 that occur once on each side, and read the days from the book's date to the bank's on those
-pairs; pass the few days most pairs fall in as `window`, the longest as `wide`, and, where
+pairs; give the few days most pairs fall in as `window`, the longest as `wide`, and, where
 items take longer to reach the bank than `window` (cheques paid out), that time as
 `transit=`. Pass `end=`, the statement's end date; transit and age are measured at it,
 and without it at the bank's last line. Pass `same_entity=True` where both sides name

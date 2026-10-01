@@ -157,7 +157,7 @@ resets monthly is annualized at twelve times the tier.
   path.
 - **In a run:** pinned at `<run_dir>/arr_policy.yaml` by
   `setup_run.py <run_dir> --arr-policy <file>`, which refuses a policy `arr_policy.py
-  check` does not pass (complete, approved, unchanged since approval) and records its
+  check` does not clear (complete, approved, unchanged since approval) and records its
   sha in `run.json.inputs.arr_policy`. The pinned file is never edited. A policy amended during
   the run (§ Applying the policy, step 6) replaces it: any approved policy before the plan
   is approved; after that, only one that adds instructions and changes no position,

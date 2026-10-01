@@ -44,7 +44,7 @@ what this period's files show is different; never run it unread. Per `params.fil
 entry, parse that table and `cache.write` it — with the entry's `what` — and true file
 coordinates (`header_at`, `rows` as the rows sit in the file) and, per column, where it
 sits and how its text was read (`parse`, in words). A value you cannot read stays text,
-and its column's `parse` says so. Where the document states a total for the table, pass
+and its column's `parse` says so. Where the document states a total for the table, give
 it as `stated`, with a `tolerance` where 0.005 is not the difference that agrees (the
 tolerance is recorded). Any other table you see on a file is a `cache.note`, not
 extracted.
@@ -66,7 +66,7 @@ citation reads the file as it says, and a fix pass edits it. Write it to be read
 count or control total that disagrees with the profile's citation of the same table, is
 a blocker until you explain it: correct the script and re-run, or rule on why the
 difference is right and record the ruling. A table you could not parse is a blocker
-naming its id; never drop an entry to make the step pass.
+naming its id; never drop an entry to make the step succeed.
 
 ## 4. Files
 
