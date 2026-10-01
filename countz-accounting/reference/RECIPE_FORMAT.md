@@ -83,7 +83,7 @@ The closed list the run's population is ruled from, drawn top-down from the obje
 the statement line, the trial-balance accounts that compose it, the general-ledger
 accounts behind each — never from which account names read as in scope. The section
 carries the definition the population family rules against and the accounts outside the
-line it reaches as candidates (DOCTRINE.md § Populations). Where the population family's
+line it reaches, each ruled in or out (DOCTRINE.md § Populations). Where the population family's
 ruling differs from the plan's, its record states the divergence and the relay puts it to
 the user (§ 3).
 
