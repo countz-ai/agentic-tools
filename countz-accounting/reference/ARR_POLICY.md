@@ -465,7 +465,11 @@ before the termination was recorded is restated. `document_threshold_pct` (the
 `outlier_threshold_pct` convention): a contract whose annualized value exceeds that
 share of total ARR at the first date it is in force enters ARR only with the signed
 order form or amendment that evidences it; without one it is withheld with its `D.`. At
-`none`, no contract is held to this test.
+`none`, no contract is held to this test. The share is measured against total ARR before
+this test: ARR at that month end with every contract the test could withhold included,
+the tested contract among them, so no contract's result depends on another's. A contract
+in force before the first month end the records can measure total ARR at is tested at
+that month end.
 
 **L5 · Stub, co-term and month-to-month contracts.**
 - `exclude`: none of them carries ARR.
