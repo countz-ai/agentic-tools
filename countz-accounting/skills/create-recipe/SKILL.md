@@ -2,8 +2,8 @@
 name: create-recipe
 description: >-
   Author a playbook recipe for an analysis the catalog does not cover, from the user's
-  ask and the registered data room: a draft pass that reads the sources and returns the
-  questions the recipe needs answered, then an author pass that writes the recipe to the
+  ask and the registered data room: a draft stage that reads the sources and returns the
+  questions the recipe needs answered, then an author stage that writes the recipe to the
   run directory and validates it against the recipe contract.
 context: fork
 agent: countz-accounting:planner
@@ -14,9 +14,9 @@ user-invocable: false
 # Author the recipe
 
 Arguments: `run_dir`, `seq`, `ask` (the user's ask, verbatim), `catalog` (the served
-`catalog.yaml`, so you know what exists and do not re-author it), and on the author
-pass `answers` (the user's answers to the questions your draft pass returned, verbatim).
-Without `answers` you are on the draft pass; with it, the author pass. Append
+`catalog.yaml`, so you know what exists and do not re-author it), and, on the author
+stage, `answers` (the user's answers to the questions your draft stage returned, verbatim).
+Without `answers` you are on the draft stage; with it, the author stage. Append
 `step_start` before reading and `step_end` as your last act (`OBSERVABILITY.md`).
 
 Read `${CLAUDE_PLUGIN_ROOT}/reference/RECIPE_FORMAT.md` whole — it is the contract you
@@ -26,7 +26,7 @@ then `run.json`. Its registered sources are the data room; you read them under
 `${CLAUDE_PLUGIN_ROOT}/reference/CONDUCT.md § Reading client files`. You write a recipe, not a plan: no file
 index, no profiles, no definition. `check-plan` does that against the recipe you leave.
 
-## Draft pass (no `answers`)
+## Draft stage (no `answers`)
 
 Peek every registered file — a folder in one call — so you know what the room holds:
 which of the three source classes are present, what grain the records carry, what
@@ -45,7 +45,7 @@ sentence, that the recipe cannot be written without:
 Ask nothing the room already answers. Return the questions as your last lines; the relay
 puts them to the user.
 
-## Author pass (`answers` given)
+## Author stage (`answers` given)
 
 Write `<run_dir>/recipes/<name>.md`, `name` kebab-case and not a name the catalog
 carries. Frontmatter per `RECIPE_FORMAT.md`: `name`, `objective` (from the confirmed

@@ -80,13 +80,13 @@ which for this skill runs as:
 and cannot ask the user anything, so it runs twice, exactly as `check-plan` runs again
 on `revise=`.
 
-1. **Draft pass.** `run_state.py dispatch <run_dir> --step recipe --args '<one-line JSON>'`
+1. **Draft stage.** `run_state.py dispatch <run_dir> --step recipe --args '<one-line JSON>'`
    with `ask=` (the user's ask verbatim, from `instructions`), `catalog=` (the
    `catalog_yaml` you fetched), then the plain Skill call. It returns the questions it
    needs answered: the objective in one sentence, the population, the source classes it
    found, the grain the data supports, and what the ask leaves open. `record`.
 2. **Relay.** Put those questions to the user, in its words, and collect the answers.
-3. **Author pass.** Dispatch `create-recipe` again on a new seq with the same arguments
+3. **Author stage.** Dispatch `create-recipe` again on a new seq with the same arguments
    plus `answers=` (the user's answers, verbatim). It writes
    `<run_dir>/recipes/<name>.md`, runs `scripts/validate_recipe.py` over it, and ends
    `blocked` rather than hand the plan a malformed recipe. `record`, then pin the file:
