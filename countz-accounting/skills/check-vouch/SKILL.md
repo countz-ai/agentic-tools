@@ -34,9 +34,9 @@ consume the whole list — every item on it ends with a classification, none dro
 
 ## 2. Trace each item
 
-Trace with polars joins, one per pass; check the assignment with
-`${CLAUDE_PLUGIN_ROOT}/scripts/matching.py`'s `check_assignment()`, and classify what no
-pass clears per § 3.
+Trace with polars joins, one join per matching round; check the assignment with
+`${CLAUDE_PLUGIN_ROOT}/scripts/matching.py`'s `check_assignment()`, and classify every
+item left unmatched after the last round per § 3.
 
 Into the target source at item grain: the clearing or supporting line's citation, its
 date and amount. One-to-many is allowed and recorded (a deposit clearing as two credits).

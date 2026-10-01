@@ -2453,9 +2453,8 @@ def check(root: pathlib.Path) -> list[str]:
             bad.append(f"{rel(idx)}: lists `{name}`, which is not a user-facing skill")
 
     # 8s. The Countz connector declaration (docs/arch/AUTH_MCP_OAUTH.md in the monorepo):
-    #     `.mcp.json` declares exactly the `countz` server, the manifest lists the
-    #     connector, and no skill hardcodes a host's wire name (`mcp__...`) — the short
-    #     name is the contract. The sign-in procedure lives once, in
+    #     `.mcp.json` declares exactly the `countz` server, and no skill hardcodes a
+    #     host's wire name (`mcp__...`) — the short name is the contract. The sign-in procedure lives once, in
     #     `reference/RUN_CONTRACT.md § Sign in first`, which every launcher skill reads
     #     before it collects; no per-skill section is required.
     mcp_json = root / ".mcp.json"
@@ -2471,8 +2470,6 @@ def check(root: pathlib.Path) -> list[str]:
             srv = servers.get("countz") or {}
             if srv.get("type") != "http" or not str(srv.get("url", "")).startswith("https://"):
                 bad.append(f"{rel(mcp_json)}: `countz` must be an http server at an https URL")
-            if mf.get("connectors") != ["countz"]:
-                bad.append(f"{rel(manifest)}: connectors must be [\"countz\"] when .mcp.json declares the server")
         for f in sorted(root.glob("skills/*/SKILL.md")):
             if "mcp__" in f.read_text():
                 bad.append(f"{rel(f)}: names a tool by wire name (`mcp__...`) - use the short name on the `countz` server")
