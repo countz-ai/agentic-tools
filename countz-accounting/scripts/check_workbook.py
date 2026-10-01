@@ -26,6 +26,12 @@ in the figure ledger. Two ways to satisfy it:
      the file then substitute `<v/>` for `<v>result</v>` in the sheet XML — verified to
      preserve the formula and render the value.
 
+GATE 8 — live arithmetic (reference/WORKBOOK.md § 7). Every formula in the grammar of
+scripts/formula.py is recomputed from the stored values and must agree with its own cached
+result. On a sheet a tab script mapped (`wbkit.save` wrote `<tab>.cells.json` naming it,
+read beside the workbook and, with --run-dir, from out/tabs/), a subtotal, a total or a
+walk's derived line (`= …`) is a formula over the rows it adds, never a typed value.
+
 GATE 4 — the design. Every tab is built to reference/WORKBOOK.md and
 WORKBOOK_STYLE.md, read from the stored styles: Arial in the five sizes, column A empty,
 the primary table's BAND header on row 4 and BAND on header labels only, freeze panes at B4, no merged cell, every
@@ -674,7 +680,8 @@ def style_table(z: zipfile.ZipFile) -> dict:
     try:
         xml = z.read("xl/styles.xml").decode("utf-8", "replace")
     except KeyError:
-        return {"fonts": [], "fills": [], "borders": [], "xfs": [], "wraps": []}
+        return {"fonts": [], "fills": [], "borders": [], "xfs": [], "wraps": [],
+                "double_bottom": [], "bold": [], "numfmts": {}}
     # An empty entry is stored self-closing (`<border />`); a parser that reads it as an
     # opening tag swallows the next entry and shifts every index after it.
     def entries(tag: str) -> list[str]:
@@ -689,8 +696,10 @@ def style_table(z: zipfile.ZipFile) -> dict:
     for f in entries("fill"):
         rgb = re.search(r'<fgColor rgb="([0-9A-Fa-f]+)"', f)
         fills.append(rgb.group(1)[-6:].upper() if rgb else "")
-    borders = [re.search(r"<(left|right|top|bottom) style=", b) is not None
-               for b in entries("border")]
+    border_list = entries("border")
+    borders = [re.search(r"<(left|right|top|bottom) style=", b) is not None for b in border_list]
+    double_bottom = [re.search(r'<bottom style="double"', b) is not None for b in border_list]
+    bold = [re.search(r"<b\s*/>|<b val=\"(?:1|true)\"", f) is not None for f in entries("font")]
     xfs, wraps = [], []
     section = re.search(r"<cellXfs\b[^>]*>(.*?)</cellXfs>", xml, re.S)
     for attrs, body in re.findall(r"<xf\b([^>]*?)(?:/>|>(.*?)</xf>)", section.group(1) if section else "", re.S):
@@ -698,7 +707,10 @@ def style_table(z: zipfile.ZipFile) -> dict:
         xfs.append((ids.get("numFmtId", 0), ids.get("fontId", 0), ids.get("fillId", 0),
                     ids.get("borderId", 0)))
         wraps.append('wrapText="1"' in body or 'wrapText="true"' in body)
-    return {"fonts": fonts, "fills": fills, "borders": borders, "xfs": xfs, "wraps": wraps}
+    numfmts = {int(i): html.unescape(code) for i, code in
+               re.findall(r'<numFmt numFmtId="(\d+)" formatCode="([^"]*)"', xml)}
+    return {"fonts": fonts, "fills": fills, "borders": borders, "xfs": xfs, "wraps": wraps,
+            "double_bottom": double_bottom, "bold": bold, "numfmts": numfmts}
 
 
 # A cell reading as the run's machine vocabulary rather than words (WORKBOOK.md § 3
@@ -1253,6 +1265,112 @@ def audit_recon(z: zipfile.ZipFile, stem: str, run_dir: pathlib.Path | None) -> 
     return fails
 
 
+# GATE 8 — live arithmetic (WORKBOOK.md § 7). Every formula the gate can read — a
+# reference, a sum, a signed sum, a conditional sum (scripts/formula.py) — is recomputed
+# from the stored values and must agree with its own cached result: a stale cache shows a
+# viewer one figure and Excel another. And on a sheet its tab script mapped (`wbkit.save`
+# wrote a cells map naming it), a subtotal, a total or a walk's derived line (`= …`) is a
+# formula over the rows it adds, never a typed value.
+SUBTOTAL_FILL = "EDEBE3"     # wbkit's MIST, the Subtotal style's fill
+FORMULA_EL = re.compile(r'<c r="([A-Z]+\d+)"[^>]*>\s*<f>(.*?)</f>\s*(?:<v>([^<]*)</v>)?', re.S)
+
+
+def cell_maps(workbook: pathlib.Path, run_dir: pathlib.Path | None) -> dict[str, set[str]]:
+    """{sheet: the cells declared stated} for every sheet a tab script mapped: the cells
+    map beside the workbook gated (`<stem>.cells.json`) and, with a run directory, every
+    placed tab's."""
+    found = [workbook.with_name(workbook.stem + ".cells.json")]
+    if run_dir is not None:
+        found += sorted((run_dir / "out" / "tabs").glob("*.cells.json"))
+    sheets: dict[str, set[str]] = {}
+    for f in found:
+        try:
+            data = json.loads(f.read_text(encoding="utf-8")).get("sheets") or {}
+        except (OSError, ValueError, AttributeError):
+            continue
+        for name, cells in data.items():
+            sheets.setdefault(name, set()).update(
+                c for c, e in (cells or {}).items() if isinstance(e, dict) and e.get("stated"))
+    return sheets
+
+
+def audit_formulas(z: zipfile.ZipFile, mapped: dict[str, set[str]]) -> list[str]:
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+    import formula as fx  # noqa: PLC0415
+    shared = shared_strings(z)
+    order = sheet_order(z)
+    values: dict[str, dict[str, object]] = {}
+    xmls: dict[str, str] = {}
+    for part, tab in order:
+        tab = html.unescape(tab)
+        xml = z.read(part).decode("utf-8", "replace")
+        xmls[tab] = xml
+        texts, _ = sheet_cells(xml, shared)
+        vals: dict[str, object] = dict(sheet_numbers(xml))
+        vals.update(texts)
+        values[tab] = vals
+    get = lambda sh, co: values.get(sh, {}).get(co)  # noqa: E731
+    styles = style_table(z) if mapped else None
+    fails: list[str] = []
+    for tab, xml in xmls.items():
+        stale = []
+        formulas: set[str] = set()
+        for m in FORMULA_EL.finditer(xml):
+            ref, text_, cached = m.group(1), html.unescape(m.group(2)), m.group(3)
+            formulas.add(ref)
+            if cached in (None, ""):
+                continue                        # GATE 1 refuses an empty result
+            try:
+                stored = float(cached)
+            except ValueError:
+                continue
+            got = fx.evaluate(text_, tab, get)
+            if got is None:
+                continue
+            pre = fx.precedents(text_, tab) or []
+            terms = [v for v in (get(*c) for c in pre) if isinstance(v, float)]
+            if not fx.foots(stored, got, len(pre), terms + [got]):
+                stale.append(f"{ref} (={text_[:40]} computes {got:,.2f}; stored {stored:,.2f})")
+        if stale:
+            fails.append(f"{tab}: a formula whose stored result is not what it computes — "
+                         f"{len(stale)} cell(s), first {stale[0]} — write the result its "
+                         f"formula computes (wbkit.save caches it)")
+        if tab not in mapped or styles is None:
+            continue
+        rows: dict[int, list[tuple[str, int]]] = {}
+        for m in STYLE_CELL.finditer(xml):
+            col, row, attrs = m.group(1), int(m.group(2)), m.group(3)
+            si = ATTR("s").search(attrs)
+            rows.setdefault(row, []).append((col, int(si.group(1)) if si else 0))
+        typed = []
+        for row, cells in sorted(rows.items()):
+            if row < 5:
+                continue
+            def xf(i):
+                return styles["xfs"][i] if i < len(styles["xfs"]) else (0, 0, 0, 0)
+            total_row = any(xf(i)[3] < len(styles["double_bottom"]) and styles["double_bottom"][xf(i)[3]]
+                            for _, i in cells)
+            derived = any(str(values[tab].get(f"{c}{row}", "")).strip().startswith("=")
+                          for c in ("B", "C"))
+            for col, i in cells:
+                ref = f"{col}{row}"
+                v = values[tab].get(ref)
+                if ref in formulas or not isinstance(v, float):
+                    continue
+                _, font_id, fill_id, _ = xf(i)
+                if ref in mapped.get(tab, set()):
+                    continue                    # declared stated (`wbkit.stated`), not a sum
+                subtotal = (fill_id < len(styles["fills"]) and styles["fills"][fill_id] == SUBTOTAL_FILL
+                            and font_id < len(styles["bold"]) and styles["bold"][font_id])
+                if total_row or derived or subtotal:
+                    typed.append(ref)
+        if typed:
+            fails.append(f"{tab}: a subtotal, total or derived line (`= …`) typed as a value — "
+                         f"{len(typed)} cell(s), first {typed[0]} — write it with wbkit.total() "
+                         f"over the rows it adds (WORKBOOK.md § 7)")
+    return fails
+
+
 def audit(path: pathlib.Path, declared: set[str] | None = None,
           ledger_fails: list[str] | None = None,
           run_dir: pathlib.Path | None = None) -> dict:
@@ -1282,6 +1400,7 @@ def audit(path: pathlib.Path, declared: set[str] | None = None,
         rep["order"] = audit_order(z, run_dir)
         rep["match"] = audit_match(z)
         rep["recon"] = audit_recon(z, path.stem, run_dir)
+        rep["formulas"] = audit_formulas(z, cell_maps(path, run_dir))
     if ledger_fails:
         rep["links"]["link_failures"] = list(ledger_fails) + rep["links"]["link_failures"]
     return rep
@@ -1336,8 +1455,9 @@ def main() -> int:
     order_fails = rep.get("order", [])
     match_fails = rep.get("match", [])
     recon_fails = rep.get("recon", [])
+    formula_fails = rep.get("formulas", [])
     bad = bool(rep["uncached"] or link_fails or design_fails or order_fails or match_fails
-               or recon_fails)
+               or recon_fails or formula_fails)
 
     if a.json:
         print(json.dumps(rep, indent=2))
@@ -1357,7 +1477,9 @@ def main() -> int:
               + ", ".join(f"{c['sheet']}!{c['cell']}" for c in shown)
               + (f", … and {rep['uncached'] - len(shown)} more" if rep["uncached"] > len(shown) else ""))
         print("\n  Fix: write the computed value into the cell, or write the formula with its")
-        print("  result cached beside it. See this script's header for both recipes.\n")
+        print("  result cached beside it. See this script's header for both recipes.")
+        print("  A tab script saves with wbkit.save(wb, path), which caches every formula's result;")
+        print("  an assembled workbook gets them from link_workbook.py.\n")
     else:
         print(f"{a.workbook.name}: {rep['formula_cells']} formula cells, all carry a "
               f"cached value — the workbook renders without recalculating.")
@@ -1422,6 +1544,13 @@ def main() -> int:
             print(f"    {f}")
         if len(recon_fails) > a.max_report:
             print(f"    … and {len(recon_fails) - a.max_report} more")
+    if formula_fails:
+        print(f"{a.workbook.name}: {len(formula_fails)} live-arithmetic failure(s) — a total "
+              f"the reader cannot trace to its rows, or a formula whose stored result is stale.\n")
+        for f in formula_fails[:a.max_report]:
+            print(f"    {f}")
+        if len(formula_fails) > a.max_report:
+            print(f"    … and {len(formula_fails) - a.max_report} more")
     return 1 if bad else 0
 
 

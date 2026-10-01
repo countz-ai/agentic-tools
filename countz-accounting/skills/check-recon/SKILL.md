@@ -153,7 +153,9 @@ Files:
   schedule (one row per left item, the ones kept out of the streams included as `others`:
   an invoice with no cash, each with its reason), the reconciling items and the rules
   (`WORKBOOK.md` § 6). Then your check tab, blocks per `WORKBOOK.md` § 4, with the
-  reconciliation statement as the primary table and the item schedules. Every
+  reconciliation statement as the primary table and the item schedules, its totals and
+  derived lines written with `wbkit.total` and the file saved with `wbkit.save`
+  (`WORKBOOK.md` § 7). Every
   reconciliation carries the match tabs, so the reader finds the schedule on each one;
   `check_workbook.py` GATE 7 refuses a file without them unless the check tab states
   `No item grain:` (§ 3).

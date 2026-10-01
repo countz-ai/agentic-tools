@@ -64,11 +64,17 @@ proceed; end the step `blocked` naming that check (§ 6).
 **Links.** After assembly:
 
 ```
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/link_workbook.py <run_dir>/out/.staging/workbook.xlsx
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/link_workbook.py <run_dir>/out/.staging/workbook.xlsx --run-dir <run_dir>
 ```
 
 It wires every id and every Exec Summary amount to where it resolves, turns each Exec
-Summary amount into a formula reading its original, and caches every formula's result. It reports the
+Summary amount into a formula reading its original, makes the arithmetic between the
+check tabs live — each copy a reference to the producing check's cell, each total a
+formula over its rows (WORKBOOK.md § 7) — and caches every formula's result. A `copy not
+wired` line it prints — a copy that disagrees with the figure it copies — is the copying
+check's to fix: end the step `blocked` naming it, as for any defect on a copied tab.
+Totals it leaves as values on a tab written before the cells maps existed are listed and
+are not a blocker. It reports the
 ids it cannot wire: fix each by stating the id where it
 resolves, never by dropping the citation; fix an unmatched amount by copying its row
 label and column header verbatim, never by placing a link. Citations to the user's

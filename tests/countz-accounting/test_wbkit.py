@@ -111,8 +111,91 @@ def main() -> int:
         and all(t.tableStyleInfo is not None and t.tableStyleInfo.name == "TableStyleLight1"
                 and not t.tableStyleInfo.showRowStripes for t in t2.tables.values()) \
         and t2["B14"].fill.fgColor.rgb.endswith(BAND)
+    fails = live()
+    for f in fails:
+        print(f"FAIL {f}")
+    ok = ok and not fails
     print("wbkit: ok" if ok else "wbkit: self-check FAILED")
     return 0 if ok else 1
+
+
+def live() -> list[str]:
+    """The arithmetic is live (WORKBOOK.md § 7): `total` writes the formula and refuses
+    one that does not reach the script's figure, `save` caches every result and writes the
+    cells map, and check_workbook.py GATE 8 holds a mapped sheet's totals to formulas."""
+    import json
+    import subprocess
+    import tempfile
+    from openpyxl import Workbook, load_workbook
+    from wbkit import S, amount, finish, header, save, stated, text, total
+    bad: list[str] = []
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "k3 Walk"
+    band(ws, "k3 · the walk foots", "Fixture · FY2026 · USD", "Opening plus sales less cash is closing.")
+    header(ws, 4, ["id", "line", "FY2026", "verdict"], ["id", "description", "amount", "status"])
+    lines = [("F.k3.open", "Opening receivable", 100.0, None), ("F.k3.sales", "Add: billed", 50.25, None),
+             ("F.k3.cash", "Less: cash received", 40.10, None)]
+    for r, (fid, lab, v, _) in enumerate(lines, start=5):
+        ident(ws.cell(r, 2), fid)
+        text(ws.cell(r, 3), lab)
+        amount(ws.cell(r, 4), v, fid=fid)
+    text(ws.cell(8, 3), "= Closing receivable")
+    got = total(ws.cell(8, 4), 110.15, rows=[5, 6], less=[7], style="Subtotal", fid="F.k3.close")
+    if ws["D8"].value != "=D5+D6-D7" or abs(got - 110.15) > 1e-9:
+        bad.append(f"a walk's derived line: {ws['D8'].value} = {got}")
+    try:
+        total(ws.cell(9, 4), 999.0, rows=[5, 6])
+        bad.append("a total that does not reach the script's figure must be refused")
+    except ValueError as e:
+        if "missing a row" not in str(e):
+            bad.append(f"the refusal names the cause: {e}")
+    # a conditional subtotal over the verdict column, and a copy of another check's figure
+    for r, (v, verdict) in enumerate(((7.0, "supported"), (3.0, "candidate")), start=10):
+        amount(ws.cell(r, 4), v, src="F.k1.total" if r == 10 else None)
+        text(ws.cell(r, 5), verdict)
+    total(ws.cell(12, 4), 7.0, rows=[10, 11], when=("E", "supported"), style="Subtotal")
+    if not ws["D12"].value.startswith('=SUMIFS(D10:D11,$E$10:$E$11,"supported")'):
+        bad.append(f"a conditional subtotal: {ws['D12'].value}")
+    text(ws.cell(13, 3), "Total")
+    amount(ws.cell(13, 4), 4.0, style="Total")      # an item count: stated, not a sum
+    stated(ws.cell(13, 4))
+    finish(ws, 13)
+    try:
+        amount(ws.cell(20, 4), 1.0, fid="k3 total")
+        bad.append("a figure id outside the grammar must be refused")
+    except ValueError:
+        pass
+    ws["D20"].value = None
+    with tempfile.TemporaryDirectory() as td:
+        path = pathlib.Path(td) / "k3_walk.xlsx"
+        side = save(wb, path)
+        back = load_workbook(path, data_only=True)["k3 Walk"]
+        if (back["D8"].value, back["D12"].value) != (110.15, 7.0):
+            bad.append(f"save caches every result: D8 {back['D8'].value}, D12 {back['D12'].value}")
+        m = json.loads(side.read_text())["sheets"]["k3 Walk"]
+        if m.get("D5", {}).get("fid") != "F.k3.open" or m.get("D10", {}).get("src") != "F.k1.total" \
+                or m.get("D8", {}).get("formula") != "=D5+D6-D7" or not m.get("D13", {}).get("stated"):
+            bad.append(f"the cells map: {m}")
+        gate = [sys.executable, str(SCRIPTS / "check_workbook.py"), str(path), "--json"]
+        rep = json.loads(subprocess.run(gate, capture_output=True, text=True).stdout)
+        if rep.get("formulas"):
+            bad.append(f"a mapped sheet with live totals passes GATE 8: {rep['formulas']}")
+        # the same sheet with the closing line typed as a value is refused
+        typed = load_workbook(path)
+        typed["k3 Walk"]["D8"].value = 110.15
+        typed.save(path)
+        rep = json.loads(subprocess.run(gate, capture_output=True, text=True).stdout)
+        if not any("typed as a value" in f and "D8" in f for f in rep.get("formulas", [])):
+            bad.append(f"a total typed as a value on a mapped sheet must be refused: {rep.get('formulas')}")
+        # a stale result: the formula computes one figure, the file stores another
+        save(wb, path)
+        import formula as fx
+        fx.cache_results(path, {"k3 Walk": {"D8": 999.0}})
+        rep = json.loads(subprocess.run(gate, capture_output=True, text=True).stdout)
+        if not any("stored result" in f for f in rep.get("formulas", [])):
+            bad.append(f"a stale result must be refused: {rep.get('formulas')}")
+    return bad
 
 
 if __name__ == "__main__":

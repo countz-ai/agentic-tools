@@ -94,8 +94,10 @@ income-statement style: one column per period in the set, the id column the only
 band, the title the only row above the header. Rows: the starting figure, citing its
 tie; one row per item considered, grouped under its rung or cause, with id, name, group,
 signed amount per period, verdict, then the record at the producing check's values; per
-group, the supported subtotal as a conditional-sum formula over the verdict column with
-its result cached (EVIDENCE.md § 4); the closing figure; information lines, never added
+group, the supported subtotal as a conditional-sum formula over the verdict column,
+`wbkit.total(cell, value, rows=[…], when=("<verdict column>", ["supported", …]))`, its
+result cached (WORKBOOK.md § 7); every derived line a `wbkit.total` over the line above
+it and the rows between; the closing figure; information lines, never added
 to the walk. No item sits only inside a subtotal. A family that rolls up other families'
 items mints nothing. A supported item whose evidence stands below its ruling is a
 blocking review defect.

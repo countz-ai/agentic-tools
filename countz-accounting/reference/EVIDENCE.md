@@ -211,9 +211,10 @@ at the seal. `Ledger.tie()` mints a tie's difference figure and classifies it
 
 **Every figure cell in a workbook carries its computed value.** openpyxl writes a formula
 with no cached result, and the cell renders blank in a viewer that does not recalculate.
-Write the value (the arithmetic lives in the figure's `expression` on the Sources tab), or
-write the formula with its result cached beside it. The gate is
-`scripts/check_workbook.py`. A typed constant that resolves to no figure id is blocking.
+A body figure is a value (the arithmetic from the data room lives in its `expression` on
+the Sources tab); a subtotal, a total, a derived line and a copy of another check's figure
+are formulas with their results cached — `wbkit.total`, `wbkit.save` and
+`link_workbook.py` write them (WORKBOOK.md § 7). The gate is `scripts/check_workbook.py`. A typed constant that resolves to no figure id is blocking.
 
 **Prose numbers are interpolated, never typed.** A sentence is authored as a template
 around a figure id; the code that writes the tab or the deck loads the ledger and

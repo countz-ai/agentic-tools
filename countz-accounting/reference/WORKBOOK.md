@@ -93,7 +93,8 @@ its heading. The kit writes this: `section()` returns the header's row and
 
 1. **The primary table** — the check's own schedule: tie schedule, reconciliation
    statement, roster, window, vouch schedule, adjustment schedule, bridge. Header on row
-   4 (`BAND`), body from row 5, subtotals in `Subtotal`, the footing row in `Total`.
+   4 (`BAND`), body from row 5, subtotals in `Subtotal`, the footing row in `Total`, each
+   a formula over the rows it adds (§ 7).
    The id is the first column after the margin; amounts right; the status column last.
    Every cell of the table — header, body, subtotal, total — carries the style's hairline
    on all four sides (`grid()`); Notes and To reperform rows carry none.
@@ -312,7 +313,35 @@ from wbkit import *
 and never carries a copy of any of it: the module is the one place the kit is written,
 and `check_workbook.py` GATE 4 verifies the stored workbook against the same values. Each
 helper's contract is its docstring and signature in the module; the rules they implement
-are § 3 to § 5 above. `finish(ws, table_last_row, ledger=False)` sets the per-sheet
+are § 3 to § 5 above.
+
+**The arithmetic is live.** A reviewer foots a schedule by its formulas and traces a
+figure to where it came from by Excel's precedents, so:
+
+- A body figure is a value: it comes from the data room, which the workbook does not
+  hold, and its reperformance is its Sources row. Write it with `amount(cell, v,
+  fid="F.…")` (or `count(…, fid=…)`) naming the figure it holds.
+- A figure copied from ANOTHER check's tab is written with `src="F.…"`, naming the
+  figure it copies. At assembly `link_workbook.py --run-dir` replaces it with a reference
+  to the producing check's cell (`='r5 Position and DSO'!G23`), and reports a copy that
+  disagrees with its source — the copying check's to fix.
+- A subtotal, a total and a walk's derived line (`= …`) are `total(cell, value,
+  rows=[…])`: a formula over the rows it adds (`less=[…]` for `Less:` lines stored as
+  positive figures; `when=("N", "supported")` for a walk's conditional subtotal over its
+  verdict column). It refuses a formula that does not reach the figure the script
+  computed — the table is missing a row or carries a wrong one. A figure in such a row
+  that is not the sum of the rows above (a reconciliation's item count per bank) is
+  declared with `stated(cell)`.
+- Save with `save(wb, path)`, never `wb.save`: it caches every formula's result (a
+  viewer that does not recalculate shows nothing otherwise) and writes the cells map,
+  `<path stem>.cells.json`, that `step_record.place_tab` moves with the tab.
+
+`check_workbook.py` GATE 8 recomputes every formula from the stored values and refuses a
+stale result, and on a mapped sheet refuses a subtotal, a total or a derived line typed
+as a value. A tab written before the maps existed is retrofitted at assembly as far as
+the evidence allows (`link_workbook.py` § 8).
+
+`finish(ws, table_last_row, ledger=False)` sets the per-sheet
 settings of the style's § 9 — the primary table's rules, row heights, the `B4` freeze, gridlines,
 tab color, an Excel table per table block (§ 4), print setup and the § 7 footer — after the
 last row is written.
