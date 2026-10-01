@@ -38,13 +38,18 @@ schedules (RECIPE_FORMAT.md § Report), each is on the deck as a table from its 
 tab carrying every declared column and period, at the full population its `where` and
 `through` leave: every row's identity is on the deck, none is trimmed. A check whose
 declared periods scripts/periods.py refuses fails this gate by name. A run with no
-recipe, or a recipe with no `## Report`, is not held to it.
+recipe, or a recipe with no `## Report`, is not held to it. On every deck, a table whose
+rows read the same in every column shown is refused: the reader cannot tell them apart.
 
-GATE 6 — the opening (REPORT.md § 1). The first page after the cover is the executive
-summary — headed `Executive summary`, its message a sentence, at least one stat tile, table
-or chart on it. On a recipe run the second page is the key-metrics page, headed as the
-recipe's `metrics.title`, carrying a figure block, and the first schedule sits at most one
-page after it.
+GATE 6 — the structure (REPORT.md § 1). The recipe decides it; this gate holds the deck
+to what the recipe declares. The first page after the cover is the executive summary —
+headed `Executive summary`, its message a sentence, at least one stat tile, table or
+chart on it. On a recipe run the second page is the key-metrics page, headed as the
+recipe's `metrics.title`, carrying a figure block; the first schedule placed `lead` sits
+at most one page after it and no other page stands between two `lead` schedules; every
+page carrying a schedule placed `appendix` has the kicker `Appendix`, as does every page
+after the first `Appendix` page; and where the recipe declares `narrative`, every
+narrative page carries one of its sections as its kicker, in the declared order.
 
 Parsed from the .pptx zip with the standard library only, like check_workbook.py.
 
@@ -67,7 +72,7 @@ import zipfile
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from check_prose import admitted_values  # noqa: E402
 from check_workbook import sheet_cells, sheet_order, shared_strings  # noqa: E402
-from recipe_format import report_metrics, report_schedules  # noqa: E402
+from recipe_format import APPENDIX, report_metrics, report_narrative, report_schedules  # noqa: E402
 import style  # noqa: E402
 
 TITLE_MAX = 80                          # build_report.TITLE_MAX — a headline, not a sentence
@@ -365,15 +370,12 @@ def schedule_gate(schedules: list[dict], tabs: list[str], texts: dict[str, dict[
             want.append(max(known, key=lambda x: x[1])[0] if known else periods[-1])
         candidates = [(k, body) for k, body in groups.items() if k[0] == tab]
         if not candidates:
-            fails.append(f"schedule `{title}`: no page carries a table from `{tab}` — the recipe's "
-                         f"schedules follow the opening pages (REPORT.md § 1)")
+            fails.append(f"schedule `{title}`: no page carries a table from `{tab}` — the recipe "
+                         f"places it `{sc.get('place', 'lead')}` (REPORT.md § 1)")
             continue
-        match = None
-        for k, body in candidates:
-            missing = [w for w in want if header_at(list(k[1]), w) is None]
-            if not missing:
-                match = (k, body)
-                break
+        full = [(k, body) for k, body in candidates
+                if not [w for w in want if header_at(list(k[1]), w) is None]]
+        match = max(full, key=lambda kb: len(kb[1])) if full else None
         if match is None:
             # name what the nearest table lacks: the candidate missing the fewest columns,
             # and of those the one carrying the most of the declared (non-period) columns
@@ -421,7 +423,7 @@ def schedule_gate(schedules: list[dict], tabs: list[str], texts: dict[str, dict[
 
 
 EXEC_TITLE = "executive summary"
-OPENING_MAX_EXTRA = 1     # pages allowed between the key-metrics page and the first schedule
+OPENING_MAX_EXTRA = 1     # pages allowed between the key-metrics page and the first lead schedule
 
 
 def has_figures(s: dict) -> bool:
@@ -431,13 +433,32 @@ def has_figures(s: dict) -> bool:
             or any(CHARTVAL.match(n) for n, _ in s["shapes"]))
 
 
-def opening_gate(metrics: dict | None, schedules: list[dict] | None, tabs: list[str],
-                 slides: list[dict]) -> list[str]:
-    """GATE 6 — the opening (REPORT.md § 1). The first page after the cover is the
-    executive summary: headed `Executive summary`, carrying its message as a sentence and
-    at least one figure block. On a recipe run the second page is the key-metrics page,
-    headed as the recipe's `metrics.title`, carrying a figure block; and the first
-    schedule sits at most one page after it."""
+def schedule_tab(sc: dict, tabs: list[str]) -> str | None:
+    fam = fold(str(sc.get("from", "")))
+    return next((x for x in tabs if fold(x.split(" ", 1)[0]) == fam), None)
+
+
+def carries(s: dict, sc: dict, tabs: list[str]) -> bool:
+    """Whether a slide carries schedule `sc`'s own table: from its tab, its header
+    carrying every declared column."""
+    tab = schedule_tab(sc, tabs)
+    words = [str(w) for w in sc.get("columns", [])]
+    return tab is not None and any(
+        ":" in n and n.split(":", 1)[1] == tab and rows
+        and all(header_at([h.strip() for h in rows[0]], w) is not None for w in words)
+        for n, rows in s["tables"])
+
+
+def structure_gate(metrics: dict | None, schedules: list[dict] | None, narrative: list[str] | None,
+                   tabs: list[str], slides: list[dict]) -> list[str]:
+    """GATE 6 — the structure (REPORT.md § 1), as the recipe declares it. The first page
+    after the cover is the executive summary: headed `Executive summary`, carrying its
+    message as a sentence and at least one figure block. On a recipe run the second page is
+    the key-metrics page, headed as the recipe's `metrics.title`, carrying a figure block.
+    Then each schedule's place: `lead` directly after the opening, the lead schedules in
+    one run; `appendix` under the `Appendix` kicker, after every other page. Where the
+    recipe declares `narrative`, the narrative's pages carry its sections as kickers, in
+    order. Slide numbers in the messages count the cover as slide 1."""
     fails: list[str] = []
     body = [s for s in slides if s["name"] != "cover"]
     if not body:
@@ -463,24 +484,94 @@ def opening_gate(metrics: dict | None, schedules: list[dict] | None, tabs: list[
                      f"not `{second['title'].strip()[:50]}`")
     if not has_figures(second):
         fails.append(f"slide 3: the key-metrics page `{want}` carries no stat tile, table or chart")
-    if not schedules:
-        return fails
-    fam = fold(str(schedules[0].get("from", "")))
-    tab = next((x for x in tabs if fold(x.split(" ", 1)[0]) == fam), None)
-    if tab is None:
-        return fails
-    words = [str(w) for w in schedules[0].get("columns", [])]
+    # the opening runs to the key-metrics page and its continuations
+    opening_end = 1
+    while (opening_end + 1 < len(body)
+           and fold(body[opening_end + 1]["title"].strip().removesuffix(CONTINUED)) == fold(want)
+           and body[opening_end + 1]["title"].strip().endswith(CONTINUED.strip())):
+        opening_end += 1
+    schedules = schedules or []
+    lead = [sc for sc in schedules if sc.get("place", "lead") == "lead"]
+    appendix = [sc for sc in schedules if sc.get("place") == "appendix"]
+    is_appx = [fold(s["kicker"].strip()) == fold(APPENDIX) for s in body]
+    # The lead schedules run together from the first page carrying one: that run of pages
+    # is where every lead schedule sits. A later page copying a few of a schedule's rows is
+    # the narrative's (and is the author's to justify), not the schedule's place.
+    lead_at: list[int] = []
+    head = next((i for i, s in enumerate(body) if any(carries(s, sc, tabs) for sc in lead)), None)
+    if head is not None:
+        i = head
+        while i < len(body) and any(carries(body[i], sc, tabs) for sc in lead):
+            lead_at.append(i)
+            i += 1
+        if head > opening_end + 1 + OPENING_MAX_EXTRA:
+            fails.append(f"slide {head + 2}: the first lead schedule (`{lead[0].get('title')}`) sits "
+                         f"{head - opening_end - 1} pages after the key-metrics page; at most "
+                         f"{OPENING_MAX_EXTRA} (REPORT.md § 1)")
+        for sc in lead:
+            if not any(carries(body[j], sc, tabs) for j in lead_at):
+                at = next((j for j, s in enumerate(body) if carries(s, sc, tabs)), None)
+                if at is not None:
+                    fails.append(f"slide {at + 2}: a page stands between the lead schedules — `{sc.get('title')}` "
+                                 f"runs on from the one before it, directly after the opening (REPORT.md § 1)")
+    for sc in appendix:
+        at = [i for i, s in enumerate(body) if carries(s, sc, tabs)]
+        if at and not any(is_appx[i] for i in at):
+            fails.append(f"slide {at[0] + 2}: the schedule `{sc.get('title')}` is placed `appendix` by the "
+                         f"recipe; it sits in the appendix, on pages with the kicker `{APPENDIX}` after the "
+                         f"narrative, not under `{body[at[0]]['kicker'].strip()[:30]}`")
+    first_appx = next((i for i, a in enumerate(is_appx) if a), None)
+    if first_appx is not None:
+        stray = next((i for i in range(first_appx, len(body)) if not is_appx[i]), None)
+        if stray is not None:
+            fails.append(f"slide {stray + 2}: a page (`{body[stray]['title'].strip()[:40]}`) follows the "
+                         f"appendix — the appendix closes the deck (REPORT.md § 1)")
+    if narrative:
+        order = [fold(x) for x in narrative]
+        start = (lead_at[-1] + 1) if lead_at else opening_end + 1
+        last, last_name = -1, ""
+        for i in range(start, len(body)):
+            if is_appx[i] or i in lead_at:
+                continue
+            k = fold(body[i]["kicker"].strip())
+            if k not in order:
+                fails.append(f"slide {i + 2}: kicker `{body[i]['kicker'].strip()[:30]}` is not a narrative "
+                             f"section the recipe declares ({', '.join(narrative)})")
+                continue
+            if order.index(k) < last:
+                fails.append(f"slide {i + 2}: the section `{body[i]['kicker'].strip()[:30]}` comes after "
+                             f"`{last_name}` — the recipe orders the narrative {' · '.join(narrative)}")
+            if order.index(k) >= last:
+                last, last_name = order.index(k), body[i]["kicker"].strip()[:30]
+    return fails
 
-    def carries(s: dict) -> bool:
-        # the schedule's own table: from its tab, its header carrying every declared column
-        return any(":" in n and n.split(":", 1)[1] == tab and rows
-                   and all(header_at([h.strip() for h in rows[0]], w) is not None for w in words)
-                   for n, rows in s["tables"])
-    at = next((i for i, s in enumerate(body) if carries(s)), None)
-    if at is not None and at > 2 + OPENING_MAX_EXTRA:
-        fails.append(f"slide {at + 2}: the first schedule (`{schedules[0].get('title')}`) sits "
-                     f"{at - 2} pages after the key-metrics page; at most {OPENING_MAX_EXTRA} "
-                     f"(REPORT.md § 1)")
+
+def twin_rows(slides: list[dict]) -> list[str]:
+    """Every table on the deck — a table continued over pages read as one — whose body
+    holds two rows that read the same in every column shown. The reader cannot tell them
+    apart; the owning check names each row distinctly, or the page shows the column that
+    separates them."""
+    fails: list[str] = []
+    groups: dict[tuple[str, tuple[str, ...]], list[tuple[int, list[str]]]] = {}
+    for n, s in enumerate(slides, 1):
+        for tname, rows in s["tables"]:
+            if not rows:
+                continue
+            key = (tname, tuple(h.strip() for h in rows[0]))
+            groups.setdefault(key, []).extend((n, r) for r in rows[1:])
+    for (tname, _), rows in groups.items():
+        seen: dict[tuple[str, ...], int] = {}
+        for n, r in rows:
+            sig = tuple(c.strip() for c in r)
+            if not any(sig):
+                continue
+            if sig in seen:
+                tab = tname.split(":", 1)[1] if ":" in tname else tname
+                fails.append(f"slide {n}: two rows of the table from `{tab}` read the same in every column "
+                             f"shown (`{sig[0][:50]}`) — show the column that tells them apart, or the check "
+                             f"that wrote `{tab}` names each row distinctly")
+                break
+            seen[sig] = n
     return fails
 
 
@@ -694,7 +785,7 @@ def audit(deck: pathlib.Path, workbook: pathlib.Path, run_dir: pathlib.Path | No
         for cname, vals in s["charts"]:
             for v in vals:
                 total += 1
-                if not backed(v, 0.5, (1.0,), pool):
+                if not backed(abs(v), 0.5, (1.0,), pool):     # a magnitude, as every figure
                     unbacked.append({"slide": n, "where": cname, "token": f"{v:g}"})
         has_figures = bool(s["tables"] or s["charts"] or figures_here
                            or any(n_ in ("stat-value", "kv-value") for n_, _ in s["shapes"]))
@@ -736,7 +827,7 @@ def audit(deck: pathlib.Path, workbook: pathlib.Path, run_dir: pathlib.Path | No
                          f"done and found in the reader's words; ids and step tokens stay in the workbook")
     # GATE 5 — the recipe's schedules, on a plan-driven run whose recipe declares them;
     # GATE 6 — the opening, on every deck, with the key-metrics page held to the recipe.
-    schedules = metrics = None
+    schedules = metrics = narrative = None
     if run_dir is not None and (run_dir / "run.json").is_file():
         try:
             run = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
@@ -744,12 +835,14 @@ def audit(deck: pathlib.Path, workbook: pathlib.Path, run_dir: pathlib.Path | No
             if rpath:
                 rtext = pathlib.Path(rpath).read_text(encoding="utf-8")
                 schedules, metrics = report_schedules(rtext), report_metrics(rtext)
+                narrative = report_narrative(rtext)
         except (OSError, ValueError):
-            schedules = metrics = None
+            schedules = metrics = narrative = None
     if schedules:
         fails.extend(period_defects)
         fails.extend(schedule_gate(schedules, tabs, workbook_texts(workbook), slides, plan))
-    fails.extend(opening_gate(metrics, schedules, tabs, slides))
+    fails.extend(twin_rows(slides))
+    fails.extend(structure_gate(metrics, schedules, narrative, tabs, slides))
     return {"slides": len(slides), "failures": fails, "numbers": total, "unbacked": unbacked,
             "workbook_values": len(nums), "ledger_values": len(ledger_pool),
             "schedules": len(schedules or [])}

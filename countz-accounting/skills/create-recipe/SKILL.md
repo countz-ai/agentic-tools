@@ -52,13 +52,15 @@ carries. Frontmatter per `RECIPE_FORMAT.md`: `name`, `objective` (from the confi
 answer, verbatim), `declares` for any option the answers left to the user (and
 `arr_policy` whenever the objective computes ARR, recurring-revenue retention, churn or
 an ARR bridge, per `RECIPE_FORMAT.md` § The document), `headline`
-naming the one-check family whose walk the deliverable leads with, `lead` where more
-than one tab follows the Exec Summary. The seven required sections in order, `## Report`
-among them: its `metrics.title` is the headline of the deck's key-metrics page — the
-measure the deliverable exists to state — and its `schedules` are the tables from the
-headline and lead families' tabs a reader of this report type opens it for, each
-naming header words the family's section says its tab carries (RECIPE_FORMAT.md
-§ Report). Families
+naming the one-check family that rolls the results up, `lead` where more than one tab
+follows the Exec Summary. The seven required sections in order, `## Report` among them:
+it states the deck's structure for this reader. Its `metrics.title` is the headline of
+the deck's key-metrics page — the measure the deliverable exists to state; `narrative`,
+where the story has a fixed shape, names its sections in order; and its `schedules` are
+the tables from the families' tabs this report carries, each naming header words the
+family's section says its tab carries and placed `lead` where the reader came for that
+table itself, `appendix` where it supports a narrative the reader came for
+(RECIPE_FORMAT.md § Report). Families
 composed only from `KINDS` in `${CLAUDE_PLUGIN_ROOT}/scripts/check_playbook.py`,
 headed exactly as the contract states, numbered from 0 where family 0 is the population
 walk; each says what it establishes, what it reads, and the families before it. Write

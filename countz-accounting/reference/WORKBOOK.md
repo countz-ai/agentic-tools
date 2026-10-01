@@ -72,6 +72,9 @@ reason, a condition or a note. Name what was done, not which step did it.
 Examples: the class `one_time_event` shows as *Non-recurring events*; the status `withheld`
 as *unable to establish from the records provided*; a reason reads *the management ARR agreed
 to the waterfall*, not *as a2_management_arr footed it*.
+`check_workbook.py` refuses a cell outside the id column that is wholly a code
+(`consistent_late_payer`, `not_supported`, `phone_call: promise_to_pay`); a cell naming a
+check by its id (`r5_measures`), which links to that check's tab, is navigation, not a code.
 
 ## 4. The blocks of a check tab
 
@@ -181,10 +184,16 @@ is Coverage), not the list of open items (Open Items), and not the background of
   row 4.
 - A number in a sentence is interpolated (`EVIDENCE.md` § 4).
 - Every numeric cell is a copy from a check tab, in a table whose title carries the marker
-  `from: <tab>` (the tab's full name or its token, `REPORT.md` § 2) and whose row labels and column headers are copied verbatim. `link_workbook.py` wires
-  each amount to the cell it was copied from; `check_workbook.py` refuses one it cannot.
+  `from: <tab>` (the tab's full name or its token, `REPORT.md` § 2) and whose row labels and column headers are copied verbatim. `link_workbook.py` turns
+  each amount into a formula reading the cell it was copied from (`='r8 Billed to
+  collected'!G119`), its result cached, and links it there, so a reviewer tracing
+  precedents lands on the original; `check_workbook.py` refuses one it cannot wire.
   A number that is not a figure (a year in a header) is written as text.
 - A chart draws on the cells of such a table, on this tab.
+- The last block is **Tabs in this workbook**: one row per tab in strip order, the tab's
+  name (a check tab's cell opens with its token, so it links there) and one line on what
+  a reader finds on it. With thirty tabs, a reader who does not know the roster tokens
+  finds the schedule they want from here.
 - A check that did not run, or ran degraded, appears here only where it limits the
   answer. The full list is on Basis of Preparation.
 - A check invariant that fails, or a data-integrity exception that undermines a trend
@@ -236,6 +245,8 @@ Tables, not paragraphs, in this order:
    and its reason; elections with their bases and rejected sides.
 3. On a plan-driven run: the recipe, the plan's approval, and each family the plan
    dropped or degraded with its reason.
+   Then the sign-off block: `Prepared by` (Countz, with the run's date), `Reviewed by`
+   and `Date reviewed`, the last two left blank for the firm's reviewer to complete.
 4. **Procedures not performed** — one line per row: every check that did not run or
    ended blocked or failed, every check that could not establish what it set out to
    establish, and every step that ran degraded, with its reason.

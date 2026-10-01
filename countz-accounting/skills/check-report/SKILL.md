@@ -37,11 +37,13 @@ how much of the population is matched, copy the match summary's walk.
 **Exec Summary.** Read the recipe's `## Exec summary` (the recipe is at
 `run.json.plan.recipe`) and tell that story from the checks' results, in whatever form
 carries it — sentences, tables copied from check tabs, charts over them — under the
-rules in `WORKBOOK.md` § 6. The headline check is the one in `run.json.checks` whose
-`params.family` matches the recipe's `headline`; its walk's spine — starting figure to
-closing figure, one row per item the walk includes, grouped under its rung — is the
-schedule the story is most often built on. A run with no recipe tells the story its
-objective and results support. Read `${CLAUDE_PLUGIN_ROOT}/reference/DOCTRINE.md`
+rules in `WORKBOOK.md` § 6. Lead with what that section says to lead with, and state
+beside it every item it names — a book error, an integrity pattern, a balance the
+ledger does not carry — with its amount. The headline check is the one in
+`run.json.checks` whose `params.family` matches the recipe's `headline`: the check that
+rolls the results up, and the tab most of the figures are copied from. Which of its
+tables the story shows, if any, is the recipe's `## Exec summary` to say. A run with no
+recipe tells the story its objective and results support. Read `${CLAUDE_PLUGIN_ROOT}/reference/DOCTRINE.md`
 § Voice again before writing its sentences
 (`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py DOCTRINE.md Voice`).
 
@@ -65,7 +67,8 @@ proceed; end the step `blocked` naming that check (§ 6).
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/link_workbook.py <run_dir>/out/.staging/workbook.xlsx
 ```
 
-It wires every id and every Exec Summary amount to where it resolves. It reports the
+It wires every id and every Exec Summary amount to where it resolves, turns each Exec
+Summary amount into a formula reading its original, and caches every formula's result. It reports the
 ids it cannot wire: fix each by stating the id where it
 resolves, never by dropping the citation; fix an unmatched amount by copying its row
 label and column header verbatim, never by placing a link. Citations to the user's
@@ -90,19 +93,28 @@ Every sentence the plan and the pages carry — a `title`, `message`, `text`, `b
 
 - `out/.staging/report-plan.md` — the plan, before any page: the story in a few
   sentences, then the pages in order, each with its one message and the tabs it draws
-  on. The order is `REPORT.md` § 1: the opening — the `Executive summary` page, whose
-  `message` is the one sentence the deck exists to deliver, with the stat tiles, chart
-  or table that carry it; then the key-metrics page, headed as the recipe's
-  `metrics.title` (RECIPE_FORMAT.md § Report; the recipe is at `run.json.plan.recipe`)
-  and showing the figures its prose names; then at most one page carrying the story to
-  the first schedule. Then the recipe's `## Report` schedules, in the recipe's order,
-  one `table:` block each with the schedule's own keys (`from`, `columns`, `where`,
-  `through`, `periods`, `scale`, `currency`, `dense`) — `columns:` on the block names the tab's
-  actual headers that carry the recipe's words, with every period column for
-  `periods: all` and the latest by date for `latest`. Never `max_rows` on one: a long schedule
-  continues over pages. The narrative pages after refer to those rows and copy no
-  schedule again. A run with no recipe opens on the `Executive summary` page the same
-  way and goes straight to its narrative.
+  on. The structure is the recipe's `## Report` (RECIPE_FORMAT.md § Report; the recipe
+  is at `run.json.plan.recipe`), laid out as `REPORT.md` § 1 states:
+  1. the opening — the `Executive summary` page, whose `message` is the one sentence
+     the deck exists to deliver, with the stat tiles, chart or table that carry it and
+     every item the recipe's `## Exec summary` says to state beside the headline; then
+     the key-metrics page, headed as the recipe's `metrics.title` and showing the
+     figures its prose names; then, where a schedule is placed `lead`, at most one
+     page carrying the story to it;
+  2. the schedules the recipe places `lead`, in the recipe's order;
+  3. the narrative — under the recipe's `narrative` sections, in that order, where it
+     declares them;
+  4. the schedules the recipe places `appendix`, in the recipe's order, in a section
+     titled `Appendix`, and nothing after them.
+
+  Each schedule is one `table:` block with the schedule's own keys (`from`, `columns`,
+  `where`, `through`, `periods`, `scale`, `currency`, `dense`) — `columns:` on the block
+  names the tab's actual headers that carry the recipe's words, with every period column
+  for `periods: all` and the latest by date for `latest`. Never `max_rows` on one: a long
+  schedule continues over pages. The narrative refers to the schedules' rows and copies
+  none of them. A walk the narrative shows is a `waterfall` chart over the walk's lines,
+  not the walk's rows again. A run with no recipe opens on the `Executive summary` page
+  the same way and goes straight to its narrative.
 - `out/.staging/report.yaml` — the pages to the plan (`REPORT.md` § 2). A page's
   `title` is its headline — the subject of a page of figures, the conclusion of a page
   that argues one — and the sentence stating the message, where the page needs one, is
@@ -129,6 +141,14 @@ numbers before writing pages; no other check reads either. Rules a finished deck
   what they are called, the amount behind it — and carry that name on every page after.
 - Build the page on what is open from the Open Items tab: each item with its size, the
   function that answers it, and what the answer decides.
+- Put on the `Executive summary` page every matter the recipe's `## Exec summary` names
+  beside the headline, and every open question or pattern whose amount is material to
+  the answer — a balance the ledger does not carry, an integrity pattern, a receipt with
+  no deposit — each with its amount. A late page may explain it; it may not be the only
+  place it appears.
+- Gloss the status words a table shows in a `note` under it; name counterparties as the
+  tab names them; lead an actions page with the actions carrying most of the cash
+  (REPORT.md § 3).
 - A table appears once. A narrative page that needs a schedule's figure references the
   cell or states it in a stat tile; it does not copy the rows a schedule page already
   shows.
@@ -176,7 +196,9 @@ whose `To reperform` cell is empty, a pane frozen deeper than the title band
 with `--run-dir` it computes the order from the roster and the recipe's `lead` and
 names the strip it wants. `check_report.py` gates the deck (`REPORT.md` § 5): every number on
 a slide backed by a workbook cell or a ledger record, every figure page naming its source
-tabs in the footer, every title a headline and every sentence complete. **A non-zero exit is a stop — the deliverable does not
+tabs in the footer, every title a headline and every sentence complete, the structure the
+recipe declares, and no table showing two rows that read alike — a copied tab's twin rows
+are the owning check's to name apart. **A non-zero exit is a stop — the deliverable does not
 seal (§ 6).** On a surface YOU wrote — a run-level tab, `report.yaml` — fix it and
 re-gate. On a copied tab you may not repair it: name the cell or the id,
 name the check that wrote it, and end the step `blocked` so the run re-runs that check. A

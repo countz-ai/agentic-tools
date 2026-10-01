@@ -36,7 +36,9 @@ wrapped column at least 42 wide or in a cell overflowing an empty row, every row
 a wrapped cell sized to fit it, no cell cut mid-sentence (nor a label cut mid-word from a
 longer statement the workbook carries), gridlines off on deliverable
 tabs and on for ledgers,
-the tab colour by kind, B1 title, B2 subtitle and B3 the summary. The Exec
+the tab colour by kind, B1 title, B2 subtitle and B3 the summary, and no cell outside the
+id column reading as the run's machine vocabulary (`consistent_late_payer`,
+`phone_call: promise_to_pay`) where the reader's words belong. The Exec
 Summary's band is rows 1 to 3 (B3 the position), frozen at B4, with no row-4 header rule
 (WORKBOOK.md § 6).
 
@@ -699,6 +701,17 @@ def style_table(z: zipfile.ZipFile) -> dict:
     return {"fonts": fonts, "fills": fills, "borders": borders, "xfs": xfs, "wraps": wraps}
 
 
+# A cell reading as the run's machine vocabulary rather than words (WORKBOOK.md § 3
+# Language): a whole cell that is a snake_case code — `consistent_late_payer`,
+# `not_supported` — or two joined by a colon (`phone_call: promise_to_pay`). A check id
+# (`r5_measures`) names a check and links to its tab, so a cell opening with a roster
+# token is not one; nor is an id in the id column, nor a ledger or Basis of Preparation
+# cell, where the run's own terms are declared for the reader.
+MACHINE_CODE = re.compile(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)+(?::\s*[a-z][a-z0-9]*(?:_[a-z0-9]+)*)?$"
+                          r"|^[a-z][a-z0-9]*:\s*[a-z][a-z0-9]*(?:_[a-z0-9]+)+$")
+ROSTER_ID = re.compile(r"^[a-z]{1,3}\d[a-z0-9_]*$")
+
+
 def audit_design(z: zipfile.ZipFile) -> list[str]:
     """One line per (tab, rule) that fails, with a count and the first cell."""
     styles = style_table(z)
@@ -720,7 +733,7 @@ def audit_design(z: zipfile.ZipFile) -> list[str]:
         ledger = tab in LEDGER_TABS
         summary = tab == EXEC       # band rows 1-3, no row-4 header rule, tables anywhere below
         bad_font, col_a, band_cells, general, unstyled, unruled = [], [], [], [], [], []
-        cut, narrow, short_rows = [], [], []
+        cut, narrow, short_rows, coded = [], [], [], []
         widths, heights = col_widths(xml), row_heights(xml)
         by_row: dict[int, list[int]] = {}
         for ref in list(texts) + list(stored):
@@ -751,6 +764,9 @@ def audit_design(z: zipfile.ZipFile) -> list[str]:
                 general.append(ref)
             if ((row == 4 and not summary) or (ref not in texts and row > 3)) and not ruled:
                 unruled.append(ref)                 # a header or a number below the band is a table cell
+            if (ref in texts and row > 4 and not ledger and tab != BASIS and col != "B"
+                    and MACHINE_CODE.match(texts[ref].strip()) and not ROSTER_ID.match(texts[ref].strip())):
+                coded.append(ref)
             if ref in texts and row > 4 and not ledger:
                 t = texts[ref].rstrip()
                 si = int(s.group(1))
@@ -790,6 +806,10 @@ def audit_design(z: zipfile.ZipFile) -> list[str]:
                 short_rows.append(f"row {row} ({lines} lines, height {heights.get(row, 'unset')})")
         if short_rows:
             rule(tab, "row holding a wrapped cell without a height that fits it — kit `fit_rows`", short_rows, "WORKBOOK.md § 7")
+        if coded:
+            rule(tab, f"the run's machine vocabulary where the reader's words belong (`{texts[coded[0]].strip()[:40]}`) — "
+                      f"write the status, class or cause in words, declared beside the code "
+                      f"(`consistent_late_payer` shows as `Consistently late payer`)", coded, "WORKBOOK.md § 3")
         if cut:
             rule(tab, "long text cut mid-sentence — split it into a Notes row or the check record, never truncate", cut, "WORKBOOK.md § 4")
         if "<mergeCell " in xml:

@@ -16,34 +16,48 @@ process owner) unless the run declares a transaction reader (`RUN_CONTRACT.md`
 § Parameters). Do not infer a transaction from the data room's name or its files. With no
 declaration the deck closes on what the company does about what was found.
 
-The deck is three parts, in this order.
+The deck's structure is the recipe's (`## Report`, RECIPE_FORMAT.md § Report), because
+what a reader comes for differs by analysis: a quality of earnings review is read for its
+EBITDA walk, so the walk leads; a revenue-leak diagnostic is read for its causes, risks
+and actions, so its full bridge is support at the back. The parts, in this order:
 
 **The opening.** Two pages, and at most one more:
 
 1. **Executive summary** — headed exactly that. The elevator pitch: `message` is the one
    sentence an executive takes away, and it drives the rest of the deck — most of the
    pages after exist to support it. Under it, the stat tiles, chart or table that carry
-   the message; never prose alone.
+   the message; never prose alone. Everything the recipe's `## Exec summary` says to lead
+   with or to state beside the headline is on this page — a book error, an integrity
+   pattern, a balance the records do not carry — each with its amount, never left to a
+   late page alone.
 2. **The key metrics** — the executive summary continued as figures. Its headline names
    what it shows, the measure the report exists to state: the recipe's `## Report`
    declares it as `metrics.title` (`Adjusted EBITDA` for a quality of earnings review,
    `Days sales outstanding` for a revenue leak). Stat tiles, a chart or a short table per
    period; the recipe's prose says which figures.
-3. Optionally one page that carries the story to the first schedule — a chart of the
-   trend, the split that explains the headline — where the schedule needs it.
+3. Optionally, where the recipe places a schedule `lead`, one page that carries the story
+   to it — a chart of the trend, a waterfall of the walk, the split that explains the
+   headline. A deck with no lead schedule goes from the key metrics to its narrative.
 
-**The schedules.** The recipe's `## Report` declares the tables a reader of this report
-type opens it for (RECIPE_FORMAT.md § Report) — for a quality of earnings review, the
-EBITDA walk at item grain and the roster of every adjustment considered with its verdict
-and reason. Each is one page, continued over as many as it takes, at full population, in
-the recipe's order, directly after the opening. A run with no recipe has no schedules
-part; its opening is the executive summary alone, and the gate holds that page the same
-way.
+**The lead schedules.** Each schedule the recipe places `lead`: the table a reader of
+this report type opens it for — for a quality of earnings review, the EBITDA walk at item
+grain and the roster of every adjustment considered with its verdict and reason. Each is
+one page, continued over as many as it takes, at full population, in the recipe's order,
+directly after the opening.
 
-**The narrative.** The findings, what they rest on, what is open — pages that refer to
-the schedules' rows by name and stat, and copy no schedule a second time. A table
-appears once on the deck; a figure a narrative page needs is a reference or a stat tile,
-never the schedule's rows again.
+**The narrative.** The findings, what they rest on, what is open, what to do — pages
+that refer to the schedules' rows by name and stat. Where the recipe declares
+`narrative`, its sections in that order, each the kicker its pages carry. A table appears
+once on the deck; a figure a narrative page needs is a reference, a stat tile or a chart,
+never a schedule's rows again.
+
+**The appendix.** Each schedule the recipe places `appendix`, in the recipe's order,
+after every narrative page, its pages carrying the kicker `Appendix`: the full population
+the narrative refers to, for the reader who wants to check it. Nothing but appendix
+pages follows the first of them.
+
+A run with no recipe has no schedules; its opening is the executive summary alone, and
+the gate holds that page the same way.
 
 Three rules:
 
@@ -129,7 +143,7 @@ sentence (`…`); it never trims one.
 | `kv: [{label, value}]` | label and value pairs |
 | `table: {from, block?, rows?, columns?, where?, through?, max_rows?, title?, ids?, scale?, currency?, dense?}` | a table copied from a tab: its primary table, or the block under a heading (`Exceptions`, `Analysis`, a titled table on the Exec Summary). `rows` selects by leading label and `columns` by header. `where: {verdict: supported}` keeps the rows carrying a matching value in that column and every row with the column empty — a walk's mechanics, its subtotals — so a walk shows at item grain; `through: "= pro-forma EBITDA"` ends the table at that row, dropping the information lines under it. `max_rows` caps and states the rows left on the tab; a recipe schedule is never capped. `scale: units|thousands|millions|billions` states the money columns at that scale, written once in the table's title in their currency (§ 4); `currency: eur` names that currency where it is not the book's. `dense: true` sets the table at the dense size, for a schedule shown at full population. Ids are dropped unless `ids: true`. |
 | `lines: {from, block, title?}` | a tab's statement block (Notes, To reperform, a How-to-read list) as bullets |
-| `chart: {type, from, rows, columns?, block?, title?}` | `column`, `bar` or `line`, drawn on rows copied from a tab, at most four series |
+| `chart: {type, from, rows, columns?, block?, title?}` | `column`, `bar` or `line`, drawn on rows copied from a tab, at most four series; or `waterfall`, a walk drawn as floating bars — `rows` the walk's lines in order, the first and every derived line (`= …`) a total drawn from zero, every other line a step from the running total, and `columns` one period. Each bar carries its value. |
 | `columns: {widths, items}` | two or three lists of blocks side by side; `widths` sum to 1 |
 
 **Condensed schedules.** A derived line (`= …`) shown above contributing lines equals the
@@ -262,6 +276,21 @@ carries two populations, name both. Example: *a third of the past-due balance* b
 another. A page showing a selection from a longer list names the list the same way: how
 many items it holds, and what share of its amount the items shown carry.
 
+**Status words.** A table carrying a verdict or a standing column (`supported`,
+`candidate`, `rejected`, `underpowered`, `documented`, `indicative`) carries a `note`
+under it that says what each word shown means, in one sentence each, in the reader's
+words: *indicative — inferred from payment behavior; the customer has not confirmed the
+cause*. A reader outside accounting meets the word there, not in the workbook.
+
+**Names.** A customer, vendor or counterparty is named as the tab names it (*Ramirez
+Education Group*), with its record identifier beside the name only where the reader must
+find it in the records. An identifier alone (*C1637*) tells an executive nothing.
+
+**Actions.** A page of actions shows, per action, the owner, the cash and the days it
+carries, and when it can start; it leads with the few actions that carry most of the
+cash, states what share of the total they carry, and refers to the tab for the rest with
+their count and amount.
+
 Characterize evidence in the profession's terms. A bank statement is third-party
 evidence, so an unreconciled account is *unreconciled*, never *taken on the bank's word*.
 
@@ -331,11 +360,17 @@ write the message yourself and reference the figures.
   full population its `where` and `through` leave: every row's identity is on the deck,
   and none is trimmed to `max_rows`. A period column is one naming a period the plan
   declares (`params.columns`, `scripts/periods.py`); `latest` is the latest by the plan's
-  dates, else the last period column.
-- **The opening.** The first page after the cover is headed `Executive summary`, carries a
-  `message` and at least one stat tile, table or chart. On a recipe run the second page is
-  headed as the recipe's `metrics.title` and carries a figure block, and the first
-  schedule sits at most one page after it.
+  dates, else the last period column. A table on the deck showing two rows that read the
+  same in every column shown is refused: the reader cannot tell them apart, so the
+  owning check names each row distinctly.
+- **The structure.** The first page after the cover is headed `Executive summary`,
+  carries a `message` and at least one stat tile, table or chart. On a recipe run the
+  second page is headed as the recipe's `metrics.title` and carries a figure block; the
+  first `lead` schedule sits at most one page after it, and no narrative page stands
+  between two `lead` schedules. Every page carrying an `appendix` schedule has the kicker
+  `Appendix`, and every page after the first `Appendix` page has it too. Where the recipe
+  declares `narrative`, every narrative page — after the opening and the lead schedules,
+  before the appendix — carries one of its sections as its kicker, in the declared order.
 - **The reader's words.** No ledger id (`Q.r4.ar_movement`, `LK.terms_not_enforced`) and no
   step token past a cell's opening (`as R4 measured it`, `(q1)`) on a page or in a table
   cell; the footers name tabs and are not read. A token shaped like a period (`Q1`) is

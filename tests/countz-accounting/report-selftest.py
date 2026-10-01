@@ -653,7 +653,7 @@ def main() -> int:
             fails.append(f"12: a trimmed walk must build (exit {r.returncode}): {(r.stdout + r.stderr).strip()[-300:]}")
         else:
             g = run(gate)
-            if g.returncode != 1 or "schedule `EBITDA walk`" not in g.stdout or "Non-recurring" not in g.stdout:
+            if g.returncode != 1 or "schedule `EBITDA walk`" not in g.stdout or "are not on the deck" not in g.stdout:
                 fails.append(f"12: a walk trimmed to max_rows must be refused naming the schedule and the "
                              f"rows it lacks (exit {g.returncode}): {(g.stdout + g.stderr).strip()[:400]}")
         spec.write_text(re.sub(r"      - title: EBITDA walk\n        blocks:\n          - table: .*\n", "", GOOD_SPEC)
@@ -773,6 +773,106 @@ def main() -> int:
             fails.append(f"16: a check whose periods periods.py refuses must be named by the gate "
                          f"(build {r.returncode}, gate {g.returncode}): "
                          f"{(g.stdout + g.stderr).strip()[:300]}")
+        # 17. the recipe decides the structure (RECIPE_FORMAT.md § Report): a schedule
+        #     placed `appendix` sits under the `Appendix` kicker, after the narrative. The
+        #     good spec (walk under `The bridge`) is refused naming `Appendix`; the walk
+        #     moved to the close of the appendix passes; a page after the appendix is
+        #     refused; the narrative's sections are held to the declared order.
+        recipe_path = rd / "QOE.md"
+        appx_recipe = RECIPE.replace('"dense": true}', '"dense": true, "place": "appendix"}')
+        assert appx_recipe != RECIPE
+        walk_page = ("      - title: EBITDA walk\n        blocks:\n          - table: {from: q6, where: {verdict: supported}, "
+                     "through: \"= Diligence adjusted EBITDA\", columns: [line, FY2023, FY2024, LTM Jul 2025, verdict], dense: true}\n")
+        assert walk_page in GOOD_SPEC
+        in_appendix = GOOD_SPEC.replace(walk_page, "") + walk_page
+        structure_cases = {
+            "a": (appx_recipe, GOOD_SPEC, "kicker `Appendix`"),
+            "b": (appx_recipe, in_appendix, None),
+            "c": (appx_recipe, in_appendix + "  - title: Afterword\n    pages:\n      - title: Afterword\n"
+                                             "        blocks:\n          - text: \"We close here.\"\n",
+                  "follows the appendix"),
+            "d": (appx_recipe.replace('"schedules"', '"narrative": ["Findings"], "schedules"'), in_appendix,
+                  "not a narrative section"),
+            "e": (appx_recipe.replace('"schedules"', '"narrative": ["The bridge"], "schedules"'), in_appendix, None),
+        }
+        for case, (rtext, stext, want) in structure_cases.items():
+            recipe_path.write_text(rtext, encoding="utf-8")
+            spec.write_text(stext, encoding="utf-8")
+            r = run(build)
+            if r.returncode != 0:
+                fails.append(f"17{case}: the spec must build (exit {r.returncode}): {(r.stdout + r.stderr).strip()[-300:]}")
+                continue
+            g = run(gate)
+            if want is None and g.returncode != 0:
+                fails.append(f"17{case}: the deck follows the recipe's structure and must pass (exit "
+                             f"{g.returncode}): {(g.stdout + g.stderr).strip()[:400]}")
+            elif want is not None and (g.returncode != 1 or want not in g.stdout):
+                fails.append(f"17{case}: the gate must refuse the structure naming `{want}` (exit "
+                             f"{g.returncode}): {(g.stdout + g.stderr).strip()[:400]}")
+        recipe_path.write_text(RECIPE, encoding="utf-8")
+
+        # 18. two rows that read the same in every column shown are refused: the reader
+        #     cannot tell them apart.
+        spec.write_text(GOOD_SPEC.replace(
+            'rows: ["= Reported EBITDA", "= Diligence adjusted EBITDA"], columns: [line, FY2023, FY2024, LTM Jul 2025], title: "EBITDA bridge, USD"',
+            'rows: ["+ D&A", "+ D&A"], columns: [line, FY2023, FY2024, LTM Jul 2025], title: "EBITDA bridge, USD"'),
+            encoding="utf-8")
+        r, g = run(build), run(gate)
+        if r.returncode != 0 or g.returncode != 1 or "read the same in every column" not in g.stdout:
+            fails.append(f"18: a table repeating a row must be refused (build {r.returncode}, gate "
+                         f"{g.returncode}): {(r.stdout + g.stdout).strip()[:400]}")
+
+        # 19. a walk as a waterfall: builds, each bar carries its value, and passes the
+        #     gate; a waterfall whose steps do not reach a total it shows is refused.
+        wf_rows = ('["EBIT", "+ D&A", "= Reported EBITDA", "Non-recurring, supported", '
+                   '"Normalization, supported", "= Diligence adjusted EBITDA"]')
+        chart_line = ('          - chart: {type: column, from: q6, rows: ["= Reported EBITDA", '
+                      '"= Diligence adjusted EBITDA"], columns: [FY2023, FY2024, LTM Jul 2025]}\n')
+        assert chart_line in GOOD_SPEC
+        spec.write_text(GOOD_SPEC.replace(chart_line, f"          - chart: {{type: waterfall, from: q6, rows: "
+                                                      f"{wf_rows}, columns: [LTM Jul 2025]}}\n"), encoding="utf-8")
+        r = run(build)
+        if r.returncode != 0:
+            fails.append(f"19: a waterfall must build (exit {r.returncode}): {(r.stdout + r.stderr).strip()[-300:]}")
+        else:
+            body = html.unescape("\n".join(stored_slides(deck)))
+            if 'name="chart-value"' not in body or "8,404,000" not in body:
+                fails.append("19: each waterfall bar carries its value beside it")
+            g = run(gate)
+            if g.returncode != 0:
+                fails.append(f"19: a waterfall deck must pass (exit {g.returncode}): {(g.stdout + g.stderr).strip()[:400]}")
+        spec.write_text(GOOD_SPEC.replace(chart_line, "          - chart: {type: waterfall, from: q6, rows: "
+                                          "[\"EBIT\", \"= Reported EBITDA\", \"= Diligence adjusted EBITDA\"], "
+                                          "columns: [LTM Jul 2025]}\n"), encoding="utf-8")
+        r = run(build)
+        if r.returncode != 1 or "do not foot" not in r.stdout:
+            fails.append(f"19: a waterfall skipping its steps must be refused (exit {r.returncode}): "
+                         f"{(r.stdout + r.stderr).strip()[:300]}")
+
+        # 21. a check tab stating a status as the run's code (`not_supported`) is refused by
+        #     the workbook gate (WORKBOOK.md § 3 Language); a check id naming a check is not.
+        from openpyxl import load_workbook  # noqa: PLC0415
+        coded = rd / "out" / ".staging" / "coded.xlsx"
+        wbc = load_workbook(wb)
+        wbc["q6 EBITDA bridge"]["H6"].value = "not_supported"
+        wbc["q6 EBITDA bridge"]["H7"].value = "q1_fy2023"
+        wbc.save(coded)
+        g = run([py, str(SCRIPTS / "check_workbook.py"), str(coded)])
+        if g.returncode != 1 or "machine vocabulary" not in g.stdout or "`not_supported`" not in g.stdout:
+            fails.append(f"21: a status written as the run's code must be refused, named (exit "
+                         f"{g.returncode}): {(g.stdout + g.stderr).strip()[:300]}")
+        elif "q1_fy2023" in g.stdout:
+            fails.append("21: a check id naming its check is navigation, not machine vocabulary")
+
+        # 20. days on the deck: never `-0.0`; a table's negative in parentheses.
+        import build_report  # noqa: PLC0415 — the builder's own formatter
+        for v, want in ((-0.004, "–"), (0.0, "–"), (-5.66, "(5.7)"), (5.66, "5.7")):
+            got = build_report.fmt_value(v, "0.0")
+            if got != want:
+                fails.append(f"20: {v} formatted `0.0` in a table must read `{want}`, not `{got}`")
+        if build_report.fmt_value(-0.004, "0.0", prose=True) != "0":
+            fails.append("20: a zero in a sentence reads `0`, never `-0.0`")
+
         # 6. a fragment where a sentence belongs: a text block with no full stop
         spec.write_text(GOOD_SPEC.replace(
             '- text: "Every rostered check is listed with what it examined and what it did not."',
@@ -797,7 +897,10 @@ def main() -> int:
           "filtered walk builds, and the recipe's "
           "schedule trimmed or absent is refused; the opening — the executive summary with its message "
           "and a figure block, the key-metrics page headed as the recipe declares, the first schedule "
-          "at most one page after it — is held.")
+          "at most one page after it — is held; the recipe's structure — an appendix schedule under "
+          "the `Appendix` kicker, nothing after the appendix, the narrative in its declared order — is "
+          "held; twin rows are refused; a waterfall builds and foots; days never read `-0.0`; a status "
+          "written as the run's code is refused on the workbook.")
     return 0
 
 

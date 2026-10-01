@@ -21,9 +21,9 @@ table is the workbook: check-report reproduces it on Basis of Preparation (WORKB
 | `T.` | **tie** — one asserted agreement between sides, and its result | `checks/<check>.md` |
 | `RI.` | **reconciling item** — one classified, quantified component of a difference | `checks/<check>.md` |
 | `S.` | **source election** — which of two disagreeing sources was trusted, and why | `checks/<check>.md` |
-| `AJ.` | **adjustment** — one adjustment to a reported figure, minted by the recipe family that rules on it: rung or cause, subtype, origin, signed per-period amounts, ruling, evidence | `checks/<check>.md`, rolled up in the recipe's headline walk |
+| `AJ.` | **adjustment** — one adjustment to a reported figure, minted by the recipe family that rules on it: rung or cause, subtype, origin, signed per-period amounts, ruling, evidence | `checks/<check>.md`, rolled up in the recipe's walk |
 | `H.` | **hypothesis** — one candidate lever stated in falsifiable form, with its null, test, population, power and result, reported whether supported or refuted; minted by the recipe family that tests it | `checks/<check>.md`, rolled up in the recipe's hypothesis register |
-| `LK.` | **leak** — one quantity of receivable or revenue billed and not collected, attributed to one named mechanism, with its dollars, days and verdict; minted by the recipe family that establishes it | `checks/<check>.md`, rolled up in the recipe's headline walk |
+| `LK.` | **leak** — one quantity of receivable or revenue billed and not collected, attributed to one named mechanism, with its dollars, days and verdict; minted by the recipe family that establishes it | `checks/<check>.md`, rolled up in the recipe's walk |
 | `X.` | **exception** — one item that failed a check's assertion, with what would clear it and who owns that | `checks/<check>.md`, rolled up in the report's exception schedule |
 | `C.` | **review finding** | the review step's record |
 | `D.` | **data request** — an open item: something missing from the files | the report's open items |

@@ -35,14 +35,17 @@ What gets wired, in this order:
      `q2_billings_detail`. Only a check tab is a target — the run-level tabs are named in
      prose and in column headers throughout, and a header reading "Evidence" is not a
      pointer to that tab. Two tabs on one fold, no link.
-  6. Every AMOUNT on the Exec Summary links to the cell it was copied from. The Exec
-     Summary mints no figure, so each number there has an original on a check's tab; the
-     table's title declares that tab (`from: <tab>`), and the amount is found by the row's
-     leading label and the column's header, both copied verbatim. An amount that matches
-     nothing is reported and left — check_workbook.py refuses an unlinked number on the
-     Exec Summary, because the fix is copying the label, not linking. These cells take
-     the link color and no underline: under a figure, an underline is the accounting rule
-     that reads "sum above".
+  6. Every AMOUNT on the Exec Summary links to the cell it was copied from, and becomes a
+     formula reading it: `='q6 EBITDA bridge'!F12`, its result cached in the sheet XML so
+     a viewer that does not recalculate still shows it (check_workbook.py GATE 1). The
+     Exec Summary mints no figure, so each number there has an original on a check's tab;
+     a formula makes that visible in the formula bar, and an accountant tracing
+     precedents lands on the original. The table's title declares that tab
+     (`from: <tab>`), and the amount is found by the row's leading label and the column's
+     header, both copied verbatim. An amount that matches nothing is reported and left —
+     check_workbook.py refuses an unlinked number on the Exec Summary, because the fix is
+     copying the label, not linking. These cells take the link color and no underline:
+     under a figure, an underline is the accounting rule that reads "sum above".
 
   7. On a match summary (scripts/match_tabs.py), each line's status words link to that
      status's rows on its match schedule: the link selects the block, which the schedule
@@ -376,6 +379,39 @@ def walk_targets(wb):
     return targets, missed
 
 
+def cache_results(path: pathlib.Path, results: dict[str, dict[str, float]]) -> None:
+    """Write each formula's result into its cell's `<v>`, per sheet (openpyxl saves a
+    formula with an empty one). The zip is rewritten whole, every other part as it was."""
+    import html
+    import zipfile
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+    from check_workbook import sheet_order  # noqa: PLC0415 — the one reader of the tab order
+    results = {k: v for k, v in results.items() if v}
+    if not results:
+        return
+    with zipfile.ZipFile(path) as z:
+        parts = {p: results[html.unescape(name)] for p, name in sheet_order(z)
+                 if html.unescape(name) in results}
+        items = [(i, z.read(i.filename)) for i in z.infolist()]
+
+    def filler(values: dict[str, float]):
+        def fill(m: re.Match) -> str:
+            ref = m.group(2)
+            if ref not in values:
+                return m.group(0)
+            return f"{m.group(1)}<f>{m.group(3)}</f><v>{float(values[ref])!r}</v></c>"
+        return fill
+
+    cell = re.compile(r'(<c\b[^>]*\br="([A-Z]+\d+)"[^>]*>)<f>(.*?)</f>(?:<v\s*/>|<v>[^<]*</v>)?</c>', re.S)
+    tmp = path.with_suffix(".caching.xlsx")
+    with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as out:
+        for info, data in items:
+            if info.filename in parts:
+                data = cell.sub(filler(parts[info.filename]), data.decode("utf-8")).encode("utf-8")
+            out.writestr(info, data)
+    tmp.replace(path)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -399,6 +435,7 @@ def main() -> int:
         return 2
 
     wb = openpyxl.load_workbook(a.workbook)
+    cached = openpyxl.load_workbook(a.workbook, data_only=True)   # a re-run reads its own formulas' results
     if SOURCES not in wb.sheetnames:
         print(f"{a.workbook.name}: no '{SOURCES}' tab — assemble the workbook first",
               file=sys.stderr)
@@ -464,11 +501,24 @@ def main() -> int:
                     if cell.hyperlink is not None:
                         cell.hyperlink = None
             ws._hyperlinks = []
+        # The Exec Summary's amounts become formulas reading their originals; each keeps
+        # the value it showed, cached in the XML after the save.
+        live: dict[str, float] = {}
+        for (sheet, coord), (tsheet, tcoord) in walk.items():
+            cell = wb[sheet][coord]
+            shown = cell.value
+            if cell.data_type == "f" or not isinstance(shown, (int, float)) or isinstance(shown, bool):
+                shown = cached[sheet][coord].value
+            if not isinstance(shown, (int, float)) or isinstance(shown, bool):
+                continue                          # nothing to cache: leave the cell as it is
+            live[coord] = shown
+            cell.value = f"='{tsheet.replace(chr(39), chr(39) * 2)}'!{tcoord}"
         for (sheet, coord), (tsheet, tcoord) in targets.items():
             cell = wb[sheet][coord]
+            shown = live.get(coord, cell.value) if sheet == EXEC else cell.value
             cell.hyperlink = Hyperlink(ref=coord, location=f"'{tsheet}'!{tcoord}",
-                                       tooltip=f"{cell.value} — {tsheet}"[:250],
-                                       display=str(cell.value)[:250])
+                                       tooltip=f"{shown} — {tsheet}"[:250],
+                                       display=str(shown)[:250])
             font = copy(cell.font)
             font.color = LINK_COLOR
             # A linked AMOUNT takes color only: under a figure, an underline is the
@@ -482,7 +532,21 @@ def main() -> int:
         from wbkit import excel_tables
         taken: set[str] = set()
         n_tables = sum(len(excel_tables(ws, taken)) for ws in wb.worksheets)
+        # openpyxl saves every formula with an empty result: the tabs' own formulas (a
+        # walk's conditional subtotals) lose the results they arrived with unless this
+        # pass writes them back, with the Exec Summary's new ones.
+        results: dict[str, dict[str, float]] = {}
+        for ws in wb.worksheets:
+            for row in ws.iter_rows():
+                for cell in row:
+                    if cell.data_type != "f":
+                        continue
+                    v = cached[ws.title][cell.coordinate].value
+                    if isinstance(v, (int, float)) and not isinstance(v, bool):
+                        results.setdefault(ws.title, {})[cell.coordinate] = v
+        results.setdefault(EXEC, {}).update(live)
         wb.save(a.workbook)
+        cache_results(a.workbook, results)
 
     ledgers = (SOURCES, EVIDENCE)
     up = sum(1 for at, t in targets.items() if t[0] in ledgers and at[0] not in ledgers)
