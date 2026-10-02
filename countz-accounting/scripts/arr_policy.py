@@ -95,7 +95,7 @@ POLICIES = {
     "recurrence": {
         "question": "Would this revenue come back next year without a new sale?",
         "positions": {
-            "subscription_only": "Fixed-fee subscriptions and term licences only",
+            "subscription_only": "Fixed-fee subscriptions and term licenses only",
             "plus_services_warranty": "+ recurring services, maintenance and warranty, "
                                       "bundled equipment",
             "plus_usage_commit": "+ committed consumption minimums",
@@ -232,7 +232,7 @@ DECISIONS = [
      "options": ["annualized_contract", "ratable_revenue"],
      "derive": _by("source", ["annualized_contract", "annualized_contract",
                               "ratable_revenue", "annualized_contract"])},
-    {"id": "S4", "name": "Term or perpetual licences recognized upfront", "type": "policy",
+    {"id": "S4", "name": "Term or perpetual licenses recognized upfront", "type": "policy",
      "by": ["source"], "options": ["annualized_contract", "recognized_revenue"],
      "derive": _by("source", ["annualized_contract", "annualized_contract",
                               "recognized_revenue", "annualized_contract"])},

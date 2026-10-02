@@ -34,12 +34,11 @@ objective: >-                  # what the run establishes; passed to the plan st
 declares:                      # optional: run-level options the user must state
   perspective: >-              # key -> the one-line choice the relay puts to the user
     buy_side | sell_side ...
-headline: q6                   # optional: the one-check family whose walk is the
-                               # deliverable's headline
-                               # (PLAYBOOK_RECIPES.md § The headline walk)
+headline: q6                   # optional: the one-check family that rolls the run's
+                               # results up, which check-report finds by params.family
 lead: [q6, q5]                 # optional: the families whose tabs follow the Exec Summary,
-                               # in reader order, headline first; absent, the headline
-                               # family alone (WORKBOOK.md § 2)
+                               # in reader order; absent, the headline family alone
+                               # (WORKBOOK.md § 2)
 ---
 ```
 
@@ -61,12 +60,14 @@ carrying `params.arr_policy` applies it, and the review holds it to it, per
 critic to the policy, and `validate_recipe.py` refuses a recipe that declares
 `arr_policy` without that sentence.
 
-`headline` names a family whose section declares one check. `check-report` finds that
-check in `run.json.checks` by `params.family` and builds the Exec Summary on its walk.
+`headline` names a family whose section declares one check: the check that rolls the
+run's results up, which `check-report` finds in `run.json.checks` by `params.family`. It
+says which check that is, not what the deliverable leads with: the Exec Summary tells the
+story `## Exec summary` sets, and the deck carries the structure `## Report` declares.
 
-`lead` names the families whose tabs sit directly after the Exec Summary, the headline
-family first. `check-report` orders the workbook by it; absent, by the headline family
-alone (WORKBOOK.md § 2).
+`lead` names the families whose tabs sit directly after the Exec Summary, in the order
+the reader opens them. `check-report` orders the workbook by it; absent, by the headline
+family alone (WORKBOOK.md § 2).
 
 ### The body
 
@@ -82,7 +83,7 @@ The closed list the run's population is ruled from, drawn top-down from the obje
 the statement line, the trial-balance accounts that compose it, the general-ledger
 accounts behind each — never from which account names read as in scope. The section
 carries the definition the population family rules against and the accounts outside the
-line it reaches as candidates (DOCTRINE.md § Populations). Where the population family's
+line it reaches, each ruled in or out (DOCTRINE.md § Populations). Where the population family's
 ruling differs from the plan's, its record states the divergence and the relay puts it to
 the user (§ 3).
 
@@ -125,20 +126,33 @@ with. `check-report` writes that tab and the deck's executive summary from it
 
 #### Report
 
-The deck's opening and the schedules it carries before its narrative pages (REPORT.md
-§ 1). Prose first — what the key-metrics page shows, what each schedule shows and why the
-narrative refers to it rather than copying it — then exactly one fenced ```` ```json ````
-block, `{"metrics": {...}, "schedules": [...]}`, with no other key.
+The deck's structure (REPORT.md § 1): what the key-metrics page shows, what the narrative
+covers and in what order, and which schedules the deck carries and where each sits. The
+recipe decides it, because readers of different analyses come for different things: a
+quality of earnings review is read for its EBITDA walk, so the walk leads; a revenue-leak
+diagnostic is read for its causes, risks and actions, so the full bridge is support in
+the appendix. Prose first — what the key-metrics page shows, what each narrative section
+carries, what each schedule shows and why it sits where it does — then exactly one fenced
+```` ```json ```` block, `{"metrics": {...}, "narrative": [...], "schedules": [...]}`,
+with no other key.
 
 `metrics` is one mapping, `{"title": ...}`: the headline of the key-metrics page, the
 second page of the deck, naming the measure the report exists to state (`Adjusted
 EBITDA`, `Cash as substantiated`). `check_report.py` refuses a deck whose second page is
-headed otherwise. `schedules` is a non-empty list, one mapping per schedule:
+headed otherwise.
+
+`narrative` is optional: the narrative's sections in reading order, each the kicker its
+pages carry (`["Findings", "Risks to investigate", "Next steps"]`). Where declared, every
+narrative page carries one of them and the sections run in that order; a section the run
+has nothing for is left out. Absent, the author orders the narrative.
+
+`schedules` is a non-empty list, one mapping per schedule:
 
 | key | |
 |---|---|
 | `title` | the page headline |
 | `from` | the family whose tab holds it (`q6`); the deck's table comes from that tab |
+| `place` | `lead` — directly after the opening, ahead of the narrative: the schedule is what the reader came for; `appendix` — after the narrative, under the `Appendix` kicker: support the narrative refers to. Required |
 | `columns` | header words the table must carry; the first is the row's identity, the word the gate matches rows on (`name`, `account`) |
 | `block` | optional; a titled block on the tab; the primary table otherwise |
 | `where` | optional; `{"verdict": "supported"}` or a list of values — a row carrying a value in that column stays when it matches; a row with the column empty stays regardless |
@@ -150,11 +164,12 @@ headed otherwise. `schedules` is a non-empty list, one mapping per schedule:
 | `ids` | optional; `true` keeps the id column |
 
 `check-report` builds each schedule as one `table:` block with the same keys, in the
-recipe's order, directly after the opening; `check_report.py` refuses a deck on which a
-schedule is absent, lacks a declared column or period, or shows fewer rows than the tab
-holds under its `where` and `through` (REPORT.md § 5). `validate_recipe.py` refuses a
-block that does not parse, a missing or empty `metrics.title`, a schedule missing
-`title`, `from` or `columns`, a `from` naming no family, and an unknown key.
+recipe's order within its place; `check_report.py` refuses a deck on which a schedule is
+absent or out of its place, lacks a declared column or period, or shows fewer rows than
+the tab holds under its `where` and `through` (REPORT.md § 5). `validate_recipe.py`
+refuses a block that does not parse, a missing or empty `metrics.title`, a `narrative`
+that is not a list of distinct section names, a schedule missing `title`, `from`,
+`columns` or `place`, a `from` naming no family, and an unknown key.
 
 #### `What the plan notes rather than checks`
 

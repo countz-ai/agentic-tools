@@ -35,14 +35,30 @@ What gets wired, in this order:
      `q2_billings_detail`. Only a check tab is a target — the run-level tabs are named in
      prose and in column headers throughout, and a header reading "Evidence" is not a
      pointer to that tab. Two tabs on one fold, no link.
-  6. Every AMOUNT on the Exec Summary links to the cell it was copied from. The Exec
-     Summary mints no figure, so each number there has an original on a check's tab; the
-     table's title declares that tab (`from: <tab>`), and the amount is found by the row's
-     leading label and the column's header, both copied verbatim. An amount that matches
-     nothing is reported and left — check_workbook.py refuses an unlinked number on the
-     Exec Summary, because the fix is copying the label, not linking. These cells take
-     the link color and no underline: under a figure, an underline is the accounting rule
-     that reads "sum above".
+  6. Every AMOUNT on the Exec Summary links to the cell it was copied from, and becomes a
+     formula reading it: `='q6 EBITDA bridge'!F12`, its result cached in the sheet XML so
+     a viewer that does not recalculate still shows it (check_workbook.py GATE 1). The
+     Exec Summary mints no figure, so each number there has an original on a check's tab;
+     a formula makes that visible in the formula bar, and an accountant tracing
+     precedents lands on the original. The table's title declares that tab
+     (`from: <tab>`), and the amount is found by the row's leading label and the column's
+     header, both copied verbatim. An amount that matches nothing is reported and left —
+     check_workbook.py refuses an unlinked number on the Exec Summary, because the fix is
+     copying the label, not linking. These cells take the link color and no underline:
+     under a figure, an underline is the accounting rule that reads "sum above".
+
+  8. The arithmetic between the check tabs is made live (WORKBOOK.md § 7). With
+     `--run-dir`, each tab's cells map (`out/tabs/<check>.cells.json`, `wbkit.save`)
+     says which cell holds which figure and which cells copy another check's figure: each
+     copy becomes a reference to the cell holding it (`='r5 Position and DSO'!G23`),
+     refused — left a value and reported — when the two disagree. A tab written before the
+     map existed is retrofitted on evidence alone: a total, a subtotal or a walk's derived
+     line (`= …`) becomes a formula over the rows above it when one plain reading of
+     those rows adds to it exactly; a figure becomes a reference when its value, to the
+     cent, sits in exactly one cell of an earlier check's tabs under a header naming the
+     same period. Anything less certain stays a value and is listed. Last, every
+     formula's result is computed (scripts/formula.py) and cached, since a load and save
+     by openpyxl stores none.
 
   7. On a match summary (scripts/match_tabs.py), each line's status words link to that
      status's rows on its match schedule: the link selects the block, which the schedule
@@ -66,7 +82,7 @@ The id grammar and the home rule are mirrored in check_workbook.py's link gate; 
 here changes both files.
 
 Usage:
-    link_workbook.py <workbook.xlsx> [--dry-run] [--json]
+    link_workbook.py <workbook.xlsx> [--run-dir DIR] [--dry-run] [--json]
 Exit 0 on success (dead ends included — the gate owns refusal), 2 on a usage error or a
 workbook with no Sources tab.
 """
@@ -376,12 +392,297 @@ def walk_targets(wb):
     return targets, missed
 
 
+# --- 8. live arithmetic ---------------------------------------------------------------
+SUBTOTAL_FILL = "EDEBE3"          # wbkit's MIST, the Subtotal style's fill
+PERIOD_MONTHS = {m.lower(): i for i, m in enumerate(
+    ["January", "February", "March", "April", "May", "June", "July", "August", "September",
+     "October", "November", "December"], start=1)}
+
+
+def period_key(header) -> str | None:
+    """The period a column header names, on one key across tabs: `September 2025`,
+    `As of September 2025` and `Sep 2025 (days)` are `2025-09`; `FY2025` is `fy2025`; `LTM
+    Jul 2025` is `ltm2025-07`. None for a header naming no period."""
+    if not isinstance(header, str):
+        return None
+    h = header.lower()
+    ltm = "ltm" if re.search(r"\bltm\b", h) else ""
+    m = re.search(r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(?:\d{1,2},\s+)?((?:19|20)\d\d)\b", h)
+    if m:
+        month = next(i for name, i in PERIOD_MONTHS.items() if name.startswith(m.group(1)))
+        return f"{ltm}{m.group(2)}-{month:02d}"
+    m = re.search(r"\bfy\s?((?:19|20)\d\d)\b", h)
+    return f"fy{m.group(1)}" if m else None
+
+
+def _is_number(v) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+class Styles:
+    """The style ids that mark a row's kind, resolved once per workbook: reading a
+    cell's border, font and fill through openpyxl's proxies, cell by cell over every tab,
+    is the slow part of a large workbook."""
+
+    def __init__(self, wb):
+        rgb = lambda f: (str(f.fgColor.rgb or "")[-6:].upper()  # noqa: E731
+                         if getattr(f, "fill_type", None) == "solid" and getattr(f, "fgColor", None) is not None
+                         and f.fgColor.type == "rgb" else "")
+        self.double = {i for i, b in enumerate(wb._borders)
+                       if b.bottom is not None and b.bottom.style == "double"}
+        self.bold = {i for i, f in enumerate(wb._fonts) if f.b}
+        self.mist = {i for i, f in enumerate(wb._fills) if rgb(f) == SUBTOTAL_FILL}
+        self.filled = {i for i, f in enumerate(wb._fills) if rgb(f) not in ("", SUBTOTAL_FILL)}
+
+    def subtotal(self, cell) -> bool:
+        st = getattr(cell, "_style", None)
+        return st is not None and st.fontId in self.bold and st.fillId in self.mist
+
+    def header(self, cell) -> bool:
+        st = getattr(cell, "_style", None)
+        return (st is not None and isinstance(cell.value, str) and st.fontId in self.bold
+                and st.fillId in self.filled)
+
+    def total(self, cell) -> bool:
+        st = getattr(cell, "_style", None)
+        return st is not None and st.borderId in self.double
+
+
+def sheet_rows(ws, styles: Styles) -> dict[int, dict]:
+    """{row: {"cells": {column: cell}, "kind": total | derived | body, "header": bool}}
+    for every row holding a value — one pass over the sheet."""
+    out: dict[int, dict] = {}
+    for row in ws.iter_rows(min_col=2):
+        cells = {c.column: c for c in row if c.value not in (None, "")}
+        if not cells:
+            continue
+        r = row[0].row
+        kind = "body"
+        if any(styles.total(c) for c in row):
+            kind = "total"
+        else:
+            for col in (2, 3):
+                c = cells.get(col)
+                if c is not None and c.data_type != "f" and isinstance(c.value, str) \
+                        and c.value.strip().startswith("="):
+                    kind = "derived"
+        out[r] = {"cells": cells, "kind": kind, "header": 2 in cells and styles.header(cells[2])}
+    return out
+
+
+def retrofit_totals(wb, value, results: dict, styles: Styles | None = None) -> tuple[int, list[str]]:
+    """Section 8, on a tab with no cells map: each total, subtotal and derived line typed as
+    a value becomes `=SUM(...)` over the rows above it in its table, when one plain reading
+    of them adds to it exactly — a subtotal the rows since the last subtotal or derived
+    line, a derived line the one above it and what lies between (a subtotal standing for
+    the rows it adds), a total its table. Returns (converted, the cells left as values)."""
+    import formula as fx  # noqa: PLC0415
+    styles = styles or Styles(wb)
+    done, left = 0, []
+    for ws in wb.worksheets:
+        if ws.title in value["skip"]:
+            continue
+        rows = sheet_rows(ws, styles)
+        targets = [r for r, info in rows.items()
+                   if info["kind"] != "body" or any(_is_number(c.value) and styles.subtotal(c)
+                                                    for c in info["cells"].values())]
+        if not targets:
+            continue
+        cover: dict[tuple[int, int], set[int]] = {}       # (column, subtotal row) -> rows it adds
+        for r in sorted(targets):
+            hr = r - 1                  # up to the table's header row, or the blank row above it
+            while hr in rows and not rows[hr]["header"]:
+                hr -= 1
+            for col, cell in sorted(rows[r]["cells"].items()):
+                if cell.data_type == "f" or not _is_number(cell.value):
+                    continue
+                kind = rows[r]["kind"] if rows[r]["kind"] != "body" else (
+                    "subtotal" if styles.subtotal(cell) else "body")
+                if kind == "body":
+                    continue
+                letter = cell.column_letter
+                derived_above, last_total, boundary = None, None, hr
+                for x in range(hr + 1, r):
+                    c = rows.get(x, {}).get("cells", {}).get(col)
+                    if c is None:
+                        continue
+                    if c.data_type == "f" and (col, x) not in cover:
+                        pre = fx.precedents(c.value, ws.title) or []
+                        if styles.subtotal(c):
+                            cover[(col, x)] = {int(re.sub(r"[A-Z]+", "", co)) for sh, co in pre if sh == ws.title}
+                    if (col, x) in cover:
+                        boundary = x
+                    if rows[x]["kind"] == "derived":
+                        derived_above = boundary = x
+                    if rows[x]["kind"] == "total":
+                        last_total = boundary = x
+                if kind == "subtotal":
+                    start = boundary
+                else:
+                    start = max(derived_above or hr, last_total or hr)
+
+                def num(x):
+                    return value["get"](ws.title, f"{letter}{x}")
+
+                def plain_body(x):
+                    c = rows.get(x, {}).get("cells", {}).get(col)
+                    return (rows.get(x, {}).get("kind") == "body" and (col, x) not in cover
+                            and not (c is not None and c.data_type != "f" and styles.subtotal(c)))
+
+                between = [x for x in range(start + 1, r) if _is_number(num(x))
+                           and rows.get(x, {}).get("kind") != "total"]
+                # an `All …` line heading the rows it adds restates them; it stands for none
+                heads = {x for x in between if (col, x) in cover and cover[(col, x)]
+                         and min(cover[(col, x)]) > x}
+                between = [x for x in between if x not in heads]
+                subs = [x for x in between if (col, x) in cover]
+                covered = set().union(*(cover[(col, x)] for x in subs)) if subs else set()
+                body = [x for x in between if plain_body(x)]
+                lead = [derived_above] if kind == "derived" and derived_above and derived_above > start - 1 else []
+                if kind == "subtotal":
+                    below = []
+                    x = r + 1
+                    while x in rows and _is_number(num(x)) and plain_body(x):
+                        below.append(x)
+                        x += 1
+                    sets = [body, [] if body else below]
+                else:
+                    sets = [lead + subs + [x for x in body if x not in covered], lead + body,
+                            subs if kind == "total" else []]
+
+                def deducted(x) -> bool:
+                    """A `Less:` or `Deduct:` line stored as a positive figure."""
+                    label = " ".join(str(rows[x]["cells"][k].value) for k in (2, 3)
+                                     if k in rows[x]["cells"] and isinstance(rows[x]["cells"][k].value, str))
+                    return bool(re.search(r"(?:^|\s)(?:less|deduct)\b", label, re.I)) and float(num(x)) >= 0
+                hit = None
+                for rs in sets:
+                    if not rs:
+                        continue
+                    vals = [float(num(x)) for x in rs]
+                    for minus in ([], [x for x in rs if deducted(x)]):
+                        got = sum(-v if x in minus else v for x, v in zip(rs, vals))
+                        if fx.foots(float(cell.value), got, len(rs), vals + [float(cell.value)]):
+                            hit = (rs, minus)
+                            break
+                        if not [x for x in rs if deducted(x)]:
+                            break
+                    if hit:
+                        break
+                if hit is None:
+                    left.append(f"{ws.title}!{cell.coordinate}")
+                    continue
+                v = float(cell.value)
+                rs, minus = hit
+                cell.value = fx.signed_formula(letter, [x for x in rs if x not in minus], minus)
+                results.setdefault(ws.title, {})[cell.coordinate] = v
+                value["set"](ws.title, cell.coordinate, v)
+                if kind == "subtotal":
+                    cover[(col, r)] = set(rs)
+                done += 1
+    return done, left
+
+
+def wire_copies(wb, value, maps: dict, results: dict) -> tuple[int, list[str]]:
+    """Section 8, by the cells maps: each cell a tab declared as a copy (`src`) becomes a
+    reference to the cell its map says holds that figure, when the two agree."""
+    import formula as fx  # noqa: PLC0415
+    home: dict[str, tuple[str, str]] = {}
+    for sheet, cells in maps.items():
+        for coord, e in cells.items():
+            if e.get("fid"):
+                home.setdefault(e["fid"], (sheet, coord))
+    done, bad = 0, []
+    for sheet, cells in maps.items():
+        if sheet not in wb.sheetnames:
+            continue
+        for coord, e in cells.items():
+            src = e.get("src")
+            if not src:
+                continue
+            target = home.get(src)
+            if target is None or target[0] not in wb.sheetnames:
+                bad.append(f"{sheet}!{coord} copies {src}, which no tab's cells map places")
+                continue
+            mine, theirs = value["get"](sheet, coord), value["get"](*target)
+            if not (_is_number(mine) and _is_number(theirs)
+                    and fx.foots(float(theirs), float(mine), 1, [float(theirs), float(mine)])):
+                bad.append(f"{sheet}!{coord} copies {src} as {mine!r}; {target[0]}!{target[1]} holds {theirs!r}")
+                continue
+            wb[sheet][coord].value = fx.reference(*target)
+            results.setdefault(sheet, {})[coord] = float(theirs)
+            done += 1
+    return done, bad
+
+
+def retrofit_copies(wb, value, rank: dict[str, int], results: dict, styles: Styles | None = None) -> int:
+    """Section 8, on tabs with no cells map: a figure whose value, to the cent, sits in
+    exactly one cell of an earlier check's tabs under a header naming the same period
+    becomes a reference to that cell. A zero, a whole number under 1,000 (a count, a day
+    count) and anything matched twice stay values: equal is not the same figure there."""
+    import formula as fx  # noqa: PLC0415
+    styles = styles or Styles(wb)
+    index: dict[tuple[str, float], list[tuple[str, str]]] = {}
+    cand: list[tuple[str, str, tuple[str, float]]] = []
+    for ws in wb.worksheets:
+        if ws.title in value["skip_copies"]:
+            continue
+        headers_at, _, _, numerics = sheet_grid(ws)
+        double = {c.row for row in ws.iter_rows(min_col=2) for c in row
+                  if c.value is not None and styles.total(c)}
+        for r, cells in numerics.items():
+            kind = "total" if r in double else "body"
+            for c, coord in cells:
+                cell = ws[coord]
+                v = cell.value
+                if cell.data_type == "f" or not _is_number(v) or v == 0 or \
+                        (float(v).is_integer() and abs(v) < 1000):
+                    continue
+                per = period_key(headers_at.get(r, {}).get(c))
+                if per is None:
+                    continue
+                key = (per, round(float(v), 4))
+                index.setdefault(key, []).append((ws.title, coord))
+                if kind == "body" and not styles.subtotal(cell) and ws.title not in value["mapped"]:
+                    cand.append((ws.title, coord, key))
+    done = 0
+    for sheet, coord, key in cand:
+        mine = rank.get(sheet)
+        if mine is None:
+            continue
+        earlier = [(s_, c_) for s_, c_ in index[key] if s_ != sheet and rank.get(s_, 1 << 30) < mine]
+        if len(earlier) != 1:
+            continue
+        source = value["get"](*earlier[0])
+        wb[sheet][coord].value = fx.reference(*earlier[0])
+        results.setdefault(sheet, {})[coord] = float(source)
+        done += 1
+    return done
+
+
+def load_maps(run_dir: pathlib.Path | None) -> dict[str, dict]:
+    """{sheet: {coord: entry}} from every placed tab's cells map."""
+    out: dict[str, dict] = {}
+    if run_dir is None:
+        return out
+    for f in sorted((run_dir / "out" / "tabs").glob("*.cells.json")):
+        try:
+            for sheet, cells in (json.loads(f.read_text(encoding="utf-8")).get("sheets") or {}).items():
+                out.setdefault(sheet, {}).update(cells or {})
+        except (OSError, ValueError, AttributeError):
+            continue
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("workbook", type=pathlib.Path)
     ap.add_argument("--dry-run", action="store_true",
                     help="report what would be wired; write nothing")
+    ap.add_argument("--run-dir", type=pathlib.Path,
+                    help="the run directory: its placed tabs' cells maps wire each copy to the "
+                         "cell it copies, and run.json orders the checks (§ 8)")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args()
     if not a.workbook.is_file():
@@ -399,6 +700,7 @@ def main() -> int:
         return 2
 
     wb = openpyxl.load_workbook(a.workbook)
+    cached = openpyxl.load_workbook(a.workbook, data_only=True)   # a re-run reads its own formulas' results
     if SOURCES not in wb.sheetnames:
         print(f"{a.workbook.name}: no '{SOURCES}' tab — assemble the workbook first",
               file=sys.stderr)
@@ -455,7 +757,36 @@ def main() -> int:
     matches = match_targets(wb)
     targets.update(matches)
 
+    live_rep = {"copies_wired": 0, "copy_problems": [], "totals_made_live": 0,
+                "totals_left_as_values": [], "copies_retrofitted": 0}
     if not a.dry_run:
+        # § 8: the arithmetic made live, before the links (an Exec Summary amount reads a
+        # cell that may itself have just become a reference).
+        sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+        import formula as fx
+        known = fx.compute_results(wb, fallback=cached)   # the formulas the tabs arrived with
+
+        def get(sh, co):
+            if co in known.get(sh, {}):
+                return known[sh][co]
+            c = wb[sh][co]
+            return None if c.data_type == "f" else c.value
+
+        maps = load_maps(a.run_dir)
+        run_tabs = {t for t in wb.sheetnames if normalize(t) in RUN_TABS}
+        value = {"get": get, "set": lambda sh, co, v: known.setdefault(sh, {}).__setitem__(co, v),
+                 "skip": run_tabs | set(maps), "skip_copies": run_tabs, "mapped": set(maps)}
+        rank = {t: i for i, t in enumerate(wb.sheetnames)}
+        if a.run_dir is not None and (a.run_dir / "run.json").is_file():
+            from check_workbook import tab_owners
+            checks = json.loads((a.run_dir / "run.json").read_text(encoding="utf-8")).get("checks") or []
+            owner, _ = tab_owners(checks, wb.sheetnames)
+            order = [c["id"] for c in checks]
+            rank = {t: order.index(o) for t, o in owner.items() if o in order}
+        live_rep["copies_wired"], live_rep["copy_problems"] = wire_copies(wb, value, maps, known)
+        live_rep["totals_made_live"], live_rep["totals_left_as_values"] = retrofit_totals(wb, value, known)
+        live_rep["copies_retrofitted"] = retrofit_copies(wb, value, rank, known)
+
         # Every link in this workbook is placed here, so a re-run owns them all: clear
         # first, or a link this pass no longer wants survives, pointing where it did.
         for ws in wb.worksheets:
@@ -464,11 +795,22 @@ def main() -> int:
                     if cell.hyperlink is not None:
                         cell.hyperlink = None
             ws._hyperlinks = []
+        # The Exec Summary's amounts become formulas reading their originals; each keeps
+        # the value it showed, cached in the XML after the save.
+        live: dict[str, float] = {}
+        for (sheet, coord), (tsheet, tcoord) in walk.items():
+            cell = wb[sheet][coord]
+            shown = get(sheet, coord)
+            if not isinstance(shown, (int, float)) or isinstance(shown, bool):
+                continue                          # nothing to cache: leave the cell as it is
+            live[coord] = shown
+            cell.value = f"='{tsheet.replace(chr(39), chr(39) * 2)}'!{tcoord}"
         for (sheet, coord), (tsheet, tcoord) in targets.items():
             cell = wb[sheet][coord]
+            shown = live.get(coord, cell.value) if sheet == EXEC else cell.value
             cell.hyperlink = Hyperlink(ref=coord, location=f"'{tsheet}'!{tcoord}",
-                                       tooltip=f"{cell.value} — {tsheet}"[:250],
-                                       display=str(cell.value)[:250])
+                                       tooltip=f"{shown} — {tsheet}"[:250],
+                                       display=str(shown)[:250])
             font = copy(cell.font)
             font.color = LINK_COLOR
             # A linked AMOUNT takes color only: under a figure, an underline is the
@@ -482,7 +824,13 @@ def main() -> int:
         from wbkit import excel_tables
         taken: set[str] = set()
         n_tables = sum(len(excel_tables(ws, taken)) for ws in wb.worksheets)
+        # openpyxl saves every formula with an empty result, and a workbook assembled by
+        # copying tabs arrives with none: every formula's result is computed, the Exec
+        # Summary's new references and § 8's included, and cached.
+        known.setdefault(EXEC, {}).update(live)
+        results = fx.compute_results(wb, known=known, fallback=cached)
         wb.save(a.workbook)
+        fx.cache_results(a.workbook, results)
 
     ledgers = (SOURCES, EVIDENCE)
     up = sum(1 for at, t in targets.items() if t[0] in ledgers and at[0] not in ledgers)
@@ -496,7 +844,7 @@ def main() -> int:
            "tables": 0 if a.dry_run else n_tables,
            "other": len(targets) - up - back - nav - len(walk) - len(matches),
            "dead_ends": sorted(dead), "internal_refs": sorted(internal),
-           "dry_run": a.dry_run}
+           "dry_run": a.dry_run, **live_rep}
     if a.json:
         print(json.dumps(rep, indent=2))
         return 0
@@ -505,6 +853,21 @@ def main() -> int:
           f"{up} to {SOURCES}/{EVIDENCE}, {back} back out, {fam} family stems, "
           f"{rep['other'] - fam} to stated homes, {nav} check-tab navigation, "
           f"{len(walk)} {EXEC} amounts, {len(matches)} match-summary lines.")
+    if not a.dry_run:
+        print(f"  live arithmetic: {live_rep['copies_wired']} copies wired by the cells maps, "
+              f"{live_rep['copies_retrofitted']} copies retrofitted by value, "
+              f"{live_rep['totals_made_live']} totals made formulas; "
+              f"{len(live_rep['totals_left_as_values'])} totals left as values.")
+        for line in live_rep["copy_problems"][:15]:
+            print(f"    copy not wired: {line}")
+        if live_rep["copy_problems"]:
+            print("  A copy that disagrees with the figure it copies is the copying check's to "
+                  "fix; a copy whose figure no map places names a producer written before the "
+                  "maps existed.")
+        left = live_rep["totals_left_as_values"]
+        if left:
+            print(f"    left as values (no plain reading of the rows above adds to them): "
+                  f"{', '.join(left[:8])}{' …' if len(left) > 8 else ''}")
     if missed:
         print(f"  {len(missed)} {EXEC} amount(s) matched no source cell — the row's "
               f"label and the column's header must be COPIED from the tab the table's "

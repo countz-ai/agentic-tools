@@ -296,6 +296,11 @@ def place_tab(run_dir, seq_or_check) -> pathlib.Path:
     dest = run_dir / "out" / "tabs" / staged.name
     dest.parent.mkdir(parents=True, exist_ok=True)
     os.replace(staged, dest)
+    # the cells map `wbkit.save` wrote beside the tab travels with it: assembly wires the
+    # tab's copies and holds its totals by it (WORKBOOK.md § 7)
+    cells = staged.with_name(f"{check}.cells.json")
+    if cells.is_file():
+        os.replace(cells, dest.with_name(cells.name))
     return dest
 
 
@@ -303,7 +308,8 @@ def place_tab(run_dir, seq_or_check) -> pathlib.Path:
 def own_files(run_dir, check: str) -> list[pathlib.Path]:
     """The check's own files that exist, under `run_dir` as given, in this order:
     `checks/<check>.md`, `checks/<check>-*.csv` (sorted), `workpapers/figures-<check>.yaml`,
-    `workpapers/evidence-<check>.yaml`, `out/tabs/<check>.xlsx`. Refuses a check id outside
+    `workpapers/evidence-<check>.yaml`, `out/tabs/<check>.xlsx` and its cells map
+    `out/tabs/<check>.cells.json`. Refuses a check id outside
     CHECK_ID."""
     rd = pathlib.Path(run_dir)
     check = _check_id(check)
@@ -311,7 +317,7 @@ def own_files(run_dir, check: str) -> list[pathlib.Path]:
     found += sorted((rd / "checks").glob(f"{check}-*.csv"))
     found += [rd / "workpapers" / f"figures-{check}.yaml",
               rd / "workpapers" / f"evidence-{check}.yaml",
-              rd / "out" / "tabs" / f"{check}.xlsx"]
+              rd / "out" / "tabs" / f"{check}.xlsx", rd / "out" / "tabs" / f"{check}.cells.json"]
     return [p for p in found if p.is_file()]
 
 

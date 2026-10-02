@@ -29,17 +29,25 @@ FAMILY = re.compile(r"^### ([A-Z])(\d) — .+ \(kind `([a-z]+)`, (.+)\)\s*$")
 # from the reads a family declares; a recipe never schedules.
 AFTER = re.compile(r"(?:^|,)\s*after\b", re.I)
 NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
-# `## Report` (RECIPE_FORMAT.md § Report): the deck's opening and the schedules it
-# carries before its narrative, as one fenced ```json block —
-# `{"metrics": {"title": ...}, "schedules": [...]}`. Stdlib-parseable, so the deck gate
-# (check_report.py, plain python3) reads the same block this module validates.
+# `## Report` (RECIPE_FORMAT.md § Report): the deck's structure, as one fenced ```json
+# block — `{"metrics": {"title": ...}, "narrative": [...], "schedules": [...]}`: the
+# key-metrics page, the narrative's sections in order, and each schedule with the part of
+# the deck it sits in. The recipe decides the structure; no rule above it says where a
+# walk goes. Stdlib-parseable, so the deck gate (check_report.py, plain python3) reads
+# the same block this module validates.
 REPORT = "Report"
-REPORT_KEYS = {"metrics", "schedules"}
+REPORT_KEYS = {"metrics", "narrative", "schedules"}
 METRICS_KEYS = {"title"}
 SCHEDULE_KEYS = {"title", "from", "columns", "block", "where", "through", "periods", "scale",
-                 "currency", "dense", "ids"}
-SCHEDULE_REQUIRED = ("title", "from", "columns")
+                 "currency", "dense", "ids", "place"}
+SCHEDULE_REQUIRED = ("title", "from", "columns", "place")
 PERIODS = {"all", "latest", "none"}
+# Where a schedule sits: `lead` directly after the opening, ahead of the narrative — the
+# schedule IS the answer (a quality of earnings review's EBITDA walk); `appendix` after
+# the narrative, under the `Appendix` kicker — support the narrative refers to (a revenue
+# leak's full bridge). Required: the recipe states it, one way or the other.
+PLACES = ("lead", "appendix")
+APPENDIX = "Appendix"
 FENCE = re.compile(r"^```json\s*\n(.*?)^```\s*$", re.S | re.M)
 
 
@@ -101,6 +109,14 @@ def report_schedules(text: str) -> list[dict] | None:
     return sched if isinstance(sched, list) else None
 
 
+def report_narrative(text: str) -> list[str] | None:
+    """The narrative's sections `## Report` declares, in order — the kickers its pages
+    carry; None when the block declares none."""
+    data = report_block(text)
+    n = data.get("narrative") if data else None
+    return [str(x) for x in n] if isinstance(n, list) and n else None
+
+
 def report_metrics(text: str) -> dict | None:
     """The `metrics` mapping `## Report` declares — the headline of the deck's
     key-metrics page (`title`); None when the block is absent."""
@@ -135,6 +151,20 @@ def _report_defects(text: str, fams: dict[str, str]) -> list[tuple[str, str]]:
     elif set(metrics) - METRICS_KEYS:
         bad.append(("report.metrics", f"`metrics`: unknown key(s) "
                                       f"{', '.join(sorted(set(metrics) - METRICS_KEYS))}"))
+    narrative = data.get("narrative")
+    if narrative is not None:
+        if (not isinstance(narrative, list) or not narrative
+                or not all(isinstance(x, str) and x.strip() for x in narrative)):
+            bad.append(("report.narrative", f"`## {REPORT}` json block: `narrative` is a non-empty "
+                                            f"list of section names, the kickers of the narrative's "
+                                            f"pages in reading order"))
+        else:
+            folded = [x.strip().lower() for x in narrative]
+            if len(set(folded)) != len(folded):
+                bad.append(("report.narrative", "`narrative` repeats a section"))
+            if APPENDIX.lower() in folded:
+                bad.append(("report.narrative", f"`narrative` names `{APPENDIX}`, the part a schedule "
+                                                f"placed `appendix` sits in — not a narrative section"))
     sched = data.get("schedules")
     if not isinstance(sched, list) or not sched:
         return bad + [("report.block", f"`## {REPORT}` json block carries `\"schedules\": [...]`, "
@@ -164,6 +194,9 @@ def _report_defects(text: str, fams: dict[str, str]) -> list[tuple[str, str]]:
                 for k, v in where.items())):
             bad.append(("report.schedule", f"{at}: `where` maps a header word to a value or a "
                                            f"list of values"))
+        if sc.get("place") is not None and sc["place"] not in PLACES:
+            bad.append(("report.schedule", f"{at}: `place` is {' | '.join(PLACES)} — `lead` directly "
+                                           f"after the opening, `appendix` after the narrative"))
         if sc.get("periods") is not None and sc["periods"] not in PERIODS:
             bad.append(("report.schedule", f"{at}: `periods` is {' | '.join(sorted(PERIODS))}"))
         if sc.get("scale") is not None and sc["scale"] not in SCALES:
@@ -253,8 +286,4 @@ def validate(text: str, kinds: set[str] | None = None) -> list[tuple[str, str]]:
             bad.append(("lead.family", f"`lead` names `{fam}`, no family in the recipe"))
     if len(lead) != len(set(lead)):
         bad.append(("lead.repeat", "`lead` repeats a family"))
-    if lead and hl and lead[0] != hl:
-        bad.append(("lead.headline_first", f"`lead` opens with `{lead[0]}`, not the headline family "
-                                           f"`{hl}` - the Exec Summary stands on the headline's tab, "
-                                           f"so that tab sits first (WORKBOOK.md § 2)"))
     return bad

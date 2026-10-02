@@ -75,7 +75,7 @@ import style as _style  # noqa: E402  sibling: currencies and date forms
 from check_playbook import CHECK_ID  # noqa: E402  the check-id grammar
 from wbkit import (FMT_AMOUNT, FMT_DATE, FMT_PCT, S, STATUS, STATUS_KINDS, Alignment,  # noqa: E402
                    amount, band, count, finish, grid, header, ident, next_block, register_status,
-                   section, status, text)
+                   section, stated, status, text, total)
 
 __all__ = ["match_tabs", "SUMMARY_MARK", "SCHEDULE_MARK", "RULES_MARK", "RECON_MARK",
            "STATUS_HEADER", "AMOUNT_HEADER"]
@@ -533,6 +533,12 @@ def match_tabs(wb, res, left: pl.DataFrame, right: pl.DataFrame, *, check: str, 
     r_ += 1
     cells(ws, r_, [("id", None), ("text", "Total"), ("count", total_n), ("amount", total_a),
                    ("percent", 1.0 if total_a else 0.0), ("text", W("Every {n}, once."))], "Total")
+    # the opening "All" line and the Total are each the status lines between them, live
+    # (WORKBOOK.md § 7): a status line that drops out of the schedule shows here
+    if r_ > 6:
+        for c, v in ((4, total_n), (5, total_a), (6, 1.0 if total_a else 0.0)):
+            total(ws.cell(5, c), v, rows=range(6, r_), style=None)
+            total(ws.cell(r_, c), v, rows=range(6, r_), style=None)
     last_primary = r_
     # what each rule matched
     r_ = section(ws, next_block(r_), "Matched, by rule")
@@ -559,6 +565,9 @@ def match_tabs(wb, res, left: pl.DataFrame, right: pl.DataFrame, *, check: str, 
     r_ += 1
     cells(ws, r_, [("id", None), ("text", "Total"), ("count", len(Rr)), ("amount", r_total),
                    ("percent", 1.0 if r_total else 0.0)], "Total")
+    if r_ > h_ + 1:
+        for c, v in ((4, len(Rr)), (5, r_total), (6, 1.0 if r_total else 0.0)):
+            total(ws.cell(r_, c), v, rows=range(h_ + 1, r_), style=None)
     grid(ws, h_, r_, 2, 7)
     r_ = next_block(r_)
     section(ws, r_, "To reperform")
@@ -592,6 +601,8 @@ def match_tabs(wb, res, left: pl.DataFrame, right: pl.DataFrame, *, check: str, 
     r_ += 1
     text(ws2.cell(r_, 3), "Total", "Total")
     amount(ws2.cell(r_, 5), total_a, fmt=money, style="Total")
+    if last_row >= 5:
+        total(ws2.cell(r_, 5), total_a, rows=range(5, last_row + 1), style=None)
     for c in (2, 4, 6, 7, 8, 9, 10, 11):
         ws2.cell(r_, c).style = S["Total"]
     grid(ws2, r_, r_, 2, 11)
@@ -612,6 +623,10 @@ def match_tabs(wb, res, left: pl.DataFrame, right: pl.DataFrame, *, check: str, 
     r_ += 1
     cells(ws4, r_, [("id", None), ("text", f"{Os} per bank"), ("count", rt[1]), ("amount", round(rt[2], dec)),
                     ("amount", round(rt[3], dec)), ("amount", round(rt[4], dec))], "Total")
+    if recon_lines:                             # the walk: per books through each line to per bank
+        total(ws4.cell(r_, 5), rt[2], rows=range(5, r_), style=None)
+    for c in (4, 6, 7):                         # the count and the split per bank are stated, not
+        stated(ws4.cell(r_, c))                 # sums: each line counts and splits its own items
     last4 = r_
     r_ = section(ws4, next_block(r_), "The items not matched" +
                  (f", aged at {_style.date_short(end)}" if end else ""))

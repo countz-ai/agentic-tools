@@ -7,8 +7,17 @@ Every tab script imports this module rather than carrying the code. A tab script
     import sys; sys.path.insert(0, "<${CLAUDE_PLUGIN_ROOT}>/scripts")   # the token expanded
     from wbkit import *
 
-and writes its tab with `band`, `header`, `section`, `ident`, `text`, `amount`, `status`
-and `finish`. The style constants, formats and `styles()` are the ones `check_workbook.py`
+and writes its tab with `band`, `header`, `section`, `ident`, `text`, `amount`, `status`,
+`total` and `finish`, and saves it with `save`.
+
+A schedule's arithmetic is live (WORKBOOK.md § 7). A body figure is a value, written with
+`amount(cell, v, fid="F.…")` naming the figure it holds, or `src="F.…"` naming the figure
+of another check it copies — which assembly turns into a reference to that check's cell.
+A subtotal, a total or a walk's derived line (`= …`) is `total(cell, value, rows=[…])`: a
+formula over the rows it adds, refused when they do not add to the figure the script
+computed. `save(wb, path)` writes the workbook, the formulas' results (a viewer that does
+not recalculate shows them) and `<path>.cells.json`, the map of figure ids to cells that
+assembly reads. The style constants, formats and `styles()` are the ones `check_workbook.py`
 GATE 4 verifies on the stored workbook; the two documents describe them and this file is
 the one place they are written. A copy of any of it in a tab script is drift the gate
 reports after the fact — measured 2026-09-22 on one revenue run: eighteen scripts carried
@@ -32,6 +41,7 @@ from openpyxl.utils import get_column_letter
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import style as _style  # noqa: E402  sibling: date forms and currency symbols
+import formula as _formula  # noqa: E402  sibling: the formula grammar the gates read
 
 __all__ = [
     # palette (WORKBOOK_STYLE.md § 1)
@@ -46,6 +56,7 @@ __all__ = [
     "grid", "styles", "S", "STATUS", "STATUS_KINDS", "register_status", "WIDTH", "WRAP",
     "band", "header", "section", "ident", "text", "amount", "count", "status", "table", "KINDS", "fit_rows",
     "finish", "excel_tables", "table_blocks", "next_block", "HEADING_GAP", "BLOCK_GAP", "get_column_letter", "Alignment",
+    "total", "stated", "save", "CELLS_SUFFIX",
 ]
 
 # --- WORKBOOK_STYLE.md § 9 ------------------------------------------------------------
@@ -213,19 +224,137 @@ def text(cell, v, style="Body"):
         cell.alignment = WRAP                   # description and note columns wrap
 
 
-def amount(cell, value, fmt=None, hard_input=False, style=None):
+# --- the cells map: which figure each cell holds, and the formulas the kit wrote --------
+# Keyed by the worksheet object, so a sheet renamed before `save` is mapped by its final
+# title. Each entry is {coord: {"fid": ..., "src": ..., "formula": ..., "result": ...}}.
+CELLS_SUFFIX = ".cells.json"
+_MAP: dict[int, tuple[object, dict[str, dict]]] = {}
+
+
+def _note(cell, **kv) -> None:
+    ws = cell.parent
+    entry = _MAP.setdefault(id(ws), (ws, {}))[1].setdefault(cell.coordinate, {})
+    entry.update({k: v for k, v in kv.items() if v is not None})
+
+
+def _figure_ids(fid, src) -> None:
+    for name, v in (("fid", fid), ("src", src)):
+        if v is not None and not (isinstance(v, str) and v.startswith(("F.", "LK.", "AJ."))):
+            raise ValueError(f"{name}={v!r}: a figure id (`F.…`, or a leak or adjustment id)")
+
+
+def amount(cell, value, fmt=None, hard_input=False, style=None, fid=None, src=None):
+    """A figure. `fid` names the figure the cell holds (`F.r5.past_due.2025-09`); `src`
+    names the figure of ANOTHER check it copies, which assembly turns into a reference
+    to that check's cell (WORKBOOK.md § 7)."""
+    _figure_ids(fid, src)
     cell.value = value
     cell.style = S[style] if style else (S["BodyInput"] if hard_input else S["Body"])
     cell.number_format = fmt or FMT_AMOUNT
+    if fid or src:
+        _note(cell, fid=fid, src=src)
 
 
-def count(cell, value, style=None):
+def count(cell, value, style=None, fid=None, src=None):
     """A count of things: FMT_COUNT, never a money format."""
     if value is not None and float(value) != round(float(value)):
         raise ValueError(f"a count of {value} is not a whole number")
+    _figure_ids(fid, src)
     cell.value = value
     cell.style = S[style] if style else S["Body"]
     cell.number_format = FMT_COUNT
+    if fid or src:
+        _note(cell, fid=fid, src=src)
+
+
+def _kit_value(ws, coord):
+    """A cell's value as a formula reads it: a number, text, or the result of a formula
+    the kit wrote; None for a blank or a formula the kit did not write."""
+    c = ws[coord]
+    if c.data_type == "f":
+        return _MAP.get(id(ws), (ws, {}))[1].get(coord, {}).get("result")
+    return c.value
+
+
+def total(cell, value=None, rows=None, when=None, fmt=None, style="Total", fid=None, less=None):
+    """A subtotal, a total or a walk's derived line, as a formula over the rows it adds,
+    in the cell's own column. `rows` are the row numbers it adds — a walk's derived line
+    names the derived line above it and the rows between; `when=("N", "supported")` (or
+    a list of values) adds only the rows whose cell in column N reads so, as a
+    conditional sum. `less` names rows it deducts — a walk whose `Less:` lines are stored
+    as positive figures. `value` is the figure the script computed: a formula that does not
+    reach it is refused, naming both — the table is missing a row or carries a wrong one.
+    The result is cached by `save`. Returns the formula's result."""
+    ws = cell.parent
+    col = cell.column_letter
+    rows = sorted(set(int(r) for r in (rows or [])))
+    less = sorted(set(int(r) for r in (less or [])))
+    if not rows:
+        raise ValueError(f"{ws.title}!{cell.coordinate}: a total adds rows — name them (`rows=`)")
+    if cell.row in rows:
+        raise ValueError(f"{ws.title}!{cell.coordinate}: a total does not add itself")
+    if less and when is not None:
+        raise ValueError(f"{ws.title}!{cell.coordinate}: a conditional sum deducts nothing (`less=`)")
+    if when is None:
+        f = _formula.signed_formula(col, [r for r in rows if r not in less], less)
+    else:
+        crit_col, wanted = when
+        wanted = [wanted] if isinstance(wanted, str) else list(wanted)
+        lo, hi = rows[0], rows[-1]
+        f = "=" + "+".join(f'SUMIFS({col}{lo}:{col}{hi},${crit_col}${lo}:${crit_col}${hi},"{w}")'
+                           for w in wanted)
+    got = _formula.evaluate(f, ws.title, lambda sh, co: _kit_value(ws, co) if sh == ws.title else None)
+    if got is None:
+        raise ValueError(f"{ws.title}!{cell.coordinate}: cannot evaluate {f}")
+    terms = [_kit_value(ws, f"{col}{r}") for r in rows + less]
+    if value is not None and not _formula.foots(float(value), got, len(rows) + len(less),
+                                                [t for t in terms if isinstance(t, (int, float))]):
+        raise ValueError(f"{ws.title}!{cell.coordinate}: rows {rows[0]}–{rows[-1]} add to {got:,.2f}, "
+                         f"not the {float(value):,.2f} computed — the table is missing a row or "
+                         f"carries a wrong one ({f})")
+    keep = fmt or (cell.number_format if cell.number_format not in (None, "General") else FMT_AMOUNT)
+    cell.value = f
+    if style:
+        cell.style = S[style]
+    cell.number_format = keep
+    _note(cell, formula=f, result=got, fid=fid)
+    return got
+
+
+def stated(cell) -> None:
+    """Declare a figure in a total, subtotal or derived row that is NOT the sum of the
+    rows above it — a reconciliation's item count per bank, where each line counts its own
+    items — so the gate does not hold it to a formula. Every other figure in such a row is
+    a `total()`."""
+    _note(cell, stated=True)
+
+
+def save(wb, path) -> pathlib.Path:
+    """Save the workbook, cache every kit formula's result in it, and write the cells
+    map beside it (`<path stem>.cells.json`): for every sheet, the figure each mapped
+    cell holds or copies and the formulas the kit wrote. `step_record.place_tab` moves
+    the map with the tab; `link_workbook.py --run-dir` reads it at assembly and
+    `check_workbook.py` holds a mapped sheet to formulas on its totals."""
+    import json
+    path = pathlib.Path(path)
+    wb.save(path)
+    sheets: dict[str, dict] = {ws.title: {} for ws in wb.worksheets}
+    known: dict[str, dict[str, float]] = {}
+    for ws, cells in list(_MAP.values()):
+        if ws.title not in sheets or ws not in wb.worksheets:
+            continue
+        for coord, e in cells.items():
+            if "formula" in e and ws[coord].value != e["formula"]:
+                continue                        # overwritten since: not the kit's formula any more
+            sheets[ws.title][coord] = {k: e[k] for k in ("fid", "src", "formula", "stated") if k in e}
+            if "formula" in e:
+                known.setdefault(ws.title, {})[coord] = e["result"]
+    # every formula's result, the kit's and any the script wrote itself (a conditional sum)
+    _formula.cache_results(path, _formula.compute_results(wb, known))
+    side = path.with_name(path.stem + CELLS_SUFFIX)
+    side.write_text(json.dumps({"schema": "countz-accounting/cells@1", "sheets": sheets},
+                               indent=1, sort_keys=True), encoding="utf-8")
+    return side
 
 
 def status(cell, word):

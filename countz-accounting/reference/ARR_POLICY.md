@@ -253,6 +253,18 @@ decision's value becomes a number. An instruction refines these rules for one co
 records (§ Instructions); a question neither reaches is settled per § Applying the
 policy, step 5.
 
+### The contract
+
+Wherever a decision or § Modifications reads "the contract", it means every record that
+states a term enforceable between the company and the customer (a price, a quantity, a
+term, a termination right, a concession): the master agreement, order forms and
+statements of work; amendments, change orders and the modification log; side letters;
+and the channel programs V5 nets from a reseller's price. A term agreed outside a signed
+document, by email, orally or by a practice the company follows, is part of the contract
+where a record states it, and that record is cited beside the figure it moves. A
+contract record is found by what it states, never by the folder it is filed in: a
+customer's rebate program filed among vendor rebates is a channel term.
+
 ### ARR at a date
 
 **ARR at a date** is the sum, over the customers in force at that date, of the
@@ -267,9 +279,9 @@ No contract value is prorated by days. Under a run-rate S1 a month's revenue is 
 records show, a month served in part included, annualized as it stands.
 
 **S1 · ARR basis.** The record the amount is taken from.
-- `contract`: the contract's annual value as modified by the date (§ Modifications): a
-  monthly figure times twelve, a quarterly figure times four, a semi-annual figure times
-  two, a multi-year or prepaid figure per S3, a term licence per S4.
+- `contract`: the contract's annual value (§ The contract) as modified by the date
+  (§ Modifications): e.g. a monthly figure times twelve, a multi-year or prepaid figure
+  per S3, a term license per S4.
 - `all_agree`: the `contract` value, where the invoice for the stream's current service
   period and the cash applied to it agree with it. Cash agrees when the invoice is paid,
   or is not yet due at the date. Where the three disagree, the stream is carried at the
@@ -319,11 +331,11 @@ never over months before it existed.
   years; a prepayment is spread over the years it covers.
 - `ratable_revenue`: the revenue recognized on the contract in the S2 window, annualized.
 
-**S4 · Term or perpetual licences recognized upfront.**
-- `annualized_contract`: a term licence's fee divided by its term in years, from its
-  start. A perpetual licence has no term and carries no ARR; its support and
+**S4 · Term or perpetual licenses recognized upfront.**
+- `annualized_contract`: a term license's fee divided by its term in years, from its
+  start. A perpetual license has no term and carries no ARR; its support and
   maintenance are streams of their own.
-- `recognized_revenue`: the licence revenue recognized in the S2 window, annualized, so
+- `recognized_revenue`: the license revenue recognized in the S2 window, annualized, so
   the month of recognition carries it.
 
 **S5 · Point-in-time products bought repeatedly.** `timing`:
@@ -412,11 +424,10 @@ is still served; `effective_date` — it leaves at the effective end.
 `conflicting_records`, where two records date a contract's end differently, names the
 one that governs; the other is recorded beside it:
 - `earliest_end`: the earliest end any record shows.
-- `contract_as_amended`: the contract and every amendment to it (an extension, an early
-  termination, a change order), wherever the data room holds them: signed documents, an
-  amendment or modification log, CRM contract records. Where they disagree with each
-  other, the latest-dated amendment governs; a date only a CRM or billing record shows,
-  with no contract document behind it, is recorded beside the contract's.
+- `contract_as_amended`: the contract (§ The contract) and every amendment to it (an
+  extension, an early termination, a change order). Where they disagree with each other,
+  the latest-dated amendment governs; a date only a CRM or billing record shows, with no
+  contract record behind it, is recorded beside the contract's.
 
 Where no record dates a contract's end, the end is a pending question. A stream measured
 from revenue or billing rather than a contract (a run-rate S1, the billed leg of
@@ -465,7 +476,11 @@ before the termination was recorded is restated. `document_threshold_pct` (the
 `outlier_threshold_pct` convention): a contract whose annualized value exceeds that
 share of total ARR at the first date it is in force enters ARR only with the signed
 order form or amendment that evidences it; without one it is withheld with its `D.`. At
-`none`, no contract is held to this test.
+`none`, no contract is held to this test. The share is measured against total ARR before
+this test: ARR at that month end with every contract the test could withhold included,
+the tested contract among them, so no contract's result depends on another's. A contract
+in force before the first month end the records can measure total ARR at is tested at
+that month end.
 
 **L5 · Stub, co-term and month-to-month contracts.**
 - `exclude`: none of them carries ARR.
@@ -516,19 +531,20 @@ figures that need it with the `D.`.
 - `period_average_rate`: the average rate of the month ending at the date.
 - `closing_spot_rate`: the rate at the date.
 
-**V5 · Channel.** `price`: `net_of_channel` — the price the reseller pays the company;
-`gross` — the end customer's price, where a record carries it. `start`:
-`end_customer_activation` — a resold stream enters when the end customer activates;
-`sell_in` — when the company sells to the reseller.
+**V5 · Channel.** `price`: `net_of_channel` — the price the reseller pays the company,
+net of every rebate, marketing-funds or price-protection program the company pays back
+to it, at the program's stated rate on the stream; `gross` — the end customer's price,
+where a record carries it. `start`: `end_customer_activation` — a resold stream enters
+when the end customer activates; `sell_in` — when the company sells to the reseller.
 
 ### Modifications
 
 A contract's value at a date is its value as modified by that date. Every price,
-quantity or scope change the records carry — an amendment, a change order, a price
-increase or concession, an upgrade or downgrade on a contract-modification register —
-changes its annualized value from the month the change takes effect, and the ARR at a
-date carries every change effective on or before it. A modification that terminates a
-contract early ends it at the date L2 names; one that extends the term moves its end.
+quantity or scope change the contract carries (§ The contract) — a price increase or
+concession, an upgrade or downgrade — changes its annualized value from the month the
+change takes effect, and the ARR at a date carries every change effective on or before
+it. A modification that terminates a contract early ends it at the date L2 names; one
+that extends the term moves its end.
 Where a modification states an original value that disagrees with the register's value
 for the same contract, the change the modification records is applied to the register's
 value and the disagreement is recorded with both figures; where the records carry the

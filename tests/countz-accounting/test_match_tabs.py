@@ -16,6 +16,7 @@ import polars as pl
 SCRIPTS = pathlib.Path(__file__).resolve().parents[2] / "countz-accounting" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 from match_tabs import match_tabs  # noqa: E402
+from wbkit import save as wbkit_save  # noqa: E402  every formula's result cached, as a tab script saves
 
 
 def main() -> int:
@@ -59,7 +60,7 @@ def main() -> int:
                          left_label=pl.DataFrame({"id": ["i1"], "label": ["Customer One"]}))
         L.write()
         path = run / "tab.xlsx"
-        wb.save(path)
+        wbkit_save(wb, path)
         wbb = load_workbook(path)
         if wbb.sheetnames[:4] != [out["summary"], out["schedule"], out["reconciling"], out["rules"]]:
             bad.append(f"the four tabs lead the file: {wbb.sheetnames}")
@@ -101,7 +102,7 @@ def main() -> int:
         out2 = match_tabs(wb2, fa, left, right, check="m2", token="m2", ledger=L2,
                           subtitle="Fixture · March 2024 · USD", inputs=[("left", "E.m1.left")],
                           population="P.m2.left", right_population="P.m2.right")
-        wb2.save(run / "src.xlsx")
+        wbkit_save(wb2, run / "src.xlsx")
         with zipfile.ZipFile(run / "src.xlsx") as z:
             if fails := check_workbook.audit_match(z, assembled=False):
                 bad.append(f"the match gate refuses tabs from from_assignment(): {fails[:3]}")
@@ -180,10 +181,10 @@ def regressions(run: pathlib.Path) -> list[str]:
         return wb, match_tabs(wb, res, left, right, ledger=ledger, **kw), ledger
 
     def saved(wb):
-        buf = io.BytesIO()
-        wb.save(buf)
-        buf.seek(0)
-        return buf
+        """The workbook as stored, every formula's result cached (wbkit.save)."""
+        p = run / "saved.xlsx"
+        wbkit_save(wb, p)
+        return io.BytesIO(p.read_bytes())
 
     def gate(wb):
         with zipfile.ZipFile(saved(wb)) as z:
@@ -287,7 +288,7 @@ def regressions(run: pathlib.Path) -> list[str]:
     r6 = pl.DataFrame({"id": ["x"], "date": [D], "value": [1.234]})
     kwd = resolve(l6, r6, decimals=3)
     wb, out, _ = tabs(kwd, l6, r6, currency="kwd")
-    if wb[out["summary"]]["E5"].value != 3.579 or \
+    if load_workbook(saved(wb), data_only=True)[out["summary"]]["E5"].value != 3.579 or \
             wb[out["schedule"]]["E5"].number_format != '#,##0.000;(#,##0.000);"–"':
         bad.append(f"a 3-decimal currency is shown to 2: {wb[out['schedule']]['E5'].number_format}")
     if not refused("matched at 3", lambda: tabs(kwd, l6, r6)) or \

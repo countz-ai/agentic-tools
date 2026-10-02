@@ -95,7 +95,8 @@ Where one fits:
   date text, and take `end=`, the statement's end.
 - `match_tabs.py` — `match_tabs()`: the match summary, schedule, reconciling items and
   rules of a reconciliation, from `resolve()` or `from_assignment()` (`WORKBOOK.md` § 6);
-  it needs `right_population` as well as `population`.
+  it needs `right_population` as well as `population`. Its totals are formulas: save the
+  workbook with `wbkit.save(wb, path)`, never `wb.save` (`WORKBOOK.md` § 7).
 - `items.py` — item tables and their manifest (`EVIDENCE.md` § 5); a table name is
   lower case.
 - `rework.py` — `snapshot()` before a fix pass, `diff_ledger()` after, to state what moved.

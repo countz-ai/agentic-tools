@@ -21,9 +21,9 @@ table is the workbook: check-report reproduces it on Basis of Preparation (WORKB
 | `T.` | **tie** — one asserted agreement between sides, and its result | `checks/<check>.md` |
 | `RI.` | **reconciling item** — one classified, quantified component of a difference | `checks/<check>.md` |
 | `S.` | **source election** — which of two disagreeing sources was trusted, and why | `checks/<check>.md` |
-| `AJ.` | **adjustment** — one adjustment to a reported figure, minted by the recipe family that rules on it: rung or cause, subtype, origin, signed per-period amounts, ruling, evidence | `checks/<check>.md`, rolled up in the recipe's headline walk |
+| `AJ.` | **adjustment** — one adjustment to a reported figure, minted by the recipe family that rules on it: rung or cause, subtype, origin, signed per-period amounts, ruling, evidence | `checks/<check>.md`, rolled up in the recipe's walk |
 | `H.` | **hypothesis** — one candidate lever stated in falsifiable form, with its null, test, population, power and result, reported whether supported or refuted; minted by the recipe family that tests it | `checks/<check>.md`, rolled up in the recipe's hypothesis register |
-| `LK.` | **leak** — one quantity of receivable or revenue billed and not collected, attributed to one named mechanism, with its dollars, days and verdict; minted by the recipe family that establishes it | `checks/<check>.md`, rolled up in the recipe's headline walk |
+| `LK.` | **leak** — one quantity of receivable or revenue billed and not collected, attributed to one named mechanism, with its dollars, days and verdict; minted by the recipe family that establishes it | `checks/<check>.md`, rolled up in the recipe's walk |
 | `X.` | **exception** — one item that failed a check's assertion, with what would clear it and who owns that | `checks/<check>.md`, rolled up in the report's exception schedule |
 | `C.` | **review finding** | the review step's record |
 | `D.` | **data request** — an open item: something missing from the files | the report's open items |
@@ -211,9 +211,10 @@ at the seal. `Ledger.tie()` mints a tie's difference figure and classifies it
 
 **Every figure cell in a workbook carries its computed value.** openpyxl writes a formula
 with no cached result, and the cell renders blank in a viewer that does not recalculate.
-Write the value (the arithmetic lives in the figure's `expression` on the Sources tab), or
-write the formula with its result cached beside it. The gate is
-`scripts/check_workbook.py`. A typed constant that resolves to no figure id is blocking.
+A body figure is a value (the arithmetic from the data room lives in its `expression` on
+the Sources tab); a subtotal, a total, a derived line and a copy of another check's figure
+are formulas with their results cached — `wbkit.total`, `wbkit.save` and
+`link_workbook.py` write them (WORKBOOK.md § 7). The gate is `scripts/check_workbook.py`. A typed constant that resolves to no figure id is blocking.
 
 **Prose numbers are interpolated, never typed.** A sentence is authored as a template
 around a figure id; the code that writes the tab or the deck loads the ledger and

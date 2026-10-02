@@ -638,7 +638,12 @@ def fmt_value(v, fmt: str = "", prose: bool = False, money: str = "") -> str:
         d = len(m.group(1)) if m.group(1) else 0
         if d > 1 and abs(v) >= 1:            # one decimal on the deck (REPORT.md § 4)
             d = 1
-        return f"{v:,.{d}f}"
+        if round(v, d) == 0:                 # never `-0.0`: a zero is the table's en dash
+            return "0" if prose else "–"
+        if prose:
+            return f"{v:,.{d}f}"
+        s = f"{abs(v):,.{d}f}"               # a table's negative in parentheses (§ 4 Style)
+        return f"({s})" if v < 0 else s
     if fmt in count_formats():
         return f"{v:,.0f}"
     if v == 0:                               # an en dash is the table's zero (§ 4 Style)
@@ -1136,8 +1141,10 @@ def chart_block(v, at: str, res: Resolver, book: Book) -> dict:
         raise SpecError(f"{at}: chart needs `from: <tab>` and `rows: [labels]`")
     known(v, CHART_KEYS, at, "chart")
     ctype = str(v.get("type", "column")).lower()
-    if ctype not in ("column", "bar", "line"):
-        raise SpecError(f"{at}: chart type is column, bar or line")
+    if ctype not in ("column", "bar", "line", "waterfall"):
+        raise SpecError(f"{at}: chart type is column, bar, line or waterfall")
+    if ctype == "waterfall":
+        return waterfall_block(v, at, res, book)
     tb = table_block({"from": v["from"], "rows": v["rows"], "ids": True,
                       **({"block": v["block"]} if v.get("block") else {})}, at, res, book)
     t: Table = tb["table"]
@@ -1163,6 +1170,48 @@ def chart_block(v, at: str, res: Resolver, book: Book) -> dict:
     return {"t": "chart", "type": ctype, "categories": categories, "series": series,
             "title": res.resolve(v.get("title", ""), at), "source": t.source,
             "fmt": next((row[cat_idx[0]].fmt for row in t.rows), "")}
+
+
+WATERFALL_SLOT = 0.3                     # inches, the least height of one walk line
+
+
+def waterfall_block(v, at: str, res: Resolver, book: Book) -> dict:
+    """A walk drawn as floating bars (REPORT.md § 2): `rows` are the walk's lines in
+    order and `columns` names one period. The first line and every derived line (`= …`)
+    is a total, drawn from zero; every other line is a step from the running total, its
+    stored sign its direction. The builder draws what the tab holds and adds nothing: a
+    total that its steps do not reach is refused, as a condensed table is."""
+    cols = v.get("columns")
+    if not isinstance(cols, list) or len(cols) != 1:
+        raise SpecError(f"{at}: a waterfall charts one period — `columns: [<period header>]`")
+    tb = table_block({"from": v["from"], "rows": v["rows"], "ids": True,
+                      **({"block": v["block"]} if v.get("block") else {})}, at, res, book)
+    t: Table = tb["table"]
+    ci = next((i for i, h in enumerate(t.headers)
+               if t.numeric[i] and normalize(h) == normalize(str(cols[0]))), None)
+    if ci is None:
+        raise SpecError(f"{at}: `{t.source}` has no numeric column headed `{cols[0]}`")
+    steps = []
+    for k, row in enumerate(t.rows):
+        label = next((str(c.value).strip() for j, c in enumerate(row)
+                      if isinstance(c.value, str) and c.value.strip() and not t.numeric[j]
+                      and t.headers[j].strip().lower() not in ID_HEADERS), "")
+        val = row[ci].value if isinstance(row[ci].value, (int, float)) else 0.0
+        total = k == 0 or bool(DERIVED_ROW.match(label))
+        steps.append({"label": label.lstrip("= ").strip() if total else label, "value": float(val),
+                      "total": total, "fmt": row[ci].fmt})
+    if not steps[0]["total"] or len(steps) < 3:
+        raise SpecError(f"{at}: a waterfall opens on its starting figure and carries at least one step "
+                        f"and one total")
+    return {"t": "chart", "type": "waterfall", "steps": steps, "title": res.resolve(v.get("title", ""), at),
+            "source": t.source, "period": str(cols[0])}
+
+
+def chart_h(block: dict) -> float:
+    """A chart's box: CHART_H, and a waterfall grows a slot per walk line past it."""
+    if block.get("type") == "waterfall":
+        return max(CHART_H, len(block["steps"]) * WATERFALL_SLOT + CHART_AXIS_H)
+    return CHART_H
 
 
 # --- layout: measure --------------------------------------------------------------
@@ -1274,7 +1323,7 @@ def measure(block: dict, width: float) -> float:
             h += 0.24
         return h
     if t == "chart":
-        return CHART_H + (label_h(block["title"], width) + 0.06 if block.get("title") else 0)
+        return chart_h(block) + (label_h(block["title"], width) + 0.06 if block.get("title") else 0)
     if t == "columns":
         ws = [width * s - COL_GAP * (len(block["cols"]) - 1) / len(block["cols"]) for s in block["widths"]]
         return max(stack_h(col, w) for col, w in zip(block["cols"], ws))
@@ -1693,6 +1742,8 @@ class Deck:
         yy = y
         if block.get("title"):
             yy += self.label(s, x, yy, w, block["title"], "chart-title", color=INK) + 0.06
+        if block["type"] == "waterfall":
+            return yy - y + self.waterfall(s, block, x, yy, w)
         cats, series = block["categories"], block["series"]
         n_cat, n_ser = max(len(cats), 1), max(len(series), 1)
         horiz = block["type"] == "bar"
@@ -1703,7 +1754,18 @@ class Deck:
         step = (ticks[1] - ticks[0]) if len(ticks) > 1 else 1.0
         span = (hi - lo) or 1.0
 
-        legend_h = CHART_LEGEND_H if len(series) > 1 else 0.0
+        # the legend wraps onto as many rows as its entries need, inside the chart's width
+        sw, lgap, lpad = 0.13, 0.07, 0.30
+        entries = [sw + lgap + text_w(str(nm), pt) + 0.05 for nm, _ in series]
+        legend_rows: list[list[int]] = [[]]
+        used = 0.0
+        for i, ew in enumerate(entries):
+            if legend_rows[-1] and used + lpad + ew > w:
+                legend_rows.append([])
+                used = 0.0
+            used += (lpad if legend_rows[-1] else 0) + ew
+            legend_rows[-1].append(i)
+        legend_h = (CHART_LEGEND_H + 0.2 * (len(legend_rows) - 1)) if len(series) > 1 else 0.0
         gutter_text = cats if horiz else [axis_text(t, step) for t in ticks]
         gut = min(max([text_w(t, pt) for t in gutter_text] + [0.35]) + 0.10, w * 0.35)
         px, pw = x + gut, w - gut
@@ -1776,18 +1838,68 @@ class Deck:
                 self.text(s, px + ci * slot, py + ph + 0.07, slot, cat_h,
                           [[(str(c), pt, False, MUTED)]], "chart-cat", align=PP_ALIGN.CENTER)
 
-        # the legend, centred under the plot
+        # the legend, centred under the plot, one line per row of entries
         if legend_h:
-            sw, gap, pad = 0.13, 0.07, 0.30
-            tw = [text_w(str(nm), pt) + 0.05 for nm, _ in series]
-            total = sum(sw + gap + t for t in tw) + pad * (len(series) - 1)
-            lx = x + max((w - total) / 2, 0.0)
-            ly = yy + CHART_H - legend_h + 0.06
-            for si, (nm, _) in enumerate(series):
-                self.rect(s, lx, ly + 0.02, sw, sw, SERIES[si % len(SERIES)], "chart-swatch")
-                self.text(s, lx + sw + gap, ly, tw[si], 0.18, [[(str(nm), pt, False, MUTED)]], "chart-legend")
-                lx += sw + gap + tw[si] + pad
+            for li, idx in enumerate(legend_rows):
+                total = sum(entries[i] for i in idx) + lpad * (len(idx) - 1)
+                lx = x + max((w - total) / 2, 0.0)
+                ly = yy + CHART_H - legend_h + 0.06 + 0.2 * li
+                for si in idx:
+                    nm = series[si][0]
+                    tw = entries[si] - sw - lgap
+                    self.rect(s, lx, ly + 0.02, sw, sw, SERIES[si % len(SERIES)], "chart-swatch")
+                    self.text(s, lx + sw + lgap, ly, tw, 0.18, [[(str(nm), pt, False, MUTED)]], "chart-legend")
+                    lx += entries[si] + lpad
         return yy - y + CHART_H
+
+    def waterfall(self, s, block: dict, x: float, y: float, w: float) -> float:
+        """A walk as floating bars, laid across the page: each line a band, its label in
+        the gutter, its bar from the running total to the running total plus the line,
+        its value printed beyond the bar. Totals are drawn from zero in ink; a step up in
+        teal, a step down in muted ink. Values ride on the shape names (`chartval:`) as
+        every drawn chart's do, and the printed value is the table's form of the cell."""
+        steps = block["steps"]
+        h = chart_h(block)
+        pt = PT["stat_label"]
+        tag = block["source"]
+        ends, run = [], 0.0
+        for st in steps:
+            a, b = (0.0, st["value"]) if st["total"] else (run, run + st["value"])
+            run = b
+            ends.append((a, b))
+        vals = [v for ab in ends for v in ab] + [0.0]
+        lo, hi, ticks = nice_axis(min(vals), max(vals))
+        step = (ticks[1] - ticks[0]) if len(ticks) > 1 else 1.0
+        span = (hi - lo) or 1.0
+        gut = min(max(text_w(st["label"], pt) for st in steps) + 0.15, w * 0.42)
+        val_w = max(text_w(fmt_value(st["value"], st["fmt"]), pt, True) for st in steps) + 0.12
+        px, pw = x + gut, w - gut - val_w
+        ph = h - CHART_AXIS_H
+        slot = ph / len(steps)
+
+        def vx(v):
+            return px + pw * (v - lo) / span
+
+        for t in ticks:
+            self.connector(s, vx(t), y, vx(t), y + ph, RULE, "chart-grid", GRID_PT)
+            self.text(s, vx(t) - 0.6, y + ph + 0.07, 1.2, 0.18,
+                      [[(axis_text(t, step), pt, False, MUTED)]], "chart-axis", align=PP_ALIGN.CENTER)
+        self.connector(s, vx(0.0), y, vx(0.0), y + ph, MUTED, "chart-base", BASE_PT)
+        for i, (st, (a, b)) in enumerate(zip(steps, ends)):
+            top = y + i * slot
+            colour = MARKER if st["total"] else (TEAL if st["value"] >= 0 else MUTED)
+            lo_x, hi_x = sorted((vx(a), vx(b)))
+            self.rect(s, lo_x, top + slot * 0.18, max(hi_x - lo_x, 0.01), slot * 0.64, colour,
+                      f"chartval:{tag}:{float(st['value'])!r}")
+            if i + 1 < len(steps) and not steps[i + 1]["total"]:
+                self.connector(s, vx(b), top + slot * 0.82, vx(b), top + slot * 1.18, RULE,
+                               "chart-grid", GRID_PT)
+            self.text(s, x, top, gut - 0.12, slot, [[(st["label"], pt, st["total"], INK if st["total"] else BODY)]],
+                      "chart-cat", align=PP_ALIGN.RIGHT, anchor=MSO_ANCHOR.MIDDLE)
+            self.text(s, hi_x + 0.06, top, val_w, slot,
+                      [[(fmt_value(st["value"], st["fmt"]), pt, st["total"], INK)]],
+                      "chart-value", anchor=MSO_ANCHOR.MIDDLE)
+        return h
 
 
 # --- assembling the pages -----------------------------------------------------------
