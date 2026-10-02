@@ -3,9 +3,8 @@
 A playbook recipe declares which checks substantiate a fixed objective, over which source
 classes, at what grain, and how the deliverable tells the result; `check-plan` compiles
 it into the run's playbook. The rules under § What every recipe inherits bind every
-family of every recipe, and no recipe restates them; § What a recipe opts into holds
-formats a family cites by name. What a recipe document must contain is
-`RECIPE_FORMAT.md`, read when one is written.
+family of every recipe. `RECIPE_FORMAT.md` states what a recipe document must contain;
+read it before you write one.
 
 ## What every recipe inherits
 
@@ -51,7 +50,8 @@ never evidence that its own conclusion holds.
 
 ### The verdict ladder
 
-`supported`: record evidence at the standing the ruling claims.
+`supported`: record evidence at the standing the ruling claims. A `supported` ruling
+whose evidence carries a lower standing is a `blocking` finding (VALIDATION.md § Severity).
 `candidate`: the evidence points one way and the data room lacks the document that
 settles it; carries the condition that would move it. `rejected`: examined and refused,
 with the test it failed. `modified`: a proposed figure and the run's, side by side. A
@@ -70,37 +70,14 @@ its amount. The schedule carries the difference as its own column beside the two
 One `X.` per exception, minted
 `X.<family>.<item slug>`. No minted item — exception, adjustment, leak — is netted or
 aggregated past counting: its schedule lists every one and states the count and gross
-amount for each group it presents.
+amount for each group it presents. A family that rolls up other families' items mints
+nothing. It lists every item it rolls up, and each row carries the id and values of the
+check that produced the item.
 
 ### Reperformance
 
 Every schedule closes with a **To reperform** block — ordered reads,
 selection rule, arithmetic (EVIDENCE.md § 4, WORKBOOK.md § 6).
-
-## What a recipe opts into
-
-Formats a family's section cites by name when its procedure produces one. Nothing here
-binds a family that does not cite it, and nothing here says where the result sits in the
-deliverable: which tables lead the deck, which go to its appendix and which stay on
-their tab is the recipe's `## Exec summary` and `## Report` (RECIPE_FORMAT.md § Report),
-because what the reader came for differs by analysis. A quality of earnings review is
-read for its EBITDA walk; a revenue-leak diagnostic is read for its causes and actions,
-with the full bridge as support.
-
-### A walk
-
-A family whose section says it builds a walk, per this section. One table,
-income-statement style: one column per period in the set, the id column the only frozen
-band, the title the only row above the header. Rows: the starting figure, citing its
-tie; one row per item considered, grouped under its rung or cause, with id, name, group,
-signed amount per period, verdict, then the record at the producing check's values; per
-group, the supported subtotal as a conditional-sum formula over the verdict column,
-`wbkit.total(cell, value, rows=[…], when=("<verdict column>", ["supported", …]))`, its
-result cached (WORKBOOK.md § 7); every derived line a `wbkit.total` over the line above
-it and the rows between; the closing figure; information lines, never added
-to the walk. No item sits only inside a subtotal. A family that rolls up other families'
-items mints nothing. A supported item whose evidence stands below its ruling is a
-blocking review defect.
 
 ## Running a recipe — the relay procedure
 

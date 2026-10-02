@@ -24,7 +24,7 @@ unless stated.
 | `MARKER`   | `16203A` | `--color-navy` | Chart series 3 only. Never text, never a fill beside `BAND` or `ACCENT` (2.20 against teal). | — |
 | `TINT`     | `E6EFF0` | `--color-surface-accent` | Fill of the headline figure cell and of a "current period" column when one must stand out. Ink text on it (13.7). | — |
 
-### 1b. Neutrals (ink and navy tinted over the ground; no neutral grey)
+### 1b. Neutrals (ink and navy tinted over the ground)
 
 | Token      | Hex      | Design token | Role                                                                   | Contrast |
 |------------|----------|--------------|------------------------------------------------------------------------|----------|

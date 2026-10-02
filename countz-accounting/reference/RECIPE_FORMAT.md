@@ -180,6 +180,5 @@ items with the plan's citation that surfaced it, and what puts it out of the run
 
 Whatever the diagnostic needs, between the required sections. The live recipes carry `The
 adjustment record`, `The expectation register`, `Data quality`, `Perspective`, and the
-frames their walks rule against. A family that builds a walk says so and cites
-`PLAYBOOK_RECIPES.md` § A walk. `The period set` is where a recipe narrows DOCTRINE.md
+frames their walks rule against. `The period set` is where a recipe narrows DOCTRINE.md
 § Periods to the columns its objective carries.
