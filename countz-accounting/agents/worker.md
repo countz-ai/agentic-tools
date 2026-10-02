@@ -65,42 +65,6 @@ meanwhile, and write nothing under `cache/`. The relay re-runs the extract step 
 your fixes and then every step that read the id (`RUN_CONTRACT.md` § Review and
 report).
 
-## Shared modules
-
-Reach for the least code that does the job, in this order: a script or module below
-where one fits; then SQL (`evidence.py`'s `select()` over the cache); then polars and
-the other common libraries (`${CLAUDE_PLUGIN_ROOT}/reference/CONDUCT.md` § Libraries);
-custom Python last, only for what none of those express.
-
-In `${CLAUDE_PLUGIN_ROOT}/scripts/`; each docstring is its API. Always, never copied or
-rewritten in your script:
-
-- `figures.py` — every figure, population, citation and tie (`Ledger`, `EVIDENCE.md`
-  § 3); every number in prose (`sub()`, `fmt()`).
-- `periods.py` — period columns, windows, labels, fiscal years (`DOCTRINE.md` § Periods).
-- `wbkit.py` — your tab (`WORKBOOK.md` § 7).
-- `evidence.py` — spans and citations.
-- `cache.py` — reading and verifying the run's cache.
-- `step_record.py` — `start`, `place_tab()`, `finish()` (`RUN_CONTRACT.md` § The step
-  record).
-
-Where one fits:
-
-- `matching.py` — `check_assignment()`: a match you built with joins accounts for every
-  item of both populations exactly once.
-- `resolve.py` — `resolve()`: two streams of transactions matched by ordered rules, as
-  reconciliation software does; every match names its rule, every other item is an
-  exception with its reason. `from_assignment()`: a match built with joins, as the same
-  result. Both refuse float or decimal ids and keys, time-zoned datetimes and non-ISO
-  date text, and take `end=`, the statement's end.
-- `match_tabs.py` — `match_tabs()`: the match summary, schedule, reconciling items and
-  rules of a reconciliation, from `resolve()` or `from_assignment()` (`WORKBOOK.md` § 6);
-  it needs `right_population` as well as `population`. Its totals are formulas: save the
-  workbook with `wbkit.save(wb, path)`, never `wb.save` (`WORKBOOK.md` § 7).
-- `items.py` — item tables and their manifest (`EVIDENCE.md` § 5); a table name is
-  lower case.
-- `rework.py` — `snapshot()` before a fix pass, `diff_ledger()` after, to state what moved.
-
 ## What you never do
 
 - Never decide what runs next. The relay drives; a decision you make is one that is not
