@@ -9,5 +9,27 @@
   "termsOfServiceUrl": "https://www.countz.ai/terms",
   "author": {
     "name": "Countz"
-  }
+  },
+  "keywords": [
+    "accounting",
+    "audit",
+    "finance",
+    "tie-out",
+    "reconciliation",
+    "bank-reconciliation",
+    "cash",
+    "quality-of-earnings",
+    "ebitda",
+    "financial-due-diligence",
+    "asc-606",
+    "revenue-recognition",
+    "asc-842",
+    "lease-accounting",
+    "arr",
+    "net-revenue-retention",
+    "saas-metrics",
+    "dso",
+    "receivables",
+    "countz"
+  ]
 }
