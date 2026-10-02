@@ -2,11 +2,13 @@
 name: cash
 description: >-
   Prove out the company's cash and cash equivalents before the auditors arrive: read
-  your files, draft an account-by-account plan for your confirmation, run it at
-  transaction level in parallel, and hand you the exceptions and open items with every
-  figure re-performable. Invoke when the user asks
-  to check, substantiate, prove out, or audit-ready their cash balances, cash
-  equivalents, bank reconciliations, or bank activity.
+  your files, draft an account-by-account plan for your confirmation, rule every account
+  against the definition, prove each account's activity and balance to the bank's own
+  record, test the period end, and hand you the walk from recorded cash to cash as
+  substantiated with the exceptions and open items, every figure re-performable. Invoke
+  when the user asks to check, substantiate, prove out, or audit-ready their cash
+  balances, cash equivalents, restricted cash, bank reconciliations, proof of cash, or
+  bank activity.
 context: inline
 ---
 
