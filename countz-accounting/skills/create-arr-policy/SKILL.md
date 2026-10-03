@@ -147,4 +147,4 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/setup_run.py <run_dir> --session ${CLAUDE_
 ## Return
 
 To a relay, two lines: the saved path and the pinned path. To the user: where the policy
-is saved, and that a revenue analysis will now use it.
+is saved, and that an ARR analysis will now use it.
