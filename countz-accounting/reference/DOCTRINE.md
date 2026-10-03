@@ -14,18 +14,6 @@ Pick the most trustworthy data source, in the following order:
 
 When 2 data sources don't agree, pick the most trustworthy one, and raise question on the other.
 
-## Populations
-
-Each check states the population it covers — which accounts, documents or contracts are
-in scope — and rules every item it reaches in or out.
-
-- An item is in only on evidence that it meets the definition. Where the records don't
-  settle it, rule it out on that basis, size it, and request the record that would bring it in.
-- E.g. a short-term investment with no instrument terms in the data room is not a cash
-  equivalent: the test can't be applied, so it stays out of the cash line and the run
-  requests the holder's statement.
-- State both sides: in scope plus ruled out equals every item examined.
-
 ## Working with numbers
 
 - Numbers should always be calculated using code or SQL queries, and never by ai-agent directly.

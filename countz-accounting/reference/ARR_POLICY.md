@@ -96,7 +96,7 @@ instructions:                     # free text: how the decisions apply to this b
     applies_to: [S5]
     source: inferred              # user | stated | inferred
     basis: "S5 timing is coverage_per_year; a reissue carries no price"
-    added: {at: 2026-09-25T10:02:11Z, in: revenue-analysis-acme.20260925-095811}
+    added: {at: 2026-09-25T10:02:11Z, in: arr-analysis-acme.20260925-095811}
 ```
 
 - The header comment and `apply_per` point whoever opens the file to § Applying the

@@ -83,9 +83,9 @@ The closed list the run's population is ruled from, drawn top-down from the obje
 the statement line, the trial-balance accounts that compose it, the general-ledger
 accounts behind each — never from which account names read as in scope. The section
 carries the definition the population family rules against and the accounts outside the
-line it reaches, each ruled in or out (DOCTRINE.md § Populations). Where the population family's
-ruling differs from the plan's, its record states the divergence and the relay puts it to
-the user (§ 3).
+line it reaches, each ruled in or out, and states how the run rules an item the records do
+not settle. Where the population family's ruling differs from the plan's, its record states
+the divergence and the relay puts it to the user (§ 3).
 
 #### `Source classes`
 
@@ -102,8 +102,8 @@ the data fact that sets it. An unstated coarsening is a review finding.
 #### `The families`
 
 One `###` per family, headed exactly
-`### <F><n> — <title> (kind \`<kind>\`, <cardinality>)`. Example: `### C4 — the books meet
-the bank (kind \`recon\`, per bank account)`. `<F>` is one upper-case letter, `<n>` one
+`### <F><n> — <title> (kind \`<kind>\`, <cardinality>)`. Example: `### C4 — the books reconciled
+to the bank (kind \`recon\`, per bank account)`. `<F>` is one upper-case letter, `<n>` one
 digit, `<kind>` a key of `KINDS`. Number from 0 where family 0 is the population walk,
 from 1 otherwise. Each family states what it establishes, what it reads from the data
 room, and what it reads from other families — the reads the plan carries as `_from`
@@ -178,7 +178,7 @@ items with the plan's citation that surfaced it, and what puts it out of the run
 
 #### Sections a recipe adds
 
-Whatever the diagnostic needs, between the required sections. The live recipes carry `The
-adjustment record`, `The expectation register`, `Data quality`, `Perspective`, and the
-frames their walks rule against. `The period set` is where a recipe narrows DOCTRINE.md
+Whatever the diagnostic needs, between the required sections. The live recipes carry
+`Rules`, `Measures`, `How issues are reported`, `Toolbox`, `The adjustment record`, `Data
+quality`, `Perspective`, and the frames their walks rule against. `The period set` is where a recipe narrows DOCTRINE.md
 § Periods to the columns its objective carries.

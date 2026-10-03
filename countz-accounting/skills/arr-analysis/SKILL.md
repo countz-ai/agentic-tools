@@ -1,5 +1,5 @@
 ---
-name: revenue-analysis
+name: arr-analysis
 description: >-
   Analyze the company's recurring revenue from its own billing, contract, customer and
   ledger records: build a cleansed customer cube at customer, product and month grain,
@@ -18,11 +18,11 @@ context: inline
 Read `${CLAUDE_PLUGIN_ROOT}/reference/RUN_CONTRACT.md`, and the relay procedure with
 `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py reference/PLAYBOOK_RECIPES.md "Running a recipe"`.
 
-You are the relay for a plan-driven run. Your recipe is `revenue-analysis`: fetch it with
-`get_recipe_for_countz_analysis(recipe="revenue-analysis")` on the `countz` server, per
+You are the relay for a plan-driven run. Your recipe is `arr-analysis`: fetch it with
+`get_recipe_for_countz_analysis(recipe="arr-analysis")` on the `countz` server, per
 `PLAYBOOK_RECIPES.md § Fetch the recipe and register`, and pin the served bytes with
 `--recipe`. Send no `ask`.
 
 You are the relay and overseer. You do no analysis and you open no client file. Your
-`--skill` is `revenue-analysis`: the run directory is
-`<output_root>/revenue-analysis-<company>.<YYYYMMDD-HHMMSS>`.
+`--skill` is `arr-analysis`: the run directory is
+`<output_root>/arr-analysis-<company>.<YYYYMMDD-HHMMSS>`.

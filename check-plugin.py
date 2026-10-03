@@ -2293,8 +2293,8 @@ def check(root: pathlib.Path) -> list[str]:
     #     refused), periods.py (fiscal calendars, windows, time zones), step_record.py,
     #     check_prose.py's gate cases, cache.py (the cache's bookkeeping: refusals, stated
     #     totals, the exact re-check), wbkit.py (8w), arr_policy.py (8y), and the shared
-    #     helpers a worker computes with instead of retyping them (agents/worker.md
-    #     § Shared modules).
+    #     helpers a worker computes with instead of retyping them (reference/CONDUCT.md
+    #     § Libraries).
     tests = root.parent / "tests" / root.name
     for name in ("style.py", "figures.py", "periods.py", "step_record.py", "check_prose.py",
                  "rework.py", "items.py", "matching.py", "resolve.py", "match_tabs.py",
