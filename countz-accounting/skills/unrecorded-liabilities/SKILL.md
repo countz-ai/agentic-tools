@@ -42,7 +42,7 @@ does. Use these sentences or your own equivalent:
   takes longer to run; a shorter one misses them.
 - **Tracing threshold**: payments and invoices at or above this amount are each traced
   to the bill behind them; a random selection of smaller ones is traced too. Default: set
-  so the traced items cover at least 80% of the dollars, and never above 75% of
+  so the traced items cover at least 80% of the dollars, and never above half of
   materiality. A lower amount traces more items and takes longer; a higher one leaves
   more dollars untraced.
 - **Stale accrual age**: an accrual with no invoice, payment or true-up behind it after
@@ -50,8 +50,10 @@ does. Use these sentences or your own equivalent:
   carried unsettled from one year end to the next is tested at any age. A shorter age
   flags more accruals.
 
-Ask for the run's materiality in the same pass; without it, materiality is 5% of pre-tax
-income for the year. Say that the defaults become days and dollars only once the files are
-read, and that the plan shows them for approval before anything runs. When you present
-the plan, show the payment cycle measured, the window's days and end date, the threshold
-in dollars, the cutoff window and every channel the search reaches or cannot reach.
+Ask for the run's materiality in the same pass. Default: 5% of the latest year's pre-tax
+income where the company made a pre-tax profit in every year presented; otherwise 1% of
+the latest year's total expenses. Say that the defaults become days and dollars only once
+the files are read, and that the plan shows them for approval before anything runs. When
+you present the plan, show the materiality in dollars, the payment cycle measured, the
+window's days and end date, the threshold in dollars, the cutoff window and every channel
+the search reaches or cannot reach.
