@@ -43,6 +43,16 @@ what changing it does. Use this sentence or your own equivalent:
   last date your records cover. A later date moves the end of the twelve months later and
   brings more obligations into it.
 
+Offer two more options with their defaults; change them only when the user asks:
+
+- **Look-forward basis**: default `asc_205_40`, the twelve months after the issuance date,
+  the period GAAP requires management to evaluate. `as_2415` measures the twelve months
+  after the period end, the period a public company's auditor evaluates.
+- **Forecast extension**: where your forecast ends before the twelve months do, the run
+  extends it at your recent monthly burn. Default: the last three forecast months, with
+  one-off items such as an annual true-up removed and named. Alternatives: the last three
+  months with nothing removed, or the last six months with one-off items removed.
+
 Ask for the run's materiality and performance materiality in the same pass. Materiality is
 the amount below which a finding is reported as advisory. Default: 5% of the latest year's
 pre-tax income where the company made a pre-tax profit in every year presented; otherwise
@@ -51,4 +61,4 @@ every suspected problem is tested before the run finishes. Default: 50% of mater
 Say that each default becomes dollars only once the files are read.
 When you present the plan, show the materiality and the performance materiality in
 dollars, the assessment date and the end of the twelve months after it, the date the
-records end, the forecast the run treats as the base case, and every plan it registers.
+records end, the forecast extension with each one-off item it removes, the forecast the run treats as the base case, and every plan it registers.

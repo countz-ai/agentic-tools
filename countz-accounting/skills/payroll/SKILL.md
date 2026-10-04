@@ -37,6 +37,14 @@ for hourly staff, the equity administrator's exercise and settlement records, th
 statements, the payables register, and the trial balance and ledger detail. Ask for them
 in the same pass. Their absence degrades families; it does not stop the run.
 
+**Collect `headline_scope`.** Ask in plain words, with its default and what changing it
+does. Use this sentence or your own equivalent:
+
+- **What the headline payroll cost holds**: by default, employee payroll cost only
+  (wages, employer taxes, benefits and reimbursements); payments to contractors are
+  reconciled to the 1099s and shown on their own line beside it. Say so if you want
+  contractor cost added to the headline instead.
+
 Ask for the run's materiality, performance materiality, clearly trivial amount and
 investigation threshold in the same pass, in plain words:
 
@@ -49,14 +57,10 @@ investigation threshold in the same pass, in plain words:
   listed and proposed as no correction. Default: 5% of materiality.
 - **Investigation threshold**: a month whose payroll cost on a line departs from what
   headcount and pay rates predict by more than this amount is investigated. Default: 50%
-  of performance materiality.
+  of performance materiality. You may set another amount.
 
 Say that each default becomes dollars only once the files are read, and that the plan
 shows them for approval before anything runs. When you present the plan, show the four
-amounts in dollars, who files the company's payroll returns (the company, a provider or
-a PEO), the pay calendar, the returns and states it registers, and the date the records
-end.
-</content>
-</invoke>
-<invoke name="Bash">
-<parameter name="command">cd /Users/yingxie/countz/agentic-tools; python3 check-plugin.py 2>&1 | tail -3; python3 countz-accounting/scripts/validate_recipe.py /Users/yingxie/countz/milkyway/models/recipes/PAYROLL.md; cd /Users/yingxie/countz/milkyway/backend; .venv/bin/python -m pytest tests/unit/control_plane/test_mcpsrv_app.py -q -p no:cacheprovider --no-cov 2>&1 | tail -3
+amounts in dollars, the headline scope, who files the company's payroll returns (the
+company, a provider or a PEO), the pay calendar, the returns and states it registers, and
+the date the records end.

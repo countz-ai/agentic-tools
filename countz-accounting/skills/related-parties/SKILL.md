@@ -45,8 +45,10 @@ what changing it does. Use this sentence or your own equivalent:
 
 - **Reporting entity**: whether the statements will be filed with the SEC. If they will,
   we also compute the related-party amounts shown on the face of the statements and list
-  each transaction with a related person above $120,000 for your counsel. Default:
-  private.
+  each transaction with a related person above $120,000 for your counsel, and we count
+  the pay of a relative of an officer or a major owner above $120,000 a year in the
+  related-party figures. If they will not, we list that pay and leave it out of the
+  figures as ordinary compensation where it is in line with the role. Default: private.
 
 Ask for the run's materiality, performance materiality and related-party materiality in
 the same pass. Materiality is the amount against which proposed entries and uncorrected
@@ -56,7 +58,7 @@ expenses. Performance materiality is the amount above which every suspected prob
 tested, and every transaction screened for its business purpose, before the run finishes.
 Default: 50% of materiality. Related-party materiality is the lower amount at or above
 which a difference in a related-party figure is reported as a finding; below it, the
-difference is advisory. Default: 5% of materiality.
+difference is advisory. Default: 5% of materiality; the user may set another amount.
 When you present the plan, show the three materialities in dollars, every party the files
 name with its relationship and the sources that name it, the masters and the keys each
 carries for matching, the company's related-party process as the files state it, and the
