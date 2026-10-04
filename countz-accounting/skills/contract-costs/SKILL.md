@@ -34,7 +34,8 @@ any customer life or retention analysis. Where the company has never capitalized
 the commission records back over the amortization period. Ask for them in the same pass.
 Their absence degrades families; it does not stop the run.
 
-Ask for the run's materiality in the same pass. Say that the default becomes dollars only
-once the files are read, and that the plan shows it for approval before anything runs.
+Ask for the run's materiality and performance materiality in the same pass. Say that the
+defaults become dollars only once the files are read, and that the plan shows them for
+approval before anything runs.
 When you present the plan, show the capitalization policy as the files state it, the
 amortization period per portfolio, and the months after the period end the records cover.

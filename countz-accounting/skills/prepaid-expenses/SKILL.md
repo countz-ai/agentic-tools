@@ -40,10 +40,11 @@ default and what changing it does. Use this sentence or your own equivalent:
   this amount, over the year before the period end, are each read for a service period
   that runs past the period end (example: an annual subscription expensed when paid); a
   random selection of smaller ones is read too. Default: your prepaid policy's threshold,
-  lowered if needed so the items read cover at least 80% of the dollars. A lower amount
+  or performance materiality divided by 2.3 where the policy states none. A lower amount
   reads more invoices and takes longer; a higher one leaves more dollars unread.
 
-Ask for the run's materiality in the same pass. Say that the default becomes dollars only
-once the files are read, and that the plan shows it for approval before anything runs.
+Ask for the run's materiality and performance materiality in the same pass. Say that each
+default becomes dollars only once the files are read, and that the plan shows both for
+approval before anything runs.
 When you present the plan, show the prepaid policy as the files state it, the threshold in
 dollars, and the months after the period end the records cover.

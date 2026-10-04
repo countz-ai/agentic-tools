@@ -44,8 +44,11 @@ what changing it does. Use this sentence or your own equivalent:
   Default: the last date your records cover. If you know when the statements will be
   issued, give that date; a waiver signed after it does not count.
 
-Ask for the run's materiality in the same pass. Default: 5% of the latest year's pre-tax
-income where the company made a pre-tax profit in every year presented; otherwise 1% of
-the latest year's total expenses. When you present the plan, show the materiality in
+Ask for the run's materiality and performance materiality in the same pass. Materiality is
+the amount below which a finding is reported as advisory. Default: 5% of the latest year's
+pre-tax income where the company made a pre-tax profit in every year presented; otherwise
+1% of the latest year's total expenses. Performance materiality is the amount above which
+every suspected problem is tested before the run finishes. Default: 50% of materiality.
+When you present the plan, show the materiality and the performance materiality in
 dollars, every borrowing and covenant it registers, each covenant's test dates, the
 evaluation date and the date the records end.
