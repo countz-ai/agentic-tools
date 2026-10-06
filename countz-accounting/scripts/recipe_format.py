@@ -22,7 +22,7 @@ from style import CURRENCIES, SCALES  # noqa: E402
 REQUIRED = ["Population", "Source classes", "Granularity", "The families",
             "Exec summary", "Report", "What the plan notes rather than checks"]
 INHERITED = {"Reperformance", "Exceptions", "The bar", "Rulings", "Coverage",
-             "The source-class ladder", "The verdict ladder", "The headline walk"}
+             "The source-class ladder", "The verdict ladder"}
 FRONTMATTER_KEYS = {"name", "objective", "declares", "headline", "lead"}
 FAMILY = re.compile(r"^### ([A-Z])(\d) — .+ \(kind `([a-z]+)`, (.+)\)\s*$")
 # `(kind `x`, one check, after A0)`: an order in the header. The plan derives `after`
