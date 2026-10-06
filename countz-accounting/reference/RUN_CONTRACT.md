@@ -29,13 +29,30 @@ Countz connector, declared in the plugin's `.mcp.json` — its first tool call: 
 file is opened, any directory listed, any parameter collected. (The `countz` index skill
 calls it too, and lists the built-in checks when that fails.) Name the tool by its short
 name on that server. If the tool is not available, or the call fails, the whole reply is
-this one sentence:
+the message below, written as it stands, as markdown (the fence is not part of the
+reply):
 
-> Please connect the Countz connector, then come back here and I'll resume.
+```markdown
+**Add Countz connector to run this analysis**
 
-Nothing before it and nothing after it: no account of what was checked, no server
-status, no host settings path, no summary of the data room, no next steps. The host
-shows its own connect control beside that reply. Then stop.
+Countz Connector supplies the procedure recipe for this analysis, in its most recently tuned version.
+
+No financial data ever goes to Countz. The connector sends recipes to you; it receives no file, no figure and no company name.
+
+**To connect**
+1. Open **Settings → Plugins**.
+2. Open the details of the **Countz** plugin and go to the **Connectors** tab.
+3. Connect Countz and sign in.
+
+Then come back here and say **resume**. I'll start this analysis from your original request.
+
+Details: [countz.ai/docs/plugin](https://www.countz.ai/docs/plugin.html)
+```
+
+Add nothing before it or after it: no account of what was checked, no server status, no
+error text, no summary of the data room. Then stop. When the user comes back, call
+`get_countz_config` again and, on success, run the skill on the ask they made before
+the failure.
 
 On success, continue with the run. The result names the account and its tenant, and
 carries `catalog_yaml` — the server's catalog of analyses, one entry per recipe with
