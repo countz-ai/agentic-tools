@@ -71,7 +71,7 @@ import zipfile
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from check_prose import admitted_values  # noqa: E402
-from check_workbook import sheet_cells, sheet_order, shared_strings  # noqa: E402
+from check_workbook import sheet_cells, sheet_numbers, sheet_order, shared_strings  # noqa: E402
 from recipe_format import APPENDIX, report_metrics, report_narrative, report_schedules  # noqa: E402
 import style  # noqa: E402
 
@@ -225,6 +225,13 @@ RUN_TAB_NAMES = {"exec summary", "basis of preparation", "coverage", "open items
 PERIOD_LIKE = re.compile(r"^[qh]\d$", re.I)
 
 
+# The run's working words, refused anywhere on a slide: in what the author writes, and in a
+# table copied from a tab — a row carrying them stays off the deck (REPORT.md § 3).
+MACHINE_PHRASE = re.compile(
+    r"\b(?:mint(?:ed|s|ing)?|recipe|skill|this run|the run(?:'s)?|rule \d+|"
+    r"hypothes(?:is|es) (?:departed|held)|departed hypothes(?:is|es))\b", re.I)
+
+
 def step_tokens(tabs: list[str]) -> list[str]:
     """The roster tokens the workbook's check tabs open with (`r4 Position and DSO`)."""
     out = set()
@@ -283,6 +290,12 @@ def tab_block(grid: dict[int, dict[int, str]], title: str | None) -> tuple[list[
     block under `title`: the header is the first populated row after the title, the body
     runs to the first empty row. Numeric cells read as empty text; the gate needs the
     label and status columns only."""
+    headers, rows, _ = tab_block_at(grid, title)
+    return headers, rows
+
+
+def tab_block_at(grid: dict[int, dict[int, str]], title: str | None) -> tuple[list[str], list[list[str]], int]:
+    """tab_block, with the sheet row of the header: body row k sits on row header + 1 + k."""
     if title is None:
         hr = 4
     else:
@@ -290,12 +303,12 @@ def tab_block(grid: dict[int, dict[int, str]], title: str | None) -> tuple[list[
                    and (next(iter(grid[r].values())).strip() == title.strip()
                         or fold(next(iter(grid[r].values()))).startswith(fold(title)))), None)
         if hr is None:
-            return [], []
+            return [], [], 0
         hr = next((r for r in sorted(grid) if r > hr and len(grid[r]) >= 2), None)
         if hr is None:
-            return [], []
+            return [], [], 0
     if hr not in grid or len(grid[hr]) < 2:
-        return [], []
+        return [], [], 0
     cols = sorted(grid[hr])
     headers = [grid[hr][c] for c in cols]
     rows = []
@@ -303,7 +316,21 @@ def tab_block(grid: dict[int, dict[int, str]], title: str | None) -> tuple[list[
     while r in grid:
         rows.append([grid[r].get(c, "") for c in cols])
         r += 1
-    return headers, rows
+    return headers, rows, hr
+
+
+def workbook_numbers(path: pathlib.Path) -> dict[str, dict[int, dict[int, float]]]:
+    """{tab: {row: {col: value}}} — every numeric cell of every tab, as stored."""
+    out: dict[str, dict[int, dict[int, float]]] = {}
+    with zipfile.ZipFile(path) as z:
+        for part, tab in sheet_order(z):
+            grid: dict[int, dict[int, float]] = {}
+            for ref, val in sheet_numbers(z.read(part).decode("utf-8", "replace")).items():
+                m = CELL_REF.match(ref)
+                if m:
+                    grid.setdefault(int(m.group(2)), {})[col_num(m.group(1))] = val
+            out[html.unescape(tab)] = grid
+    return out
 
 
 def squash(s: str) -> str:
@@ -322,8 +349,12 @@ def header_at(headers: list[str], word: str) -> int | None:
     return hits[0] if hits else None
 
 
+SCHEDULE_ROWS = 25   # build_report.py's: past it, a schedule shows its largest rows (REPORT.md § 1)
+
+
 def schedule_gate(schedules: list[dict], tabs: list[str], texts: dict[str, dict[int, dict[int, str]]],
-                  slides: list[dict], plan: list | None = None) -> list[str]:
+                  slides: list[dict], plan: list | None = None,
+                  nums: dict[str, dict[int, dict[int, float]]] | None = None) -> list[str]:
     """GATE 5 — the recipe's schedules (RECIPE_FORMAT.md § Report): each is on the deck as
     a table from its family's tab, carrying every declared column and period, at the
     full population the schedule's `where` / `through` leave — every row's identity
@@ -351,7 +382,7 @@ def schedule_gate(schedules: list[dict], tabs: list[str], texts: dict[str, dict[
             fails.append(f"schedule `{title}`: the workbook has no `{fam}` tab to draw it from")
             continue
         words = [str(w) for w in sc.get("columns", [])]
-        headers, rows = tab_block(texts.get(tab, {}), sc.get("block"))
+        headers, rows, hr = tab_block_at(texts.get(tab, {}), sc.get("block"))
         if not headers:
             fails.append(f"schedule `{title}`: `{tab}` has no "
                          + (f"block titled `{sc['block']}`" if sc.get("block") else "primary table"))
@@ -369,9 +400,11 @@ def schedule_gate(schedules: list[dict], tabs: list[str], texts: dict[str, dict[
             known = [(h, d) for h, d in dated if d is not None]
             want.append(max(known, key=lambda x: x[1])[0] if known else periods[-1])
         candidates = [(k, body) for k, body in groups.items() if k[0] == tab]
+        if not candidates and sc.get("place") == "appendix" and not sc.get("required"):
+            continue                           # an appendix schedule is the author's to include unless `required` (REPORT.md § 1)
         if not candidates:
             fails.append(f"schedule `{title}`: no page carries a table from `{tab}` — the recipe "
-                         f"places it `{sc.get('place', 'lead')}` (REPORT.md § 1)")
+                         f"places it `{sc.get('place', 'lead')}`{' and `required`' if sc.get('required') else ''} (REPORT.md § 1)")
             continue
         full = [(k, body) for k, body in candidates
                 if not [w for w in want if header_at(list(k[1]), w) is None]]
@@ -409,20 +442,42 @@ def schedule_gate(schedules: list[dict], tabs: list[str], texts: dict[str, dict[
             keep = keep[:stop + 1]
         di = header_at(list(deck_headers), words[0])
         shown = {r[di].strip() for r in body if di is not None and di < len(r)}
+        # a row nil in every period column shown is dropped from the deck (`nonzero`) and
+        # a derived line (`= …`) is never one of them
+        if nums is not None and periods:
+            cols = sorted((texts.get(tab, {}).get(hr) or {}))
+            pcols = [cols[i] for i, h in enumerate(headers) if h in want and h in periods and i < len(cols)]
+            grid = nums.get(tab, {})
+            def nil(j):
+                if any(c.strip().startswith("=") for c in rows[j][:2]):
+                    return False
+                vals = grid.get(hr + 1 + j, {})
+                return bool(pcols) and all(round(vals.get(c, 0.0), 2) == 0 for c in pcols)
+            keep = [j for j in keep if not nil(j)]
         wanted_rows = [rows[j][ident].strip() for j in keep if rows[j][ident].strip()]
         absent = [x for x in wanted_rows if x not in shown]
-        if absent:
+        closing = str(through).strip() if through else (wanted_rows[-1] if wanted_rows else "")
+        reaches = any(closing and (c.strip() == closing or fold(c) == fold(closing)) for r in body for c in r[:2])
+        if absent and len(wanted_rows) > SCHEDULE_ROWS and (
+                (match[0] in trimmed and len(wanted_rows) - len(absent) >= min(SCHEDULE_ROWS, len(wanted_rows)) // 2)
+                or reaches):
+            # a long list shows its largest rows and states the rest; a long walk is shown at
+            # cause grain, reaching its closing line — the builder holds it to footing
+            absent = []
+        elif absent:
             named = "; ".join(a[:44] for a in absent[:3])
             fails.append(f"schedule `{title}`: {len(absent)} of {len(wanted_rows)} rows on `{tab}` are not "
-                         f"on the deck ({'…; ' if len(absent) > 3 else ''}{named}) — a recipe schedule "
-                         f"is shown at full population, continued over pages, never trimmed")
-        elif match[0] in trimmed:
+                         f"on the deck ({'…; ' if len(absent) > 3 else ''}{named}) — a recipe schedule of up "
+                         f"to {SCHEDULE_ROWS} rows is shown whole; a longer one shows its largest rows "
+                         f"(`largest`) and states the rest")
+        if not absent and match[0] in trimmed and len(wanted_rows) <= SCHEDULE_ROWS:
             fails.append(f"schedule `{title}`: a table from `{tab}` states rows left on the tab — "
-                         f"a recipe schedule is never trimmed")
+                         f"a schedule of {SCHEDULE_ROWS} rows or fewer is shown whole")
     return fails
 
 
 EXEC_TITLE = "executive summary"
+MATTERS_TITLE = "Matters for your attention"
 OPENING_MAX_EXTRA = 1     # pages allowed between the key-metrics page and the first lead schedule
 
 
@@ -489,6 +544,11 @@ def structure_gate(metrics: dict | None, schedules: list[dict] | None, narrative
     while (opening_end + 1 < len(body)
            and fold(body[opening_end + 1]["title"].strip().removesuffix(CONTINUED)) == fold(want)
            and body[opening_end + 1]["title"].strip().endswith(CONTINUED.strip())):
+        opening_end += 1
+    # `Matters for your attention` (REPORT.md § 1) closes the opening where the run raised
+    # an integrity pattern
+    while (opening_end + 1 < len(body)
+           and fold(body[opening_end + 1]["title"].strip().removesuffix(CONTINUED)) == fold(MATTERS_TITLE)):
         opening_end += 1
     schedules = schedules or []
     lead = [sc for sc in schedules if sc.get("place", "lead") == "lead"]
@@ -725,9 +785,29 @@ def audit(deck: pathlib.Path, workbook: pathlib.Path, run_dir: pathlib.Path | No
     if run_dir is not None and (run_dir / "workpapers").is_dir():
         ledger_pool = [v for v, _ in admitted_values(run_dir, [])]
     pool += ledger_pool
+    # A figure the builder computed from cells (`{= …}`, REPORT.md § 2) is admitted when its
+    # terms are workbook values and they add to it; a sidecar that does not hold is a failure.
+    computed_fails: list[str] = []
+    side = deck.with_name(deck.stem + ".computed.json")
+    if side.is_file():
+        try:
+            entries = json.loads(side.read_text(encoding="utf-8")) or []
+        except ValueError:
+            entries, computed_fails = [], [f"{side.name}: not valid JSON — rebuild the deck"]
+        for e in entries:
+            terms = e.get("terms") or []
+            vals = [float(t.get("value", 0)) for t in terms]
+            total = sum(-v if t.get("sign") == "-" else v for t, v in zip(terms, vals))
+            unknown = [t.get("ref") for t, v in zip(terms, vals)
+                       if not any(abs(v - x) <= max(0.005, abs(v) * 1e-9) for x in nums)]
+            if unknown or abs(total - float(e.get("value", 0))) > 0.01:
+                computed_fails.append(f"{side.name}: `{e.get('expression', '')[:60]}` does not rest on "
+                                      f"workbook cells that add to it ({', '.join(map(str, unknown)) or 'sum'})")
+            else:
+                pool.append(float(e["value"]))
     period_defects: list[str] = []
     plan = plan_periods(run_dir, period_defects)
-    fails: list[str] = []
+    fails: list[str] = list(computed_fails)
     if not slides:
         return {"slides": 0, "failures": ["the deck holds no slides"], "numbers": 0, "unbacked": []}
     body = [s for s in slides if s["name"] != "cover"]
@@ -816,10 +896,12 @@ def audit(deck: pathlib.Path, workbook: pathlib.Path, run_dir: pathlib.Path | No
     tokens = step_tokens(tabs)
     jargon: dict[int, list[str]] = {}
     for n, s in enumerate(slides, 1):
-        texts_here = [t for nm, t in s["shapes"] if nm not in SKIP_SHAPES]
-        texts_here += [c for _, rows in s["tables"] for row in rows for c in row]
+        authored = [t for nm, t in s["shapes"] if nm not in SKIP_SHAPES]
+        texts_here = authored + [c for _, rows in s["tables"] for row in rows for c in row]
         for t in texts_here:
             jargon.setdefault(n, []).extend(machine_words(t, tokens))
+        for t in texts_here:
+            jargon.setdefault(n, []).extend(m.group(0) for m in MACHINE_PHRASE.finditer(t))
     for n, words in sorted(jargon.items()):
         if words:
             shown = ", ".join(sorted(set(words))[:4])
@@ -840,7 +922,8 @@ def audit(deck: pathlib.Path, workbook: pathlib.Path, run_dir: pathlib.Path | No
             schedules = metrics = narrative = None
     if schedules:
         fails.extend(period_defects)
-        fails.extend(schedule_gate(schedules, tabs, workbook_texts(workbook), slides, plan))
+        fails.extend(schedule_gate(schedules, tabs, workbook_texts(workbook), slides, plan,
+                                   workbook_numbers(workbook)))
     fails.extend(twin_rows(slides))
     fails.extend(structure_gate(metrics, schedules, narrative, tabs, slides))
     return {"slides": len(slides), "failures": fails, "numbers": total, "unbacked": unbacked,

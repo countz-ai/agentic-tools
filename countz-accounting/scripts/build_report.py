@@ -140,9 +140,20 @@ STATUS_COLOR = {"pass": TIED_T, "supported": TIED_T, "tied": TIED_T, "clean": TI
                 "withheld": MUTED, "not_run": MUTED, "not run": MUTED, "blocked": MUTED,
                 "degraded": MUTED}
 REF = re.compile(r"\{([^{}]+)\}")
+# One term of a computed figure, `+ [tab | row | column]` (REPORT.md § 2).
+COMPUTED_TERM = re.compile(r"([+-]?)\s*\[([^\[\]]+)\]\s*")
 EXEC = "Exec Summary"
 TABLE_STYLE_NONE = "{2D5ABB26-0587-4C30-8999-92F81FD0307C}"   # "No Style, No Grid"
 ID_HEADERS = {"id"}
+# The most body rows a schedule shows on the deck before `largest` ranks them (REPORT.md § 1).
+SCHEDULE_ROWS = 25
+# A ledger id (`F.y8.tx.reported.fy2025`) is the workbook's cross-reference, never a label a
+# reader sees on a chart (REPORT.md § 3 Run vocabulary).
+LEDGER_ID = re.compile(r"^(?:F|P|E|T|RI|S|X|C|D|Q|H|LK|A|AJ)\.[a-z]")
+# A float a cell stores as text past the precision anyone wrote (`2102.8799999999997`).
+LONG_FLOAT = re.compile(r"(?<![\w.])(\d+)\.(\d{5,})(?![\w.])")
+# An integer a cell stores as text with a trailing `.0` (`14,228,351.0`, `915.0`).
+POINT_ZERO = re.compile(r"(?<![\w.,])(\d{1,3}(?:,\d{3})+|\d+)\.0(?![\d.])")
 
 
 class SpecError(Exception):
@@ -354,6 +365,7 @@ class Table:
     more: int = 0
     numeric: list[bool] = field(default_factory=list)
     dense: bool = False                              # `dense: true` on the block (REPORT.md § 2)
+    more_note: str = ""                              # what the rows left carry (`largest`)
 
 
 @dataclass
@@ -621,23 +633,26 @@ def fmt_value(v, fmt: str = "", prose: bool = False, money: str = "") -> str:
     if isinstance(v, (dt.datetime, dt.date)):
         return style.date_short(v)
     if isinstance(v, str):
-        return v.strip()
+        t = LONG_FLOAT.sub(lambda m: f"{float(m.group(0)):,.2f}".rstrip("0").rstrip("."), v.strip())
+        return POINT_ZERO.sub(lambda m: m.group(1), t)
     if not isinstance(v, (int, float)):
         return str(v)
     if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
         return ""
     fmt = fmt or ""
+    if "@" in fmt:                           # a number stored in a text-formatted cell
+        fmt = ""
     if "%" in fmt:
         pct = v * 100
         s = f"{abs(pct):.0f}%" if float(abs(pct)).is_integer() else f"{abs(pct):.1f}%"
         return f"({s})" if pct < 0 else s
-    if "@" in fmt:
-        return str(v)
     m = re.fullmatch(r"0(?:\.(0+))?", fmt)
     if m:                                    # days, ratios, counts: `0.0` / `0`
         d = len(m.group(1)) if m.group(1) else 0
-        if d > 1 and abs(v) >= 1:            # one decimal on the deck (REPORT.md § 4)
+        if d > 1 and abs(v) >= 10:           # one decimal at ten and above, two below (REPORT.md § 4)
             d = 1
+        elif d > 2:
+            d = 2
         if round(v, d) == 0:                 # never `-0.0`: a zero is the table's en dash
             return "0" if prose else "–"
         if prose:
@@ -652,7 +667,7 @@ def fmt_value(v, fmt: str = "", prose: bool = False, money: str = "") -> str:
         return compact_money(v, money)
     # any other figure keeps the decimals its cell shows, capped at the one the deck shows
     d = 2 if re.search(r"0\.00(?![0-9])", fmt) else 0
-    if d > 1 and abs(v) >= 1:
+    if d > 1 and abs(v) >= 10:
         d = 1
     if prose and round(v, d) == 0:
         return "0"
@@ -671,6 +686,7 @@ class Resolver:
         self.count = 0
         self.sources: set[str] = set()      # every tab the deck draws on
         self.touched: set[str] = set()      # the tabs the page being built draws on
+        self.computed: list[dict] = []      # every `{= …}` figure, with the cells it adds
 
     def use(self, tab: str) -> None:
         self.sources.add(tab)
@@ -695,6 +711,8 @@ class Resolver:
                                        f"scripts/style.py; `| $` is the book's, `| $:eur` a named one")
                     return m.group(0)
                 ref = " | ".join(parts[:-1])
+            if ref.startswith("="):
+                return self._computed(ref, money, where, m.group(0))
             try:
                 cell, tab = self._cell(ref)
             except SpecError as exc:
@@ -704,6 +722,40 @@ class Resolver:
             self.use(tab)
             return fmt_value(cell.value, cell.fmt, prose=True, money=money)
         return REF.sub(sub, text)
+
+    def _computed(self, ref: str, money: str, where: str, raw: str) -> str:
+        """`{= [ref] + [ref] - [ref] | $}` — a figure the workbook does not hold as one cell,
+        stated as the sum of cells it does (REPORT.md § 2): the corrected pre-tax income as
+        reported plus the effect. Every term is a reference resolved as any other; the result
+        and its terms are recorded for the gate, which admits the figure by them."""
+        body = ref[1:].strip()
+        terms = list(COMPUTED_TERM.finditer(body))
+        rest = COMPUTED_TERM.sub("", body).strip()
+        if not terms or rest:
+            self.errors.append(f"{where}: {raw} — a computed figure is `{{= [tab | row | column] + "
+                               f"[tab | row | column] … | $}}`, terms in brackets joined by + or -")
+            return raw
+        total, cells, fmt0 = 0.0, [], ""
+        for i, t in enumerate(terms):
+            sign = -1.0 if t.group(1) == "-" else 1.0
+            if i and not t.group(1):
+                self.errors.append(f"{where}: {raw} — join each term to the one before by + or -")
+                return raw
+            try:
+                cell, tab = self._cell(t.group(2).strip())
+            except SpecError as exc:
+                self.errors.append(f"{where}: {raw} — [{t.group(2).strip()}]: {exc}")
+                return raw
+            if not isinstance(cell.value, (int, float)) or isinstance(cell.value, bool):
+                self.errors.append(f"{where}: {raw} — [{t.group(2).strip()}] is not a number")
+                return raw
+            total += sign * float(cell.value)
+            cells.append({"ref": t.group(2).strip(), "sign": "-" if sign < 0 else "+", "value": cell.value})
+            fmt0 = fmt0 or cell.fmt
+            self.count += 1
+            self.use(tab)
+        self.computed.append({"where": where, "expression": body, "value": total, "terms": cells})
+        return fmt_value(total, fmt0, prose=True, money=money)
 
     def _cell(self, ref: str) -> tuple[Cell, str]:
         parts = [p.strip() for p in ref.split("|")]
@@ -834,7 +886,7 @@ def axis_period(header: str) -> str:
 
 
 TABLE_KEYS = {"from", "block", "rows", "columns", "max_rows", "title", "ids", "fit", "scale",
-              "currency", "where", "through", "dense"}
+              "currency", "where", "through", "dense", "nonzero", "largest"}
 # A schedule of money is shown at a declared scale, stated ONCE, in the table's title:
 # `64,143` under `FY2024` in a table titled `EBITDA bridge ($ in thousands)` (REPORT.md
 # § 4) — a scale in every column header wraps a narrow column (`LTM JUL 2025 ($ IN
@@ -899,7 +951,7 @@ def scaled_title(title: str | None, headers: list[str], scaled: list[tuple[int, 
     return f"{title} ({note})" if title else note[:1].upper() + note[1:]
 
 
-CHART_KEYS = {"type", "from", "rows", "columns", "block", "title"}
+CHART_KEYS = {"type", "from", "rows", "columns", "block", "title", "labels"}
 STAT_KEYS = {"label", "value", "note"}
 
 
@@ -934,6 +986,19 @@ def row_label(row: list[Cell]) -> str:
     """A row's line label: the first text of its label columns that is not a ledger id."""
     texts = row_labels(row)
     return next((t for t in texts if not ID_LIKE.match(t)), texts[0] if texts else "")
+
+
+def unit_class(fmt: str | None) -> str:
+    """What a number counts, read from its format: money, a percentage, a count, or
+    another measure (days, a ratio). `largest` ranks within one of these."""
+    fmt = fmt or ""
+    if "%" in fmt:
+        return "percentages"
+    if is_money(fmt):
+        return "money"
+    if fmt in count_formats():
+        return "counts"
+    return "other measures"
 
 
 def is_derived(row: list[Cell]) -> bool:
@@ -1090,6 +1155,53 @@ def table_block(v, at: str, res: Resolver, book: Book) -> dict:
             kinds.append(t.kinds[hit])
             picked_idx.append(hit)
         t.rows, t.kinds = picked, kinds
+    shown_num = [i for i in idx if i < len(t.numeric) and t.numeric[i]]
+    if v.get("nonzero"):
+        # `nonzero: true` drops a row nil in every money and count column shown — a cause
+        # with no adjustment, an empty subtotal — and keeps every derived line (`= …`). A
+        # nil row adds nothing, so what remains foots as the tab does (REPORT.md § 2).
+        def nil(row):
+            return all(not isinstance(row[i].value, (int, float)) or isinstance(row[i].value, bool)
+                       or round(float(row[i].value), 2) == 0 for i in shown_num)
+        keep = [k for k, row in enumerate(t.rows) if not nil(row) or is_derived(row)]
+        t.rows, t.kinds = [t.rows[k] for k in keep], [t.kinds[k] for k in keep]
+        picked_idx = [picked_idx[k] for k in keep]
+    largest = v.get("largest")
+    if largest is not None:
+        # `largest: <header>` with `max_rows: N` keeps the N rows carrying the largest
+        # absolute amount in that column, in the tab's order, and states the count and the
+        # amount of the rows left on the tab (REPORT.md § 1, a long schedule).
+        ci = column_index(t, str(largest))
+        if ci is None or ci >= len(t.numeric) or not t.numeric[ci]:
+            raise SpecError(f"{at}: `{tab}` has no numeric column headed `{largest}` to rank by")
+        if any(is_derived(row) or kind != "body" for row, kind in zip(t.rows, t.kinds)):
+            raise SpecError(f"{at}: `{tab}` carries subtotals or derived lines — a walk is shown at cause "
+                            f"grain (`rows:` its opening line, each cause subtotal and its closing line), "
+                            f"never ranked with `largest` (REPORT.md § 1)")
+        kinds_of = {unit_class(row[ci].fmt) for row in t.rows
+                    if isinstance(row[ci].value, (int, float)) and not isinstance(row[ci].value, bool)}
+        if len(kinds_of) > 1:
+            raise SpecError(f"{at}: `{largest}` on `{tab}` mixes {', '.join(sorted(kinds_of))} — rank only a "
+                            f"column in one unit (REPORT.md § 1)")
+        n = int(v.get("max_rows") or SCHEDULE_ROWS)
+        def amt(row):
+            x = row[ci].value
+            return abs(float(x)) if isinstance(x, (int, float)) and not isinstance(x, bool) else 0.0
+        body = [k for k, row in enumerate(t.rows) if not is_derived(row)]
+        if len(body) > n:
+            top = set(sorted(body, key=lambda k: amt(t.rows[k]), reverse=True)[:n])
+            left = [k for k in body if k not in top]
+            left_amt = sum(float(t.rows[k][ci].value) for k in left
+                           if isinstance(t.rows[k][ci].value, (int, float)))
+            keep = [k for k in body if k in top]
+            t.more = len(left)
+            fmt0 = next((t.rows[k][ci].fmt for k in left if t.rows[k][ci].fmt), "")
+            amount = compact_money(left_amt, book.currency) if is_money(fmt0) else fmt_value(left_amt, fmt0)
+            t.more_note = (f"{len(left)} more row(s), {amount} in {t.headers[ci]}, "
+                           f"on the {t.source} tab of workbook.xlsx")
+            t.rows, t.kinds = [t.rows[k] for k in keep], [t.kinds[k] for k in keep]
+            picked_idx = [picked_idx[k] for k in keep]
+        v = {**v, "max_rows": None}
     max_rows = v.get("max_rows")
     if max_rows is not None:
         max_rows = int(max_rows)
@@ -1136,10 +1248,22 @@ def table_block(v, at: str, res: Resolver, book: Book) -> dict:
     return {"t": "table", "table": t, "fit": v.get("fit", True)}
 
 
+def chart_labels(v, at: str, res: Resolver) -> list[str] | None:
+    """`labels:` — the reader's words for the rows a chart draws, one per entry in `rows`,
+    in order; the figures stay the tab's (REPORT.md § 2)."""
+    labels = v.get("labels")
+    if labels is None:
+        return None
+    if not isinstance(labels, list) or len(labels) != len(v["rows"]):
+        raise SpecError(f"{at}: labels is a list with one entry per row in `rows`")
+    return [res.resolve(str(x), at) for x in labels]
+
+
 def chart_block(v, at: str, res: Resolver, book: Book) -> dict:
     if not isinstance(v, dict) or "from" not in v or "rows" not in v:
         raise SpecError(f"{at}: chart needs `from: <tab>` and `rows: [labels]`")
     known(v, CHART_KEYS, at, "chart")
+    shown_labels = chart_labels(v, at, res)
     ctype = str(v.get("type", "column")).lower()
     if ctype not in ("column", "bar", "line", "waterfall"):
         raise SpecError(f"{at}: chart type is column, bar, line or waterfall")
@@ -1159,12 +1283,13 @@ def chart_block(v, at: str, res: Resolver, book: Book) -> dict:
         raise SpecError(f"{at}: the chosen rows carry no numeric columns to chart")
     categories = [axis_period(t.headers[i]) for i in cat_idx]
     series = []
-    for row in t.rows:
+    for k, row in enumerate(t.rows):
         label = next((str(c.value).strip() for j, c in enumerate(row)
                       if isinstance(c.value, str) and c.value.strip() and not t.numeric[j]
-                      and t.headers[j].strip().lower() not in ID_HEADERS), "")
+                      and t.headers[j].strip().lower() not in ID_HEADERS
+                      and not LEDGER_ID.match(c.value.strip())), "")
         vals = [row[i].value if isinstance(row[i].value, (int, float)) else 0 for i in cat_idx]
-        series.append((label, vals))
+        series.append((shown_labels[k] if shown_labels else label, vals))
     if len(series) > 4:
         raise SpecError(f"{at}: at most four series in one chart (WORKBOOK_STYLE.md § 6)")
     return {"t": "chart", "type": ctype, "categories": categories, "series": series,
@@ -1184,6 +1309,7 @@ def waterfall_block(v, at: str, res: Resolver, book: Book) -> dict:
     cols = v.get("columns")
     if not isinstance(cols, list) or len(cols) != 1:
         raise SpecError(f"{at}: a waterfall charts one period — `columns: [<period header>]`")
+    shown_labels = chart_labels(v, at, res)
     tb = table_block({"from": v["from"], "rows": v["rows"], "ids": True,
                       **({"block": v["block"]} if v.get("block") else {})}, at, res, book)
     t: Table = tb["table"]
@@ -1195,11 +1321,18 @@ def waterfall_block(v, at: str, res: Resolver, book: Book) -> dict:
     for k, row in enumerate(t.rows):
         label = next((str(c.value).strip() for j, c in enumerate(row)
                       if isinstance(c.value, str) and c.value.strip() and not t.numeric[j]
-                      and t.headers[j].strip().lower() not in ID_HEADERS), "")
+                      and t.headers[j].strip().lower() not in ID_HEADERS
+                      and not LEDGER_ID.match(c.value.strip())), "")
         val = row[ci].value if isinstance(row[ci].value, (int, float)) else 0.0
         total = k == 0 or bool(DERIVED_ROW.match(label))
-        steps.append({"label": label.lstrip("= ").strip() if total else label, "value": float(val),
-                      "total": total, "fmt": row[ci].fmt})
+        if not total and round(float(val), 2) == 0:
+            continue                            # a cause with nothing in it draws no bar
+        label = label.lstrip("= ").strip() if total else label
+        if shown_labels:
+            label = shown_labels[k]
+        steps.append({"label": label[:1].upper() + label[1:], "value": float(val),
+                      "total": total, "fmt": row[ci].fmt,
+                      "money": book.currency if is_money(row[ci].fmt) else ""})
     if not steps[0]["total"] or len(steps) < 3:
         raise SpecError(f"{at}: a waterfall opens on its starting figure and carries at least one step "
                         f"and one total")
@@ -1391,14 +1524,15 @@ def flow(page: Page) -> list[Page]:
             widths = col_widths(tb, BODY_W, pt)
             hh, rows = row_heights(tb, widths, pt)
             head = hh + (label_h(tb.title, BODY_W) + 0.06 if tb.title else 0)
+            note = 0.24 if tb.more else 0.0      # the rows-left line rides on the last piece
             k, acc = 0, head
-            while k < len(rows) and acc + rows[k] <= room:
+            while k < len(rows) and acc + rows[k] <= room - note:
                 acc += rows[k]
                 k += 1
             if 2 <= k < len(rows):
                 first = deepcopy(b)
                 first["table"].rows, first["table"].kinds = tb.rows[:k], tb.kinds[:k]
-                first["table"].more = 0
+                first["table"].more, first["table"].more_note = 0, ""
                 rest = deepcopy(b)
                 rest["table"].rows, rest["table"].kinds = tb.rows[k:], tb.kinds[k:]
                 rest["table"].title = (tb.title if tb.title.endswith(CONTINUED)
@@ -1683,7 +1817,8 @@ class Deck:
         yy += hh + sum(rows)
         if tb.more:
             self.text(s, x, yy + 0.06, w, 0.18,
-                      [[(f"{tb.more} more row(s) on the {tb.source} tab of workbook.xlsx", PT["note"], False, MUTED)]],
+                      [[(tb.more_note or f"{tb.more} more row(s) on the {tb.source} tab of workbook.xlsx",
+                         PT["note"], False, MUTED)]],
                       "table-more")
             yy += 0.24
         return yy - y
@@ -1872,7 +2007,9 @@ class Deck:
         step = (ticks[1] - ticks[0]) if len(ticks) > 1 else 1.0
         span = (hi - lo) or 1.0
         gut = min(max(text_w(st["label"], pt) for st in steps) + 0.15, w * 0.42)
-        val_w = max(text_w(fmt_value(st["value"], st["fmt"]), pt, True) for st in steps) + 0.12
+        def shown(st):                          # a bar's value as a tile states it (REPORT.md § 4)
+            return fmt_value(st["value"], st["fmt"], prose=bool(st.get("money")), money=st.get("money", ""))
+        val_w = max(text_w(shown(st), pt, True) for st in steps) + 0.12
         px, pw = x + gut, w - gut - val_w
         ph = h - CHART_AXIS_H
         slot = ph / len(steps)
@@ -1897,7 +2034,7 @@ class Deck:
             self.text(s, x, top, gut - 0.12, slot, [[(st["label"], pt, st["total"], INK if st["total"] else BODY)]],
                       "chart-cat", align=PP_ALIGN.RIGHT, anchor=MSO_ANCHOR.MIDDLE)
             self.text(s, hi_x + 0.06, top, val_w, slot,
-                      [[(fmt_value(st["value"], st["fmt"]), pt, st["total"], INK)]],
+                      [[(shown(st), pt, st["total"], INK)]],
                       "chart-value", anchor=MSO_ANCHOR.MIDDLE)
         return h
 
@@ -2011,7 +2148,7 @@ def render(pages: list[Page], meta: dict, out: pathlib.Path) -> dict:
                  "performed, the figures they produced and the differences found.",
                  PT["small"], False, MUTED)]],
               "cover-prepared", spacing=1.35)
-    deck.band(s, "Every figure in this report is copied from workbook.xlsx, where it re-performs from the source files.",
+    deck.band(s, "Every figure in this report comes from the accompanying workbook, workbook.xlsx.",
               ["Confidential · Copyright © Countz"], names=("footer-left",))
 
     counts = {"pages": len(numbered), "tables": 0, "charts": 0}
@@ -2072,6 +2209,9 @@ def main() -> int:
         for p in pages:
             flowed.extend(flow(p))
         counts = render(flowed, meta, out)
+        # The figures the deck computes from cells, for check_report.py to admit by their terms.
+        computed = out.with_name(out.stem + ".computed.json")
+        computed.write_text(json.dumps(res.computed, indent=1), encoding="utf-8")
     except SpecError as exc:
         msgs = str(exc).splitlines()
         if a.json:

@@ -29,21 +29,68 @@ and actions, so its full bridge is support at the back. The parts, in this order
    the message; never prose alone. Everything the recipe's `## Exec summary` says to lead
    with or to state beside the headline is on this page — a book error, an integrity
    pattern, a balance the records do not carry — each with its amount, never left to a
-   late page alone.
+   late page alone. The page also holds:
+   - **The yardstick and the corrected figure.** The headline effect beside materiality
+     and the figure it changes as reported (pre-tax income, the balance), each a reference
+     to its cell on Basis of Preparation or the check tab, and the sum stated: *pre-tax
+     income of $1.4M as reported becomes $0.4M as supported, and $0.2M if the pending
+     adjustments hold*. Where the workbook holds neither, one sentence says so.
+   - **The headline by nature.** From the walk's cause subtotals, how much of the net
+     adjustment moves amounts between lines or periods (the boundary, presentation and
+     classification causes, a timing difference that reverses after the period end), how
+     much is non-cash, and how much misstates the total — on this page, in one sentence,
+     with each part's amount. Where offsetting items each
+     exceed the net, both directions with their amounts. Amounts of unlike kinds — loan
+     principal and revenue, a balance and a flow — are never added into one figure.
+   - **One meaning per figure.** Amounts on one page either add, or the page says which
+     contains which: *the $257K of held invoices is part of the $1.5M unrecorded*. A list
+     of pattern amounts carries, on the same page, the amount not already inside the
+     headline — *all but the $140K warranty release is already in the $1.5M* — so no
+     reader adds them. Pending adjustments are stated gross, each direction on its own,
+     never netted into one figure.
+   - **What "as supported" means**, once, in plain words: the recorded figure after the
+     adjustments the records support. Where part of it rests on the company's own records
+     alone, the share that does.
 2. **The key metrics** — the executive summary continued as figures. Its headline names
    what it shows, the measure the report exists to state: the recipe's `## Report`
    declares it as `metrics.title` (`Adjusted EBITDA` for a quality of earnings review,
    `Days sales outstanding` for a revenue leak). Stat tiles, a chart or a short table per
    period; the recipe's prose says which figures.
-3. Optionally, where the recipe places a schedule `lead`, one page that carries the story
-   to it — a chart of the trend, a waterfall of the walk, the split that explains the
-   headline. A deck with no lead schedule goes from the key metrics to its narrative.
+3. **Matters for your attention**, where the run raised an integrity pattern: a party tied
+   to an employee or officer, a payment with no book entry, a statement to a lender or a
+   board the records contradict, a person approving or posting their own entries, tax
+   withheld and not remitted. One page, headed exactly that, under the opening's kicker:
+   each matter with its amount, what it may indicate in plain words (*a fictitious
+   customer*, *receipts applied to conceal a shortfall*), and the role that receives it.
+   A matter about a role's own records or conduct goes to a role independent of it — the
+   audit committee or the board — never to that role. A matter goes on this page only where
+   a record ties the pattern to the person or the money: a shared address, phone or bank
+   account, an approval or a posting by the person, a document the records contradict, an
+   amount paid or withheld. A resemblance alone — a shared surname, a similar name, a
+   round amount — is a question on the page of what is open, not a matter here; so is a
+   pattern the workbook rules benign or not related. Without such a pattern this page is
+   optional and carries the story to the first `lead` schedule instead: a chart of the
+   trend, a waterfall of the walk, the split that explains the headline.
 
 **The lead schedules.** Each schedule the recipe places `lead`: the table a reader of
 this report type opens it for — for a quality of earnings review, the EBITDA walk at item
-grain and the roster of every adjustment considered with its verdict and reason. Each is
-one page, continued over as many as it takes, at full population, in the recipe's order,
-directly after the opening.
+grain and the roster of every adjustment considered with its verdict and reason. Each sits
+in the recipe's order, directly after the opening.
+
+**A schedule's length on the deck.** The deck is read by an executive; the workbook holds
+every row. A schedule drops its nil rows (`nonzero: true`) — a cause with no adjustment, an
+empty subtotal. One that still runs past 25 rows is condensed by its kind:
+- **A walk** — a schedule with subtotals or derived lines (`= …`) — is shown at cause grain:
+  `rows:` its opening line, each cause's subtotal and its closing line, which the builder
+  holds to footing. A walk is never ranked with `largest`, and never shows some of a
+  cause's items without the rest.
+- **A flat list in one unit** (exceptions, items, accounts) shows the 25 rows carrying the
+  largest amount (`largest: <amount column>`, `max_rows: 25`), and the builder states the
+  count and amount of the rest. A column mixing money, days and ratios is not ranked; the
+  list is split by measure or left to the workbook.
+
+A recipe asking for a schedule "at full population" is held to this rule on the deck; its
+tab carries the full population.
 
 **The narrative.** The findings, what they rest on, what is open, what to do — pages
 that refer to the schedules' rows by name and stat. Where the recipe declares
@@ -51,10 +98,26 @@ that refer to the schedules' rows by name and stat. Where the recipe declares
 once on the deck; a figure a narrative page needs is a reference, a stat tile or a chart,
 never a schedule's rows again.
 
-**The appendix.** Each schedule the recipe places `appendix`, in the recipe's order,
-after every narrative page, its pages carrying the kicker `Appendix`: the full population
-the narrative refers to, for the reader who wants to check it. Nothing but appendix
-pages follows the first of them.
+**The appendix.** A schedule the recipe places `appendix` goes on the deck where the
+recipe marks it `required`, and otherwise only where the narrative cites rows of it a
+reader needs to see; the workbook holds every appendix schedule. Where the recipe does not place it `lead`, the roster of every item considered,
+with its verdict, reason and condition, is the reviewer's and stays in the workbook. A
+schedule shown goes in the recipe's order,
+after every narrative page, its pages carrying the kicker `Appendix`, under the length rule
+above. Nothing but appendix pages follows the first of them.
+
+**Lists on narrative pages.** A page listing findings, owners or open items shows at most
+eight, ranked by the amount each can move in the reported figures — the walk line, the
+pending adjustment or the exposure it settles — and states the count of the rest with the
+tab that lists them. The Open Items tab's `Size` is a reference amount (a population, a
+loan's principal), not an exposure: it never ranks a list or appears as one on the deck;
+an item that moves no stated figure is listed without an amount. A recipe asking for
+every `D.` and `Q.` item is held to this on the deck; the Open Items tab carries them all.
+
+**Who answers.** On every page — the matters, the owners, the open items — a matter about a
+role's own entries, approvals, pay or dealings is answered to a role independent of it:
+the audit committee or the board receives it, and the role concerned supplies the records.
+Never *the CFO answers* for the CFO's own entries.
 
 A run with no recipe has no schedules; its opening is the executive summary alone, and
 the gate holds that page the same way.
@@ -141,9 +204,9 @@ sentence (`…`); it never trims one.
 | `bullets: [...]` | a list |
 | `stats: [{label, value, note?}]` | up to four figure tiles across the page |
 | `kv: [{label, value}]` | label and value pairs |
-| `table: {from, block?, rows?, columns?, where?, through?, max_rows?, title?, ids?, scale?, currency?, dense?}` | a table copied from a tab: its primary table, or the block under a heading (`Exceptions`, `Analysis`, a titled table on the Exec Summary). `rows` selects by leading label and `columns` by header. `where: {verdict: supported}` keeps the rows carrying a matching value in that column and every row with the column empty — a walk's mechanics, its subtotals — so a walk shows at item grain; `through: "= pro-forma EBITDA"` ends the table at that row, dropping the information lines under it. `max_rows` caps and states the rows left on the tab; a recipe schedule is never capped. `scale: units|thousands|millions|billions` states the money columns at that scale, written once in the table's title in their currency (§ 4); `currency: eur` names that currency where it is not the book's. `dense: true` sets the table at the dense size, for a schedule shown at full population. Ids are dropped unless `ids: true`. |
+| `table: {from, block?, rows?, columns?, where?, through?, max_rows?, nonzero?, largest?, title?, ids?, scale?, currency?, dense?}` | a table copied from a tab: its primary table, or the block under a heading (`Exceptions`, `Analysis`, a titled table on the Exec Summary). `rows` selects by leading label and `columns` by header. `where: {verdict: supported}` keeps the rows carrying a matching value in that column and every row with the column empty — a walk's mechanics, its subtotals — so a walk shows at item grain; `through: "= pro-forma EBITDA"` ends the table at that row, dropping the information lines under it. `max_rows` caps and states the rows left on the tab. `nonzero: true` drops a row nil in every money and count column shown, keeping every derived line. `largest: <header>` with `max_rows: N` keeps the N rows with the largest absolute amount in that column, in the tab's order, and states the count and amount of the rest; a recipe schedule is capped only this way (§ 1). `scale: units|thousands|millions|billions` states the money columns at that scale, written once in the table's title in their currency (§ 4); `currency: eur` names that currency where it is not the book's. `dense: true` sets the table at the dense size, for a schedule of many rows or columns. Ids are dropped unless `ids: true`. |
 | `lines: {from, block, title?}` | a tab's statement block (Notes, To reperform, a How-to-read list) as bullets |
-| `chart: {type, from, rows, columns?, block?, title?}` | `column`, `bar` or `line`, drawn on rows copied from a tab, at most four series; or `waterfall`, a walk drawn as floating bars — `rows` the walk's lines in order, the first and every derived line (`= …`) a total drawn from zero, every other line a step from the running total, and `columns` one period. Each bar carries its value. |
+| `chart: {type, from, rows, columns?, block?, title?, labels?}` | `column`, `bar` or `line`, drawn on rows copied from a tab, at most four series; or `waterfall`, a walk drawn as floating bars — `rows` the walk's lines in order, the first and every derived line (`= …`) a total drawn from zero, every other line a step from the running total, and `columns` one period. Each bar carries its value. `labels` gives the reader's words for each row, in order (`Reclassified to investments` for `Supported subtotal: boundary`); the figures stay the tab's. |
 | `columns: {widths, items}` | two or three lists of blocks side by side; `widths` sum to 1 |
 
 **Condensed schedules.** A derived line (`= …`) shown above contributing lines equals the
@@ -182,6 +245,13 @@ EUR book); `| $:eur` names another currency (`scripts/style.py` lists them). Wit
 number renders bare, so a count never carries a currency symbol. Prose figures follow
 `DOCTRINE.md` § Number conventions. A reference to a text cell inserts the text. A
 reference nothing resolves is a refusal naming it, never a blank.
+
+A figure the workbook does not hold as one cell — the corrected result, *reported plus
+the effect* — is computed from cells that it does: `{= [tab | row | column] + [tab | row |
+column] - [tab | row | column] | $}`, each term in brackets a reference as above, joined by
+`+` or `-`. The builder records each one with its terms beside the deck
+(`report.computed.json`) and the gate admits it by them. Compute a sum or a difference of
+figures the reader is shown, never a ratio or a figure the workbook does not imply.
 
 **Fit.** The slide is 16:9. The body holds about 4.7 inches of stacked blocks under a
 one-line headline, less under a two-line one or a message. A table or bullet list that
@@ -245,13 +315,29 @@ that month end. Both entries fall inside FY2025, so cash at September 30, 2025 i
 unaffected."*, not *"One intragroup settlement posts its two legs a month apart, at $458K
 a leg."*
 
+**One figure, one meaning.** A measure the deck states on two pages is the same figure on
+both; where the workbook carries it twice (`$296K` on the walk, `$312K` on the allowance
+tab), the deck uses one and reconciles the other once, where it first appears. A sentence
+or headline stating a total over listed parts lists parts that add to it, or says what the
+rest is. A count in a headline equals the items under it. A direction word (*raise*,
+*lower*, *overstated*) follows the tab's sign convention, stated on its row 2: read the sign
+before writing the word. A ratio set against its threshold is stated at the precision that
+shows which side of it the ratio falls (`1.16x against 1.25x`, never `1.2 against 1.2`).
+A statement about a pattern carries the pattern's own facts (*four dates*, not *one day*;
+*$283K open at the year end*, not *billed $455K and never paid* where part was re-billed or
+written off).
+
 **Run vocabulary.** State the basis only where the user chose it: *prepared on a buy-side
 diligence basis, as instructed*. Where the recipe set that parameter by default, say nothing
 about it. Where the recipe says the deliverable does not state a parameter, leave it out.
 
 Do not print a parameter name (`perspective`, `maturity_basis`), `the user` for the client,
-`this run` for the report, `bucket` for a category, or a test's internal shorthand
-(`direction`, `grain`) in place of what it tests.
+`this run` or `the run` for the report, `bucket` for a category, or a test's internal shorthand
+(`direction`, `grain`) in place of what it tests. Nor the run's working words: *minted*,
+*recipe*, *skill*, *rule 5*, *a hypothesis departed* or *held*, a step token (*E5 rules*,
+*as U4 found*), a ledger id, a system user name where the role says it (*the controller*,
+not *lnguyen*). Write *the bridge* for the walk, *adjustment* and *pending adjustment* for a
+supported and a candidate item in prose, *outside the balance* for a boundary ruling.
 
 A copied table arrives with the heading the tab gave it. Where that heading carries one of
 these, select the block by the name the tab uses and set `title:` to what the slide shows.
@@ -327,10 +413,11 @@ resolves; a figure typed into a sentence follows them too.
 | | on the deck |
 |---|---|
 | a money figure in a sentence or a stat tile | scaled and rounded, with its currency: `$50.5M`, `$1.5M`, `$81K`, `$1.2B`, `$950` — `€8.4M`, `A$1.2M`, `CHF 81K` in another currency — not `$50,456,833` |
-| days, ratios, multiples | one decimal: `57.8 days`, not `57.78` |
+| days, ratios, multiples | one decimal at ten and above: `57.8 days`, not `57.78`; two below ten: `1.16x`, not `1.2x` |
 | percentages | one decimal: `33.9%`; exact integers exactly: `100%` |
 | a date | `Sep 30, 2025` in a table cell, `September 30, 2025` in a sentence and on the cover |
 | a schedule of money copied from a tab | at the declared `scale:`, stated once in the table's title in its currency — `EBITDA bridge ($ in thousands)`; with money columns in more than one currency, `(in thousands)` and each column's currency in its header (`FY2025 (€)`) |
+| a waterfall bar | as a stat tile states it: `$18.7M`; a step that is nil draws no bar |
 | a count | never scaled: a column is a count by its format (the kit's `FMT_COUNT`, or a bare `#,##0`), never by its header's words |
 | a total | a row the tab rules with the kit's double bottom rule (`Total`); a bold row without it is a subtotal, whatever its label says |
 
@@ -357,8 +444,11 @@ write the message yourself and reference the figures.
   cover.
 - **The schedules.** On a run whose recipe declares `## Report`, each schedule is on the
   deck as a table from its family's tab, carrying every declared column and period, at the
-  full population its `where` and `through` leave: every row's identity is on the deck,
-  and none is trimmed to `max_rows`. A period column is one naming a period the plan
+  population its `where` and `through` leave, less the rows nil in every period column
+  shown: up to 25 rows, every row's identity is on the deck and none is trimmed; past
+  25, a list shows its largest rows and states the rest, and a walk reaches its closing
+  line at cause grain (§ 1). A schedule placed `appendix` is held to this where the recipe
+  marks it `required` or the deck carries it. A period column is one naming a period the plan
   declares (`params.columns`, `scripts/periods.py`); `latest` is the latest by the plan's
   dates, else the last period column. A table on the deck showing two rows that read the
   same in every column shown is refused: the reader cannot tell them apart, so the
@@ -373,7 +463,9 @@ write the message yourself and reference the figures.
   before the appendix — carries one of its sections as its kicker, in the declared order.
 - **The reader's words.** No ledger id (`Q.r4.ar_movement`, `LK.terms_not_enforced`) and no
   step token past a cell's opening (`as R4 measured it`, `(q1)`) on a page or in a table
-  cell; the footers name tabs and are not read. A token shaped like a period (`Q1`) is
+  cell; and none of the working words § 3 lists (*minted*, *recipe*, *skill*, *rule 5*,
+  *this run*, *the run*) anywhere on a slide, a copied table's cells included: a row carrying one
+  stays off the deck. The footers name tabs and are not read. A token shaped like a period (`Q1`) is
   read in lower case only. A copied row label carrying one is the owning check's to
   rewrite.
 

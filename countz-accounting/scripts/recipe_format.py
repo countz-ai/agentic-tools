@@ -39,13 +39,16 @@ REPORT = "Report"
 REPORT_KEYS = {"metrics", "narrative", "schedules"}
 METRICS_KEYS = {"title"}
 SCHEDULE_KEYS = {"title", "from", "columns", "block", "where", "through", "periods", "scale",
-                 "currency", "dense", "ids", "place"}
+                 "currency", "dense", "ids", "place", "required"}
 SCHEDULE_REQUIRED = ("title", "from", "columns", "place")
 PERIODS = {"all", "latest", "none"}
 # Where a schedule sits: `lead` directly after the opening, ahead of the narrative — the
 # schedule IS the answer (a quality of earnings review's EBITDA walk); `appendix` after
 # the narrative, under the `Appendix` kicker — support the narrative refers to (a revenue
-# leak's full bridge). Required: the recipe states it, one way or the other.
+# leak's full bridge). Required: the recipe states it, one way or the other. An `appendix`
+# schedule is on the deck where the narrative cites it, and always when `required: true` —
+# a schedule the recipe pins to the deck, such as the walk an executive is shown at the
+# back after the findings (REPORT.md § 1).
 PLACES = ("lead", "appendix")
 APPENDIX = "Appendix"
 FENCE = re.compile(r"^```json\s*\n(.*?)^```\s*$", re.S | re.M)
@@ -204,7 +207,7 @@ def _report_defects(text: str, fams: dict[str, str]) -> list[tuple[str, str]]:
         if sc.get("currency") is not None and str(sc["currency"]).lower() not in CURRENCIES:
             bad.append(("report.schedule", f"{at}: `currency` is a lower-case ISO 4217 code "
                                            f"scripts/style.py defines (`usd`, `eur`, ...)"))
-        for k in ("dense", "ids"):
+        for k in ("dense", "ids", "required"):
             if sc.get(k) is not None and not isinstance(sc[k], bool):
                 bad.append(("report.schedule", f"{at}: `{k}` is true or false"))
         for k in ("title", "block", "through"):
