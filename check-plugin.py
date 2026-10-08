@@ -1590,7 +1590,7 @@ def check(root: pathlib.Path) -> list[str]:
             for name in set(re.findall(r'recipe="([a-z0-9-]+)"', f.read_text())):
                 shims.setdefault(name, []).append(f.parent.name)
         for name, rf_ in sorted(names.items()):
-            owners = [o for o in shims.get(name, []) if o != "countz-analysis"]
+            owners = [o for o in shims.get(name, []) if o != INDEX_SKILL]
             if len(owners) != 1:
                 bad.append(f"{rel(rf_)}: {len(owners)} inline skills ask for `{name}` "
                            f"({', '.join(owners) or 'none'}); a recipe has exactly one shim")

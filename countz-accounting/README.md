@@ -3,8 +3,8 @@
 Interactive accounting checks over the user's own files, modeled on advisory-report's
 md-driven engine: the skill and reference files ARE the procedure, and the agent inspects
 the data before it binds anything. The user-facing skills run inline as the relay:
-`tieout`, `recon`, `countz-analysis` (an analysis the user describes, matched
-to the catalog or authored on the spot), and one plan-driven launcher per recipe under
+`tieout`, `recon`, `countz` (the index, which also runs an analysis the user
+describes, matched to the catalog or authored on the spot), and one plan-driven launcher per recipe under
 `playbook-recipes/` — `ls` the directory for the recipes; each recipe's H1 says what its
 run establishes, `catalog.yaml` beside them lists them for the server, and its shim is the
 one inline skill under `skills/` that names it. The recipes are authored here and served
@@ -26,7 +26,7 @@ Layout:
   engine's escalation path: decides waves where `scripts/playbook_next.py` cannot,
   distills saved playbooks; opens no client file), `scrubber` (rewrites the one text that
   crosses to the connector, and reads it back blind; opens no client file)
-- `skills/` — the inline launchers (`tieout`, `recon`, `countz-analysis`,
+- `skills/` — the inline launchers (`tieout`, `recon`, `countz`,
   one shim per recipe, and `create-arr-policy`, which settles the ARR policy a run that
   computes ARR requires), the internal inline relay `playbook`, plus the forked workers
   (`create-recipe`, `extract-arr-policy`, `check-plan`, `check-extract`, `check-tie`, `check-recon`,
