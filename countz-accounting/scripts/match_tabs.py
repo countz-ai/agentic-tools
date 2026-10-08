@@ -49,14 +49,16 @@ other Unmatched, each with its reason. `left_label` and `right_label` are DataFr
 `id`, `label`, the words a reviewer finds an item by. The nouns default to invoices and
 bank lines; `after_word` names a left item `resolve()` found in transit, dated close enough
 to the statement's end that its bank line falls after it (In transit for receipts,
-Outstanding for payments). The figures are `F.<check>.match.<token>.<line>`, the token
-written as an id segment, so each set of a check keys its own.
+Outstanding for payments). The figures are `F.<check>.match.<line>`. A token that runs on
+past the check id keys its set by the rest (`recon_ar bank` keys `F.recon_ar.match.bank.<line>`),
+so each set of a check keys its own; the check id is never written twice.
 
 Input the tabs could not show faithfully is refused with a ValueError before any tab or
 figure is written: frames other than the Resolution's, a token that cannot name a tab or
 whose tabs `wb` already holds, a currency whose minor units are not the Resolution's
 decimals, text a cell cannot hold, a status word registered with another style, `others`
-with a repeated, blank or streamed id, or with no reason.
+with a repeated, blank or streamed id, or with no reason, and a figure id longer than the
+workbook gate reads as an id (check_workbook.py PROSE_MIN).
 """
 from __future__ import annotations
 
@@ -73,6 +75,7 @@ from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import style as _style  # noqa: E402  sibling: currencies and date forms
 from check_playbook import CHECK_ID  # noqa: E402  the check-id grammar
+from check_workbook import PROSE_MIN  # noqa: E402  past it, a figure id in column B reads as prose
 from wbkit import (FMT_AMOUNT, FMT_DATE, FMT_PCT, S, STATUS, STATUS_KINDS, Alignment,  # noqa: E402
                    amount, band, count, finish, grid, header, ident, next_block, register_status,
                    section, stated, status, text, total)
@@ -150,7 +153,7 @@ def _names(wb, token) -> dict:
     if token.startswith("'"):
         raise ValueError(f"token {token!r}: a tab name never opens with an apostrophe")
     if not _slug(token):
-        raise ValueError(f"token {token!r}: it keys the figures (F.<check>.match.<token>), so it "
+        raise ValueError(f"token {token!r}: it keys the figures (F.<check>.match.…), so it "
                          f"holds a letter A-Z or a digit")
     names = {}
     for k, long_, short in TABS:
@@ -306,6 +309,11 @@ def match_tabs(wb, res, left: pl.DataFrame, right: pl.DataFrame, *, check: str, 
             raise ValueError(f"{what}: the `P.` id its side's figures are measured over, never omitted")
     names = _names(wb, token)
     tok = _slug(token)
+    # the token opens with the check id (the gate finds a tab's check by it), so the id
+    # keys the set by what follows; written twice, it pushes ids past PROSE_MIN
+    seg = "" if tok.lower() == check else \
+        tok[len(check) + 1:] if tok.lower().startswith(check + "_") else tok
+    stem = f"F.{check}.match." + (f"{seg}." if seg else "")
     dec = _decimals(res, currency, decimals)
     s = 10 ** dec
     money = FMT_AMOUNT if dec == 0 else '#,##0.{0};(#,##0.{0});"–"'.format("0" * dec)
@@ -398,7 +406,12 @@ def match_tabs(wb, res, left: pl.DataFrame, right: pl.DataFrame, *, check: str, 
     def fig(key, label, value, unit, expr, side="left"):
         """A figure of one side's items, measured over its population: a 0 over no items
         is not measured."""
-        fid = f"F.{check}.match.{tok}.{key}"
+        fid = stem + key
+        if len(fid) > PROSE_MIN:
+            raise ValueError(f"figure {fid!r}: {len(fid)} characters, past the {PROSE_MIN} the "
+                             f"workbook gate reads as an id rather than prose (check_workbook.py "
+                             f"PROSE_MIN). Shorten the check id, the token after it, or the "
+                             f"difference name")
         ins, pop, n_items = over[side]
         specs.append(dict(fid=fid, label=label, value=value, unit=unit, expression=expr, inputs=ins,
                           population=pop, zero_basis=None if value else

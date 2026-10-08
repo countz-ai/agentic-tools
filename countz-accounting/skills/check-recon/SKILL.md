@@ -149,7 +149,8 @@ Files:
   from `resolve()` or `from_assignment()`. Pass `right_population` (the bank side's
   population), and `currency` where the amounts are money: its minor units are the
   `decimals` the streams were matched at, which the call reads from `res`. Figure ids are
-  `F.<check>.match.<token>.<line>`. The tabs: the match summary, the
+  `F.<check>.match.<line>`, with the rest of the token after the check id for a second
+  set (`F.<check>.match.bank.<line>`). The tabs: the match summary, the
   schedule (one row per left item, the ones kept out of the streams included as `others`:
   an invoice with no cash, each with its reason), the reconciling items and the rules
   (`WORKBOOK.md` § 6). Then your check tab, blocks per `WORKBOOK.md` § 4, with the
