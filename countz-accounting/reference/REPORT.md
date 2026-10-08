@@ -30,10 +30,19 @@ and actions, so its full bridge is support at the back. The parts, in this order
    with or to state beside the headline is on this page — a book error, an integrity
    pattern, a balance the records do not carry — each with its amount, never left to a
    late page alone. The page also holds:
+   - **The order.** The message states the headline figure the recipe leads with, sized
+     against the yardstick, and nothing else: an integrity matter is never joined to it in
+     one sentence. The integrity matters come next, directly under the message, each on a
+     line of its own with its amount; then a covenant, liquidity or going-concern
+     consequence; then the balance arithmetic. A matter the recipe says to state beside the
+     headline is never the last line of the page.
+   - **What it means.** The consequence the workbook establishes, stated as a fact: a
+     covenant the adjusted figure breaches, a prior period the adjustments reach, a draft
+     note that states another figure. Where the workbook establishes none, say nothing.
    - **The yardstick and the corrected figure.** The headline effect beside materiality
      and the figure it changes as reported (pre-tax income, the balance), each a reference
      to its cell on Basis of Preparation or the check tab, and the sum stated: *pre-tax
-     income of $1.4M as reported becomes $0.4M as supported, and $0.2M if the pending
+     income of $1.4M as reported becomes $0.4M adjusted, and $0.2M if the pending
      adjustments hold*. Where the workbook holds neither, one sentence says so.
    - **The headline by nature.** From the walk's cause subtotals, how much of the net
      adjustment moves amounts between lines or periods (the boundary, presentation and
@@ -48,9 +57,9 @@ and actions, so its full bridge is support at the back. The parts, in this order
      headline — *all but the $140K warranty release is already in the $1.5M* — so no
      reader adds them. Pending adjustments are stated gross, each direction on its own,
      never netted into one figure.
-   - **What "as supported" means**, once, in plain words: the recorded figure after the
-     adjustments the records support. Where part of it rests on the company's own records
-     alone, the share that does.
+   - **What "adjusted" means**, once, in plain words: the recorded figure after the
+     adjustments the records support (the workbook's *as supported*). Where part of it
+     rests on the company's own records alone, the share that does.
 2. **The key metrics** — the executive summary continued as figures. Its headline names
    what it shows, the measure the report exists to state: the recipe's `## Report`
    declares it as `metrics.title` (`Adjusted EBITDA` for a quality of earnings review,
@@ -119,6 +128,10 @@ role's own entries, approvals, pay or dealings is answered to a role independent
 the audit committee or the board receives it, and the role concerned supplies the records.
 Never *the CFO answers* for the CFO's own entries.
 
+**The records' date.** The page that states the scope says the date the records run to,
+as a reference to its cell, and that events after it were not examined. A deck dated later
+than the records states this once, on that page.
+
 A run with no recipe has no schedules; its opening is the executive summary alone, and
 the gate holds that page the same way.
 
@@ -133,6 +146,11 @@ Three rules:
    page. Pages go where the findings and the reader's decisions are.
 3. **Generate the pages to the plan**, one message per page, and build the deck with the
    script.
+4. **Read the built deck back** before the gate, as its reader would, slide by slide. List
+   every item, count and total that appears on more than one page with the figure each
+   page states; one item carries one figure from one cell everywhere (§ 3 One figure, one
+   meaning), and an appendix total that differs from the headline is reconciled on its
+   page. Fix `report.yaml` and rebuild until the list has no conflict.
 
 ## 2. `report.yaml` — the document
 
@@ -175,7 +193,7 @@ the page's subject: `EBITDA`, `Working capital`, `Coverage`, `The money market h
 `Management's proposed adjustments`. A page carrying a table names what the table
 covers. A ruling, a verdict or a reading of the rows is stated in `message`, in the first
 person, beside the rows it rests on: `Acquired-intangible amortization rejected`, `Two
-adjustments carried at supported standing`, `None of the twelve is supported` and `Every
+adjustments supported by the records`, `None of the twelve is supported` and `Every
 account fails` are messages, and none of them is a title. A title carries no verb in the
 passive and no participle standing for one (`ruled`, `carried`, `rejected`). Do not open a title on `no`, `none`, `not`, `never`, `every`, `all`,
 `neither` or `nothing`.
@@ -206,7 +224,7 @@ sentence (`…`); it never trims one.
 | `kv: [{label, value}]` | label and value pairs |
 | `table: {from, block?, rows?, columns?, where?, through?, max_rows?, nonzero?, largest?, title?, ids?, scale?, currency?, dense?}` | a table copied from a tab: its primary table, or the block under a heading (`Exceptions`, `Analysis`, a titled table on the Exec Summary). `rows` selects by leading label and `columns` by header. `where: {verdict: supported}` keeps the rows carrying a matching value in that column and every row with the column empty — a walk's mechanics, its subtotals — so a walk shows at item grain; `through: "= pro-forma EBITDA"` ends the table at that row, dropping the information lines under it. `max_rows` caps and states the rows left on the tab. `nonzero: true` drops a row nil in every money and count column shown, keeping every derived line. `largest: <header>` with `max_rows: N` keeps the N rows with the largest absolute amount in that column, in the tab's order, and states the count and amount of the rest; a recipe schedule is capped only this way (§ 1). `scale: units|thousands|millions|billions` states the money columns at that scale, written once in the table's title in their currency (§ 4); `currency: eur` names that currency where it is not the book's. `dense: true` sets the table at the dense size, for a schedule of many rows or columns. Ids are dropped unless `ids: true`. |
 | `lines: {from, block, title?}` | a tab's statement block (Notes, To reperform, a How-to-read list) as bullets |
-| `chart: {type, from, rows, columns?, block?, title?, labels?}` | `column`, `bar` or `line`, drawn on rows copied from a tab, at most four series; or `waterfall`, a walk drawn as floating bars — `rows` the walk's lines in order, the first and every derived line (`= …`) a total drawn from zero, every other line a step from the running total, and `columns` one period. Each bar carries its value. `labels` gives the reader's words for each row, in order (`Reclassified to investments` for `Supported subtotal: boundary`); the figures stay the tab's. |
+| `chart: {type, from, rows, columns?, block?, title?, labels?}` | `column`, `bar` or `line`, drawn on rows copied from a tab, at most four series; or `waterfall`, a walk drawn as floating bars — `rows` the walk's lines in order, the first and every derived line (`= …`) a total drawn from zero, every other line a step from the running total, and `columns` one period. Each bar carries its value. Where the steps are small beside the totals, the value axis starts above zero so the steps can be seen, the axis says so, and each total bar carries a break mark where the axis starts. `labels` gives the reader's words for each row, in order (`Reclassified to investments` for `Supported subtotal: boundary`); the figures stay the tab's. |
 | `columns: {widths, items}` | two or three lists of blocks side by side; `widths` sum to 1 |
 
 **Condensed schedules.** A derived line (`= …`) shown above contributing lines equals the
@@ -257,7 +275,10 @@ figures the reader is shown, never a ratio or a figure the workbook does not imp
 one-line headline, less under a two-line one or a message. A table or bullet list that
 runs past the body continues onto the next page with `(continued)` in the headline, no
 message, and the table header repeated. Any other block that measures past the body is
-refused with the overflow named: split it or trim it. The builder never shrinks a font: a
+refused with the overflow named: split it or trim it. A continuation carries at least
+three rows of a table or two items of a list, and a block that does not fit after a table
+takes the table's last rows with it, so no page holds a note or a row alone. The builder
+never shrinks a font: a
 table is set at 10.5pt, at 9.75pt past six columns or fourteen rows, and at 8.25pt only
 where the author declares `dense: true`.
 
@@ -336,8 +357,8 @@ Do not print a parameter name (`perspective`, `maturity_basis`), `the user` for 
 (`direction`, `grain`) in place of what it tests. Nor the run's working words: *minted*,
 *recipe*, *skill*, *rule 5*, *a hypothesis departed* or *held*, a step token (*E5 rules*,
 *as U4 found*), a ledger id, a system user name where the role says it (*the controller*,
-not *lnguyen*). Write *the bridge* for the walk, *adjustment* and *pending adjustment* for a
-supported and a candidate item in prose, *outside the balance* for a boundary ruling.
+not *lnguyen*). The workbook's status words are replaced in the area's own terms (Working-paper
+terms below).
 
 A copied table arrives with the heading the tab gave it. Where that heading carries one of
 these, select the block by the name the tab uses and set `title:` to what the slide shows.
@@ -356,6 +377,27 @@ Where a copied CELL carries one of these, or any id `WORKBOOK.md` § 3 Language 
 tab, the tab is wrong and the owning check fixes it: name the cell and the check, and end the
 step `blocked`. Do not rewrite the tab, and do not drop the column to hide the cell.
 
+**Workpaper terms.** The workbook's status words (*supported*, *candidate*,
+*rejected*, a boundary *ruling*) and its names for its own mechanics stay in the workbook.
+In what you write on a slide — a headline, a message, a text, a bullet, a note, a tile, a
+chart's labels — say what happened to the item in the terms practitioners of that area use.
+The term depends on the area and the item; no one substitute fits every deck. Examples:
+*reclassified to restricted cash* (cash); *moved out of payroll cost to a loss* (payroll);
+*not a related party, so outside the disclosure* (related parties); *not adjusted until the
+lease is provided* (an item awaiting a record). Name a schedule what the area calls it (*the
+bridge*, *the roll-forward*, *the reconciliation*), and write *adjusted* for as supported
+(*adjusted cash*). The gate refuses *walk*, *as supported*, *candidate*, *boundary*,
+*ruled* or *ruling*, *routed*, *standing*, *cause grain* and *review step* there. A copied
+table's cells keep the tab's words, and the status note under it defines them, each in the
+form `Candidate: …` (Status words below); a tab named in a sentence keeps its name.
+
+Procedure stays in the workbook too. The deck states what was found and what it rests on,
+and states a limit of the work as the amount it leaves untested and what that amount could
+change: *we could not trace $1.6M of payments, so further unrecorded liabilities are
+possible*. No page states the count of expectations or patterns tested, the count of files
+read, performance materiality or a testing threshold; Basis of Preparation and Coverage
+hold them. Materiality itself is the yardstick and stays (§ 1).
+
 **Shares.** A percentage or ratio names the population it is a share of. Where a page
 carries two populations, name both. Example: *a third of the past-due balance* beside
 *no cause on $33.1m of the $50.5m rostered* is 33.9% of one population beside 65% of
@@ -365,8 +407,8 @@ many items it holds, and what share of its amount the items shown carry.
 **Status words.** A table carrying a verdict or a standing column (`supported`,
 `candidate`, `rejected`, `underpowered`, `documented`, `indicative`) carries a `note`
 under it that says what each word shown means, in one sentence each, in the reader's
-words: *indicative — inferred from payment behavior; the customer has not confirmed the
-cause*. A reader outside accounting meets the word there, not in the workbook.
+words, the word first: *Indicative: inferred from payment behavior; the customer has not
+confirmed the cause*. A reader outside accounting meets the word there, not in the workbook.
 
 **Names.** A customer, vendor or counterparty is named as the tab names it (*Ramirez
 Education Group*), with its record identifier beside the name only where the reader must
@@ -404,7 +446,8 @@ other column reads right, header and body alike. The three semantic states appea
 status words only, as text. Negatives in parentheses; zero as an en dash in a table and
 `$0` in a sentence. Every page ends in the teal band: the page's optional `tagline` on
 the left in white, the confidential line with the page number and the source tabs on the
-right. All of it is the builder's; the author never styles.
+right, as `Source: workbook.xlsx / Cash walk · FX effect` — each tab by its name without the
+roster token that opens it. All of it is the builder's; the author never styles.
 
 **Numbers.** US conventions, from one table — `scripts/style.py` — that the builder writes
 with and the gate reads back with. The builder applies these to every figure it
@@ -436,7 +479,8 @@ write the message yourself and reference the figures.
   defines. A table's scale is read from its title (`($ in thousands)`). A bare year is a
   period, not a figure.
 - **The sources.** A page carrying a table, a chart or a stat names its tabs in the
-  footer; every table on it comes from a tab named there.
+  footer, each by its name without its roster token; every table on it comes from a tab
+  named there.
 - **The cover.** The title names the work and carries no period, within its length; the
   subtitle within its own (§ 2). Whether either names the company is the critic's.
 - **The message.** Every title is a headline (at most 80 characters, no full stop), every
@@ -465,7 +509,9 @@ write the message yourself and reference the figures.
   step token past a cell's opening (`as R4 measured it`, `(q1)`) on a page or in a table
   cell; and none of the working words § 3 lists (*minted*, *recipe*, *skill*, *rule 5*,
   *this run*, *the run*) anywhere on a slide, a copied table's cells included: a row carrying one
-  stays off the deck. The footers name tabs and are not read. A token shaped like a period (`Q1`) is
+  stays off the deck. None of the working-paper terms § 3 lists in what the author writes on
+  a slide; a term opening its definition and a tab's name are not read. The footers name
+  tabs and are not read. A token shaped like a period (`Q1`) is
   read in lower case only. A copied row label carrying one is the owning check's to
   rewrite.
 

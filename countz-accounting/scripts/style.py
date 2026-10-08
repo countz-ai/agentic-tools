@@ -115,6 +115,18 @@ def symbol(unit: str) -> str:
     return c.symbol or f"{c.code} "
 
 
+# --- a tab as the reader sees it -----------------------------------------------------
+# A check tab opens with its roster token (`c9 Cash walk`); the deck's footer names the tab
+# without it (REPORT.md § 4), and check_report.py reads the footer back through the same
+# function. A run-level tab (`Basis of Preparation`) carries no token.
+TAB_TOKEN = re.compile(r"[A-Za-z]{1,3}\d\w*")
+
+
+def tab_title(tab: str) -> str:
+    head, _, rest = tab.strip().partition(" ")
+    return rest.strip() if rest.strip() and TAB_TOKEN.fullmatch(head) else tab.strip()
+
+
 # --- scale ----------------------------------------------------------------------------
 # Writing: upper-case K, M, B (US). Reading: any of these, case-insensitively.
 SUFFIX = (("B", 1e9), ("M", 1e6), ("K", 1e3))

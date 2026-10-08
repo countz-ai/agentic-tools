@@ -104,8 +104,8 @@ Every sentence the plan and the pages carry — a `title`, `message`, `text`, `b
   1. the opening — the `Executive summary` page, whose `message` is the one sentence
      the deck exists to deliver, with the stat tiles, chart or table that carry it and
      every item the recipe's `## Exec summary` says to state beside the headline, and
-     the yardstick, the split by nature and the meaning of "as supported" REPORT.md § 1
-     requires; then the key-metrics page, headed as the recipe's `metrics.title` and
+     the yardstick, the split by nature, the order and the meaning of "adjusted"
+     REPORT.md § 1 requires; then the key-metrics page, headed as the recipe's `metrics.title` and
      showing the figures its prose names; then `Matters for your attention` where the
      run raised an integrity pattern, otherwise at most one page carrying the story to
      the first `lead` schedule;
@@ -196,12 +196,32 @@ numbers before writing pages; no other check reads either. Rules a finished deck
 - A walk charted as a waterfall carries `labels:` in plain words for its causes.
 - None of the run's working words on a slide: *minted*, *recipe*, *skill*, *rule 5*, a
   step token, *this run* (REPORT.md § 3 Run vocabulary).
+- None of the working-paper terms in what you write on a slide (*walk*, *as supported*,
+  *candidate*, *boundary*, *ruled*, *routed*): say what happened to each item in the terms
+  practitioners of this area use, name the schedule what the area calls it, and write
+  *adjusted* for as supported (REPORT.md § 3 Working-paper terms).
+  No page states the count of expectations or patterns tested, the files read,
+  performance materiality or a testing threshold; state a limit as the amount left
+  untested and what it could change.
+- The `Executive summary` message states the headline figure, sized, and nothing else;
+  never join an integrity matter to it. The integrity matters follow directly under it,
+  each on its own line with its amount; then a covenant, liquidity or going-concern
+  consequence; then the balance arithmetic. State the consequence the workbook
+  establishes as a fact (REPORT.md § 1, The order and What it means).
+- The scope page states the date the records run to, referenced, and that events after it
+  were not examined.
 
 Before building, read `report.yaml` back as its reader, page by page, against the
 workbook: a measure stated on two pages is one figure; every list said to make a total
 adds to it; every *raise* or *lower* agrees with the tab's sign convention; every count in
 a headline equals the items under it; every ratio set against its threshold shows which
 side it falls (REPORT.md § 3, One figure, one meaning). Fix what does not hold, then build.
+
+After building, read the built deck's text back slide by slide (`REPORT.md` § 1, rule 4):
+list every item, count and total that appears on more than one page with the figure each
+page states. One item carries one figure from one cell everywhere, and an appendix total
+that differs from the headline is reconciled on its page. Fix `report.yaml` and rebuild
+until the list has no conflict.
 
 Then build:
 
@@ -234,8 +254,8 @@ whose `To reperform` cell is empty, a pane frozen deeper than the title band
 with `--run-dir` it computes the order from the roster and the recipe's `lead` and
 names the strip it wants. `check_report.py` gates the deck (`REPORT.md` § 5): every number on
 a slide backed by a workbook cell or a ledger record, every figure page naming its source
-tabs in the footer, every title a headline and every sentence complete, the structure the
-recipe declares, and no table showing two rows that read alike — a copied tab's twin rows
+tabs in the footer, every title a headline and every sentence complete, no working-paper
+term in what you wrote, the structure the recipe declares, and no table showing two rows that read alike — a copied tab's twin rows
 are the owning check's to name apart. **A non-zero exit is a stop — the deliverable does not
 seal (§ 6).** On a surface YOU wrote — a run-level tab, `report.yaml` — fix it and
 re-gate. On a copied tab you may not repair it: name the cell or the id,

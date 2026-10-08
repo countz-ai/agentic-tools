@@ -328,7 +328,7 @@ y
 """
 
 # The spec as REPORT.md § 2 has it: a title is a headline — the subject of a page of
-# figures (`EBITDA bridge`), the conclusion of a page that argues one (`The walk foots at
+# figures (`EBITDA bridge`), the conclusion of a page that argues one (`The bridge foots at
 # every rung`) — and the sentence, where a page needs one, is `message`.
 GOOD_SPEC = """schema: countz-accounting/report@1
 title: Quality of earnings review
@@ -349,10 +349,10 @@ sections:
           - chart: {type: column, from: q6, rows: ["= Reported EBITDA", "= Diligence adjusted EBITDA"], columns: [FY2023, FY2024, LTM Jul 2025]}
   - title: The bridge
     pages:
-      - title: EBITDA walk
+      - title: EBITDA bridge by line
         blocks:
           - table: {from: q6, where: {verdict: supported}, through: "= Diligence adjusted EBITDA", columns: [line, FY2023, FY2024, LTM Jul 2025, verdict], dense: true}
-      - title: The walk foots at every rung
+      - title: The bridge foots at every rung
         blocks:
           - table: {from: q6, max_rows: 5}
           - table: {from: q6, block: Exceptions}
@@ -637,7 +637,7 @@ def main() -> int:
             body = html.unescape("\n".join(stored_slides(deck))).replace("</a:t><a:t>", "")
             if 'sz="825"' not in body:
                 fails.append("11: a table declared `dense: true` is set at 8.25pt (`sz=\"825\"`)")
-            walk = next((x for x in stored_slides(deck) if "EBITDA walk" in x and "table:q6" in x), "")
+            walk = next((x for x in stored_slides(deck) if "EBITDA bridge by line" in x and "table:q6" in x), "")
             if "Management adjusted EBITDA (information)" in walk:
                 fails.append("11: `through:` ends the walk at the closing line — the information "
                              "line under it must not be on the walk's page")
@@ -656,7 +656,7 @@ def main() -> int:
             if g.returncode != 1 or "schedule `EBITDA walk`" not in g.stdout or "are not on the deck" not in g.stdout:
                 fails.append(f"12: a walk trimmed to max_rows must be refused naming the schedule and the "
                              f"rows it lacks (exit {g.returncode}): {(g.stdout + g.stderr).strip()[:400]}")
-        spec.write_text(re.sub(r"      - title: EBITDA walk\n        blocks:\n          - table: .*\n", "", GOOD_SPEC)
+        spec.write_text(re.sub(r"      - title: EBITDA bridge by line\n        blocks:\n          - table: .*\n", "", GOOD_SPEC)
                         .replace("          - table: {from: q6, max_rows: 5}\n", "")
                         .replace("          - table: {from: q6, block: Exceptions}\n", "          - text: \"No exception stands.\"\n")
                         .replace("          - table: {from: q6, rows: [\"= Reported EBITDA\", \"= Diligence adjusted EBITDA\"], "
@@ -684,10 +684,10 @@ def main() -> int:
             "c": (GOOD_SPEC.replace("      - title: Adjusted EBITDA\n", "      - title: EBITDA\n", 1),
                   "key-metrics page is headed `Adjusted EBITDA`"),
             "d": (GOOD_SPEC.replace(
-                "      - title: EBITDA walk\n",
+                "      - title: EBITDA bridge by line\n",
                 '      - title: Context first\n        blocks:\n          - text: "We set the scene here."\n'
                 '      - title: Context second\n        blocks:\n          - text: "We set more of the scene here."\n'
-                "      - title: EBITDA walk\n", 1), "2 pages after the key-metrics page"),
+                "      - title: EBITDA bridge by line\n", 1), "2 pages after the key-metrics page"),
         }
         for case, (text_, want) in opening.items():
             assert text_ != GOOD_SPEC, f"13{case}: the case did not change the spec"
@@ -781,7 +781,7 @@ def main() -> int:
         recipe_path = rd / "QOE.md"
         appx_recipe = RECIPE.replace('"dense": true}', '"dense": true, "place": "appendix"}')
         assert appx_recipe != RECIPE
-        walk_page = ("      - title: EBITDA walk\n        blocks:\n          - table: {from: q6, where: {verdict: supported}, "
+        walk_page = ("      - title: EBITDA bridge by line\n        blocks:\n          - table: {from: q6, where: {verdict: supported}, "
                      "through: \"= Diligence adjusted EBITDA\", columns: [line, FY2023, FY2024, LTM Jul 2025, verdict], dense: true}\n")
         assert walk_page in GOOD_SPEC
         in_appendix = GOOD_SPEC.replace(walk_page, "") + walk_page
@@ -838,6 +838,11 @@ def main() -> int:
             body = html.unescape("\n".join(stored_slides(deck)))
             if 'name="chart-value"' not in body or "8,404,000" not in body:
                 fails.append("19: each waterfall bar carries its value beside it")
+            if "Source: workbook.xlsx / EBITDA bridge" not in body or "· q6 " in body:
+                fails.append("19: a footer names each tab without its roster token "
+                             "(`Source: workbook.xlsx / EBITDA bridge`)")
+            if "Axis from $" not in body:
+                fails.append("19: a walk whose steps are small beside its totals says where its axis starts")
             g = run(gate)
             if g.returncode != 0:
                 fails.append(f"19: a waterfall deck must pass (exit {g.returncode}): {(g.stdout + g.stderr).strip()[:400]}")
@@ -881,6 +886,67 @@ def main() -> int:
         if r.returncode != 1 or "blocks[0]" not in r.stdout or "full stop" not in r.stdout:
             fails.append(f"6: a fragment text block must be refused, named (exit {r.returncode}): "
                          f"{(r.stdout + r.stderr).strip()[:300]}")
+
+        # 22. working-paper terms (REPORT.md § 3): a sentence the author writes with one is
+        #     refused by the gate, named; the same term opening its definition in a status
+        #     note passes, as does a copied table's cell.
+        bullet = '- bullets: ["The FY2023 income statement ties to the trial balance with no exception."]'
+        assert bullet in GOOD_SPEC
+        defined = GOOD_SPEC.replace(bullet, bullet + '\n          - note: "Candidate: an adjustment the '
+                                    'records do not yet support, outside the adjusted figure."')
+        spec.write_text(defined, encoding="utf-8")
+        r, g = run(build), None
+        if r.returncode == 0:
+            g = run(gate)
+        if r.returncode != 0 or g.returncode != 0:
+            fails.append(f"22: a status note defining `Candidate:` must build and pass (build {r.returncode}, "
+                         f"gate {g.returncode if g else '-'}): {((g or r).stdout + (g or r).stderr).strip()[:300]}")
+        spec.write_text(GOOD_SPEC.replace(bullet, '- bullets: ["We walked reported EBITDA to the adjusted '
+                                          'figure, and two candidates remain."]'), encoding="utf-8")
+        r = run(build)
+        g = run(gate) if r.returncode == 0 else r
+        if g.returncode != 1 or "working-paper terms" not in g.stdout or "walked" not in g.stdout \
+                or "candidates" not in g.stdout:
+            fails.append(f"22: a working-paper term in a bullet must be refused, named (exit {g.returncode}): "
+                         f"{(g.stdout + g.stderr).strip()[:300]}")
+
+        # 23. a walk's axis (REPORT.md § 2): steps small beside the totals start the axis
+        #     above zero; a walk crossing zero keeps zero; a money axis carries its currency.
+        lo, hi, _, cut = build_report.waterfall_axis(14_600_000, 18_700_000)
+        if not (cut and 0 < lo <= 14_600_000 and hi >= 18_700_000):
+            fails.append(f"23: a walk from $18.7M to $14.6M starts its axis above zero ({lo}, {hi}, cut {cut})")
+        if build_report.waterfall_axis(-1_000_000, 5_000_000)[3]:
+            fails.append("23: a walk crossing zero keeps zero on its axis")
+        if build_report.waterfall_axis(100_000, 5_000_000)[3]:
+            fails.append("23: a walk whose steps are large beside its totals keeps zero on its axis")
+        for v, step, want in ((12_500_000, 2_500_000, "$12.5M"), (-500_000, 100_000, "($0.5M)"),
+                              (0.0, 100_000, "0")):
+            got = build_report.axis_label(v, step, "usd")
+            if got != want:
+                fails.append(f"23: a money axis tick {v} reads `{want}`, not `{got}`")
+
+        # 24. continuation pages (REPORT.md § 2 Fit): a table split over pages leaves no
+        #     piece of fewer than three rows, and a note that does not fit after a table
+        #     takes the table's last rows with it.
+        def table_of(n: int) -> dict:
+            rows = [[build_report.Cell(f"Item {i}", "", False, "", f"A{i}"),
+                     build_report.Cell(1000.0 * i, "#,##0", False, "", f"B{i}")] for i in range(n)]
+            return {"t": "table", "table": build_report.Table("x1 Items", None, ["item", "amount"], rows,
+                                                               kinds=["body"] * n, numeric=[False, True])}
+        widows, lone = [], []
+        for n in range(5, 70):
+            pages = build_report.flow(build_report.Page("s", "s", "Items", [table_of(n)]))
+            sizes = [len(b["table"].rows) for pg in pages for b in pg.blocks if b["t"] == "table"]
+            if len(sizes) > 1 and min(sizes) < build_report.WIDOW_ROWS:
+                widows.append((n, sizes))
+            pages = build_report.flow(build_report.Page("s", "s", "Items", [
+                table_of(n), {"t": "note", "text": "Supported: the records carry the amount."}]))
+            if any(all(b["t"] == "note" for b in pg.blocks) for pg in pages):
+                lone.append(n)
+        if widows:
+            fails.append(f"24: a table continued over pages leaves a piece under three rows: {widows[:3]}")
+        if lone:
+            fails.append(f"24: a note stands alone on a continuation page, for tables of {lone[:5]} rows")
 
     if fails:
         print(f"report-selftest: {len(fails)} failure(s)")

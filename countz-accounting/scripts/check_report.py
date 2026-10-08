@@ -51,6 +51,11 @@ page carrying a schedule placed `appendix` has the kicker `Appendix`, as does ev
 after the first `Appendix` page; and where the recipe declares `narrative`, every
 narrative page carries one of its sections as its kicker, in the declared order.
 
+GATE 7 — the reader's words (REPORT.md § 3). No ledger id, step token or run working word
+anywhere on a slide, a copied table's cells included; and no working-paper term (`walk`,
+`as supported`, `candidate`, `boundary`, `ruled`, `routed`, `standing`) in what the
+author writes — a term opening its own definition and a tab's name are not read.
+
 Parsed from the .pptx zip with the standard library only, like check_workbook.py.
 
 Usage:
@@ -231,6 +236,27 @@ MACHINE_PHRASE = re.compile(
     r"\b(?:mint(?:ed|s|ing)?|recipe|skill|this run|the run(?:'s)?|rule \d+|"
     r"hypothes(?:is|es) (?:departed|held)|departed hypothes(?:is|es))\b", re.I)
 
+# The working papers' own terms, refused in what the author writes on a slide (REPORT.md
+# § 3 Working-paper terms): the deck says what happened to an item in its area's own
+# terms, which no list here can hold. A copied table's cells keep the tab's words.
+# A term opening its own definition (`Candidate: …`, `candidate — …`) is the status note
+# REPORT.md § 3 asks for, and a tab's name (`b9 Debt walk`) is a pointer, so neither counts.
+WORKING_PAPER = re.compile(
+    r"(?<![\w-])(?:walk(?:s|ed|ing)?|candidates?|as supported|boundary|boundaries|"
+    r"rul(?:ed|ing|ings)|routed|routing|standing|(?:cause|item|account|line) grain|"
+    r"beside the walk|review step)(?![\w-])(?!\s*[:—–])", re.IGNORECASE)
+AUTHORED_SHAPES = {"title", "message", "body-text", "body-bullets", "body-note", "body-heading",
+                   "stat-label", "stat-value", "stat-note", "kv-label", "kv-value", "chart-title",
+                   "chart-cat", "footer-tagline", "cover-title", "cover-subtitle"}
+
+
+def working_paper_words(text: str, tabs: list[str]) -> list[str]:
+    for t in sorted(tabs, key=len, reverse=True):
+        name = t.split(" ", 1)[1] if " " in t else t
+        for n in (t, name):
+            text = re.sub(rf"(?<!\w){re.escape(n)}(?!\w)", " ", text, flags=re.IGNORECASE)
+    return [m.group(0) for m in WORKING_PAPER.finditer(text)]
+
 
 def step_tokens(tabs: list[str]) -> list[str]:
     """The roster tokens the workbook's check tabs open with (`r4 Position and DSO`)."""
@@ -299,9 +325,14 @@ def tab_block_at(grid: dict[int, dict[int, str]], title: str | None) -> tuple[li
     if title is None:
         hr = 4
     else:
-        hr = next((r for r in sorted(grid) if r >= 4 and len(grid[r]) == 1
-                   and (next(iter(grid[r].values())).strip() == title.strip()
-                        or fold(next(iter(grid[r].values()))).startswith(fold(title)))), None)
+        heads = [r for r in sorted(grid) if r >= 4 and len(grid[r]) == 1]
+
+        def text(r: int) -> str:
+            return next(iter(grid[r].values()))
+        # the heading that reads exactly as the title wins over one it merely opens
+        # (`Obligations due` over `Obligations due by class, …`)
+        hr = next((r for r in heads if text(r).strip() == title.strip()), None) or \
+            next((r for r in heads if fold(text(r)).startswith(fold(title))), None)
         if hr is None:
             return [], [], 0
         hr = next((r for r in sorted(grid) if r > hr and len(grid[r]) >= 2), None)
@@ -406,9 +437,20 @@ def schedule_gate(schedules: list[dict], tabs: list[str], texts: dict[str, dict[
             fails.append(f"schedule `{title}`: no page carries a table from `{tab}` — the recipe "
                          f"places it `{sc.get('place', 'lead')}`{' and `required`' if sc.get('required') else ''} (REPORT.md § 1)")
             continue
+        # two schedules from one tab can carry the same columns (a transactions walk and a
+        # balances walk): the table is the one showing this schedule's own rows
+        ident0 = header_at(headers, words[0]) if words else None
+        labels = {r[ident0].strip() for r in rows if ident0 is not None and ident0 < len(r) and r[ident0].strip()}
+
+        def overlap(kb, words=words, labels=labels) -> int:
+            di_ = header_at(list(kb[0][1]), words[0]) if words else None
+            return sum(1 for r in kb[1] if di_ is not None and di_ < len(r) and r[di_].strip() in labels)
+        if (sc.get("place") == "appendix" and not sc.get("required") and labels
+                and not any(overlap(kb) for kb in candidates)):
+            continue                           # its rows are on no page: the author left it to the workbook
         full = [(k, body) for k, body in candidates
                 if not [w for w in want if header_at(list(k[1]), w) is None]]
-        match = max(full, key=lambda kb: len(kb[1])) if full else None
+        match = max(full, key=lambda kb: (overlap(kb), len(kb[1]))) if full else None
         if match is None:
             # name what the nearest table lacks: the candidate missing the fewest columns,
             # and of those the one carrying the most of the declared (non-period) columns
@@ -443,11 +485,17 @@ def schedule_gate(schedules: list[dict], tabs: list[str], texts: dict[str, dict[
         di = header_at(list(deck_headers), words[0])
         shown = {r[di].strip() for r in body if di is not None and di < len(r)}
         # a row nil in every period column shown is dropped from the deck (`nonzero`) and
-        # a derived line (`= …`) is never one of them
-        if nums is not None and periods:
+        # a derived line (`= …`) is never one of them; a schedule declaring no period reads
+        # every numeric column the deck shows, as the builder's `nonzero` does
+        if nums is not None:
             cols = sorted((texts.get(tab, {}).get(hr) or {}))
-            pcols = [cols[i] for i, h in enumerate(headers) if h in want and h in periods and i < len(cols)]
             grid = nums.get(tab, {})
+            if periods:
+                pcols = [cols[i] for i, h in enumerate(headers) if h in want and h in periods and i < len(cols)]
+            else:
+                on_deck = {i for i in (header_at(headers, h) for h in deck_headers) if i is not None}
+                pcols = [cols[i] for i in sorted(on_deck) if i < len(cols)
+                         and any(cols[i] in grid.get(hr + 1 + j, {}) for j in range(len(rows)))]
             def nil(j):
                 if any(c.strip().startswith("=") for c in rows[j][:2]):
                     return False
@@ -871,17 +919,19 @@ def audit(deck: pathlib.Path, workbook: pathlib.Path, run_dir: pathlib.Path | No
                            or any(n_ in ("stat-value", "kv-value") for n_, _ in s["shapes"]))
         if has_figures:
             src = s["footer_source"]
-            named = [t.strip() for t in src.split("·")[1:]] if src.startswith("Source:") else []
+            listed = src.split(" / ", 1)[1] if src.startswith("Source:") and " / " in src else ""
+            named = [t.strip() for t in listed.split("·") if t.strip()]
             if not named:
                 fails.append(f"slide {n} (`{s['title'][:50]}`) states a figure and names no source tab "
                              f"in its footer — declare `source:` on the page")
             else:
+                titles = {style.tab_title(t) for t in tabs}
                 for t in named:
-                    if t not in tabs:
+                    if t not in titles:
                         fails.append(f"slide {n}: footer names `{t}`, no tab of the workbook")
                 for tname, _ in s["tables"] + s["charts"]:
                     tab = tname.split(":", 1)[1] if ":" in tname else ""
-                    if tab and tab not in named:
+                    if tab and style.tab_title(tab) not in named:
                         fails.append(f"slide {n}: a table from `{tab}` on a page whose footer does not name it")
         title = s["title"].strip().removesuffix(CONTINUED)
         if len(title) > TITLE_MAX:
@@ -907,6 +957,12 @@ def audit(deck: pathlib.Path, workbook: pathlib.Path, run_dir: pathlib.Path | No
             shown = ", ".join(sorted(set(words))[:4])
             fails.append(f"slide {n}: the run's own vocabulary on the page ({shown}) — state what was "
                          f"done and found in the reader's words; ids and step tokens stay in the workbook")
+    for n, s in enumerate(slides, 1):
+        words = [w for nm, t in s["shapes"] if nm in AUTHORED_SHAPES for w in working_paper_words(t, tabs)]
+        if words:
+            shown = ", ".join(sorted({w.lower() for w in words})[:5])
+            fails.append(f"slide {n}: working-paper terms in the slide's text ({shown}) — say what happened to "
+                         f"each item in this area's own terms (REPORT.md § 3 Working-paper terms)")
     # GATE 5 — the recipe's schedules, on a plan-driven run whose recipe declares them;
     # GATE 6 — the opening, on every deck, with the key-metrics page held to the recipe.
     schedules = metrics = narrative = None

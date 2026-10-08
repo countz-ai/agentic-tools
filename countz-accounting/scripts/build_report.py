@@ -190,11 +190,13 @@ def text_h(s: str, width: float, pt: float, bold: bool = False, spacing: float =
     return lines_for(s, width, pt, bold) * pt * spacing / 72 + 0.06
 
 
-def nice_axis(lo: float, hi: float, target: int = CHART_TICKS) -> tuple[float, float, list[float]]:
-    """The value axis a reader can read: round ticks spanning the data, zero on the scale.
-    The step is 1, 2, 2.5 or 5 times a power of ten, never the raw range over the tick
-    count, so the labels are numbers a reader holds in their head."""
-    lo, hi = min(0.0, lo), max(0.0, hi)
+def nice_axis(lo: float, hi: float, target: int = CHART_TICKS,
+              zero: bool = True) -> tuple[float, float, list[float]]:
+    """The value axis a reader can read: round ticks spanning the data, zero on the scale
+    unless `zero` is False. The step is 1, 2, 2.5 or 5 times a power of ten, never the raw
+    range over the tick count, so the labels are numbers a reader holds in their head."""
+    if zero:
+        lo, hi = min(0.0, lo), max(0.0, hi)
     if hi - lo <= 0:
         hi = lo + 1.0
     raw = (hi - lo) / max(target, 1)
@@ -224,6 +226,32 @@ def axis_text(v: float, step: float) -> str:
         return f"({s})" if v < 0 else s
     d = 0 if step >= 1 else min(4, int(math.ceil(-math.log10(step))))
     return (f"({abs(v):,.{d}f})" if v < 0 else f"{v:,.{d}f}")
+
+
+def axis_label(v: float, step: float, money: str = "") -> str:
+    """A tick with the currency of a money axis in front: `$12.5M`, `($0.5M)`."""
+    s = axis_text(v, step)
+    if not money or s == "0":
+        return s
+    sym = style.symbol(money)
+    return f"({sym}{s[1:-1]})" if s.startswith("(") else f"{sym}{s}"
+
+
+WATERFALL_FLOOR = 0.5    # the steps' span, as a share of the largest bar end, under which the axis leaves zero
+
+
+def waterfall_axis(lo: float, hi: float) -> tuple[float, float, list[float], bool]:
+    """A walk's value axis. From zero, unless every bar end sits on one side of it and
+    the walk moves less than half the largest end: drawn from zero those steps are
+    slivers, so the axis starts a margin short of the nearest end and says so."""
+    big = max(abs(lo), abs(hi))
+    if big and (lo > 0 or hi < 0) and hi - lo < WATERFALL_FLOOR * big:
+        pad = max((hi - lo) * 0.25, big * 0.02)
+        a, b, ticks = nice_axis(lo - pad if lo > 0 else lo, hi if lo > 0 else hi + pad, zero=False)
+        if (lo > 0 and a > 0) or (hi < 0 and b < 0):
+            return a, b, ticks, True
+    a, b, ticks = nice_axis(lo, hi)
+    return a, b, ticks, False
 
 
 # --- prose ----------------------------------------------------------------------
@@ -599,9 +627,14 @@ class Book:
 
     def block(self, tab: str, title: str) -> Table | Lines:
         fold = normalize(title)
-        for b in self.blocks(tab):
-            if b.title and (b.title.strip() == title.strip() or normalize(b.title) == fold
-                            or normalize(b.title).startswith(fold)):
+        blocks = self.blocks(tab)
+        # the heading that reads as the title wins over one it merely opens
+        # (`Obligations due` over `Obligations due by class, …`)
+        for b in blocks:
+            if b.title and (b.title.strip() == title.strip() or normalize(b.title) == fold):
+                return b
+        for b in blocks:
+            if b.title and normalize(b.title).startswith(fold):
                 return b
         for b in self.blocks(tab):            # an untitled statement block, by its first line
             if isinstance(b, Lines) and not b.title and b.lines and normalize(b.lines[0]).startswith(fold):
@@ -1197,8 +1230,8 @@ def table_block(v, at: str, res: Resolver, book: Book) -> dict:
             t.more = len(left)
             fmt0 = next((t.rows[k][ci].fmt for k in left if t.rows[k][ci].fmt), "")
             amount = compact_money(left_amt, book.currency) if is_money(fmt0) else fmt_value(left_amt, fmt0)
-            t.more_note = (f"{len(left)} more row(s), {amount} in {t.headers[ci]}, "
-                           f"on the {t.source} tab of workbook.xlsx")
+            t.more_note = (f"{len(left)} more {'row' if len(left) == 1 else 'rows'} ({amount} of "
+                           f"{t.headers[ci].lower()}) on the {style.tab_title(t.source)} tab of workbook.xlsx")
             t.rows, t.kinds = [t.rows[k] for k in keep], [t.kinds[k] for k in keep]
             picked_idx = [picked_idx[k] for k in keep]
         v = {**v, "max_rows": None}
@@ -1294,7 +1327,8 @@ def chart_block(v, at: str, res: Resolver, book: Book) -> dict:
         raise SpecError(f"{at}: at most four series in one chart (WORKBOOK_STYLE.md § 6)")
     return {"t": "chart", "type": ctype, "categories": categories, "series": series,
             "title": res.resolve(v.get("title", ""), at), "source": t.source,
-            "fmt": next((row[cat_idx[0]].fmt for row in t.rows), "")}
+            "fmt": next((row[cat_idx[0]].fmt for row in t.rows), ""),
+            "money": book.currency if is_money(next((row[cat_idx[0]].fmt for row in t.rows), "")) else ""}
 
 
 WATERFALL_SLOT = 0.3                     # inches, the least height of one walk line
@@ -1482,6 +1516,24 @@ def fit_table(block: dict, width: float, avail: float) -> None:
 
 
 # --- flow: split long blocks over continuation pages ----------------------------
+WIDOW_ROWS = 3        # the fewest table rows a continuation carries (REPORT.md § 2 Fit)
+WIDOW_ITEMS = 2       # the fewest list items one does
+
+
+def split_table(b: dict, k: int) -> tuple[dict, dict]:
+    """A table block cut after row k: the rows-left line rides on the second piece, and
+    the second piece's title is marked `(continued)`."""
+    tb: Table = b["table"]
+    first = deepcopy(b)
+    first["table"].rows, first["table"].kinds = tb.rows[:k], tb.kinds[:k]
+    first["table"].more, first["table"].more_note = 0, ""
+    rest = deepcopy(b)
+    rest["table"].rows, rest["table"].kinds = tb.rows[k:], tb.kinds[k:]
+    rest["table"].title = (tb.title if tb.title.endswith(CONTINUED)
+                           else tb.title + CONTINUED) if tb.title else None
+    return first, rest
+
+
 def flow(page: Page) -> list[Page]:
     """The page, or the page and its continuations when its blocks measure past the
     body. Only tables and bullet lists split; anything else overflowing is a refusal.
@@ -1529,14 +1581,10 @@ def flow(page: Page) -> list[Page]:
             while k < len(rows) and acc + rows[k] <= room - note:
                 acc += rows[k]
                 k += 1
+            if 0 < len(rows) - k < WIDOW_ROWS and len(rows) - WIDOW_ROWS >= 2:
+                k = len(rows) - WIDOW_ROWS      # no continuation of a row or two
             if 2 <= k < len(rows):
-                first = deepcopy(b)
-                first["table"].rows, first["table"].kinds = tb.rows[:k], tb.kinds[:k]
-                first["table"].more, first["table"].more_note = 0, ""
-                rest = deepcopy(b)
-                rest["table"].rows, rest["table"].kinds = tb.rows[k:], tb.kinds[k:]
-                rest["table"].title = (tb.title if tb.title.endswith(CONTINUED)
-                                       else tb.title + CONTINUED) if tb.title else None
+                first, rest = split_table(b, k)
                 cur.append(first)
                 pending.insert(0, rest)
                 emit()
@@ -1548,6 +1596,8 @@ def flow(page: Page) -> list[Page]:
             while k < len(items) and acc + text_h(items[k], BODY_W - 0.26, pt, spacing=1.3) + 0.05 <= room:
                 acc += text_h(items[k], BODY_W - 0.26, pt, spacing=1.3) + 0.05
                 k += 1
+            if 0 < len(items) - k < WIDOW_ITEMS and k > WIDOW_ITEMS - 1:
+                k = len(items) - WIDOW_ITEMS
             if 1 <= k < len(items):
                 cur.append({**b, "items": items[:k]})
                 pending.insert(0, {**b, "items": items[k:]})
@@ -1555,6 +1605,14 @@ def flow(page: Page) -> list[Page]:
                 continue
         if cur:
             pending.insert(0, b)
+            # a short block that would open the next page alone takes the last rows of the
+            # table before it along, so no page holds a note or a line by itself
+            last = cur[-1]
+            if (b["t"] in ("note", "text") and len(pending) == 1 and last["t"] == "table"
+                    and len(last["table"].rows) >= 2 + WIDOW_ROWS):
+                first, rest = split_table(last, len(last["table"].rows) - WIDOW_ROWS)
+                cur[-1] = first
+                pending.insert(0, rest)
             emit()
             continue
         raise SpecError(f"page `{page.title[:60]}`: a {b['t']} block measures {h:.1f}in, "
@@ -1680,7 +1738,7 @@ class Deck:
     def footer(self, s, company: str, sources: list[str], number: int, tagline: str = ""):
         lines = [f"Confidential · Prepared by Countz for {company} · {number}"]
         if sources:
-            lines.append("Source: workbook.xlsx · " + " · ".join(sources))
+            lines.append("Source: workbook.xlsx / " + " · ".join(style.tab_title(t) for t in sources))
         self.band(s, tagline, lines)
 
     def header(self, s, kicker: str, title: str, message: str = ""):
@@ -1817,7 +1875,8 @@ class Deck:
         yy += hh + sum(rows)
         if tb.more:
             self.text(s, x, yy + 0.06, w, 0.18,
-                      [[(tb.more_note or f"{tb.more} more row(s) on the {tb.source} tab of workbook.xlsx",
+                      [[(tb.more_note or f"{tb.more} more {'row' if tb.more == 1 else 'rows'} on the "
+                                          f"{style.tab_title(tb.source)} tab of workbook.xlsx",
                          PT["note"], False, MUTED)]],
                       "table-more")
             yy += 0.24
@@ -1901,7 +1960,8 @@ class Deck:
             used += (lpad if legend_rows[-1] else 0) + ew
             legend_rows[-1].append(i)
         legend_h = (CHART_LEGEND_H + 0.2 * (len(legend_rows) - 1)) if len(series) > 1 else 0.0
-        gutter_text = cats if horiz else [axis_text(t, step) for t in ticks]
+        money = block.get("money", "")
+        gutter_text = cats if horiz else [axis_label(t, step, money) for t in ticks]
         gut = min(max([text_w(t, pt) for t in gutter_text] + [0.35]) + 0.10, w * 0.35)
         px, pw = x + gut, w - gut
         # the strip under the plot grows with its labels: a month-end category ("As of
@@ -1922,11 +1982,11 @@ class Deck:
             if horiz:
                 self.connector(s, vx(t), py, vx(t), py + ph, RULE, "chart-grid", GRID_PT)
                 self.text(s, vx(t) - 0.6, py + ph + 0.07, 1.2, 0.18,
-                          [[(axis_text(t, step), pt, False, MUTED)]], "chart-axis", align=PP_ALIGN.CENTER)
+                          [[(axis_label(t, step, money), pt, False, MUTED)]], "chart-axis", align=PP_ALIGN.CENTER)
             else:
                 self.connector(s, px, vy(t), px + pw, vy(t), RULE, "chart-grid", GRID_PT)
                 self.text(s, x, vy(t) - 0.09, gut - 0.10, 0.18,
-                          [[(axis_text(t, step), pt, False, MUTED)]], "chart-axis", align=PP_ALIGN.RIGHT)
+                          [[(axis_label(t, step, money), pt, False, MUTED)]], "chart-axis", align=PP_ALIGN.RIGHT)
         if horiz:
             self.connector(s, vx(0.0), py, vx(0.0), py + ph, MUTED, "chart-base", BASE_PT)
         else:
@@ -2002,10 +2062,13 @@ class Deck:
             a, b = (0.0, st["value"]) if st["total"] else (run, run + st["value"])
             run = b
             ends.append((a, b))
-        vals = [v for ab in ends for v in ab] + [0.0]
-        lo, hi, ticks = nice_axis(min(vals), max(vals))
+        # a total's bar runs from zero, so only its far end places the axis
+        vals = [v for st, (a, b) in zip(steps, ends) for v in ((b,) if st["total"] else (a, b))]
+        lo, hi, ticks, cut = waterfall_axis(min(vals), max(vals))
         step = (ticks[1] - ticks[0]) if len(ticks) > 1 else 1.0
         span = (hi - lo) or 1.0
+        base = min(max(0.0, lo), hi)            # where a total's bar starts: zero, or the cut axis's end
+        money = steps[0].get("money", "")
         gut = min(max(text_w(st["label"], pt) for st in steps) + 0.15, w * 0.42)
         def shown(st):                          # a bar's value as a tile states it (REPORT.md § 4)
             return fmt_value(st["value"], st["fmt"], prose=bool(st.get("money")), money=st.get("money", ""))
@@ -2019,15 +2082,28 @@ class Deck:
 
         for t in ticks:
             self.connector(s, vx(t), y, vx(t), y + ph, RULE, "chart-grid", GRID_PT)
+            if cut and t == ticks[0]:
+                continue                        # the "Axis from" line states the first tick
             self.text(s, vx(t) - 0.6, y + ph + 0.07, 1.2, 0.18,
-                      [[(axis_text(t, step), pt, False, MUTED)]], "chart-axis", align=PP_ALIGN.CENTER)
-        self.connector(s, vx(0.0), y, vx(0.0), y + ph, MUTED, "chart-base", BASE_PT)
+                      [[(axis_label(t, step, money), pt, False, MUTED)]], "chart-axis", align=PP_ALIGN.CENTER)
+        if cut:                                 # the axis does not start at zero: say so where it starts
+            self.text(s, x, y + ph + 0.07, gut - 0.12, 0.18,
+                      [[(f"Axis from {axis_label(base, step, money)}", pt, False, MUTED)]], "chart-axis",
+                      align=PP_ALIGN.RIGHT)
+        else:
+            self.connector(s, vx(0.0), y, vx(0.0), y + ph, MUTED, "chart-base", BASE_PT)
+        ends = [((base if st["total"] else a), b) for st, (a, b) in zip(steps, ends)]
         for i, (st, (a, b)) in enumerate(zip(steps, ends)):
             top = y + i * slot
             colour = MARKER if st["total"] else (TEAL if st["value"] >= 0 else MUTED)
             lo_x, hi_x = sorted((vx(a), vx(b)))
             self.rect(s, lo_x, top + slot * 0.18, max(hi_x - lo_x, 0.01), slot * 0.64, colour,
                       f"chartval:{tag}:{float(st['value'])!r}")
+            if cut and st["total"]:             # a total on a cut axis is broken where the axis starts
+                for dx in (0.0, 0.07):
+                    gap = self.rect(s, lo_x + 0.16 + dx, top + slot * 0.12, 0.03, slot * 0.76, BONE,
+                                    "chart-break")
+                    gap.rotation = 20
             if i + 1 < len(steps) and not steps[i + 1]["total"]:
                 self.connector(s, vx(b), top + slot * 0.82, vx(b), top + slot * 1.18, RULE,
                                "chart-grid", GRID_PT)
