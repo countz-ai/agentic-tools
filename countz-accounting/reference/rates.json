@@ -2,9 +2,9 @@
   "//": "Model rates used to ESTIMATE the dollar cost of a run. Tokens are measured; dollars are computed from this table at standard LIST rates, so a figure derived here does not reflect promotional pricing or contracted discounts and may differ from your actual bill. The authoritative number is your provider's usage console. OpenTelemetry's GenAI conventions define no cost attribute, so `cost_usd` is deliberately our own name and not `gen_ai.usage.cost`.",
   "schema": "countz-accounting/rates@1",
   "unit": "USD per million tokens, except web_search which is USD per request",
-  "captured_at": "2026-08-19",
-  "source": "the baked model catalog inside Claude Code 2.1.236, which describes itself as 'the source of truth for per-model provider IDs and metadata'. Tiers and the model->tier mapping were read from that catalog; the arithmetic below is the CLI's own cost function.",
-  "how_to_refresh": "Re-read the catalog from a current Claude Code build, or replace this file with rates from your own billing. Bump captured_at when you do. A model absent from `models` gets its tokens reported and its cost withheld - never priced at a neighbour's rate.",
+  "captured_at": "2026-10-07",
+  "source": "Anthropic's published list prices at https://platform.claude.com/docs/en/about-claude/pricing (Claude API, global endpoint, standard speed, no batch discount). The original tiers and model->tier mapping were read from the model catalog inside Claude Code 2.1.236; the arithmetic below is the CLI's own cost function.",
+  "how_to_refresh": "Re-read the pricing page or the catalog from a current Claude Code build, or replace this file with rates from your own billing. Bump captured_at when you do. A model absent from `models` gets its tokens reported and its cost withheld - never priced at a neighbour's rate.",
 
   "formula": [
     "cost = input_tokens/1e6 * input",
@@ -13,7 +13,10 @@
     "     + min(ephemeral_1h_input_tokens, cache_creation_input_tokens)/1e6 * cache_write_1h",
     "     + (cache_creation_input_tokens - that 1h portion)/1e6 * cache_write_5m",
     "     + web_search_requests * web_search",
-    "Thinking tokens are NOT priced separately - they are already inside output_tokens."
+    "Thinking tokens are NOT priced separately - they are already inside output_tokens.",
+    "Cache reads are 0.1x input on most models, but 0.05x on Opus 5.5 and Sonnet 5.5 and 0.025x on Fable 5.1 and Mythos 5.1; those models have their own tiers.",
+    "Haiku 5.5 charges more when one prompt exceeds 100,000 tokens. Tokens are summed per model, not per request, so Haiku 5.5 is priced at the up-to-100k rate (`haiku_55`) and a run with longer Haiku 5.5 prompts is underestimated. `haiku_55_over_100k` holds the higher rate.",
+    "Fast mode, batch, US-only inference (1.1x) and regional cloud endpoints are not modelled."
   ],
 
   "tiers": {
@@ -22,18 +25,27 @@
     "tier_10_50": {"input": 10,  "output": 50, "cache_write_5m": 12.5,  "cache_write_1h": 20,  "cache_read": 1,    "web_search": 0.01},
     "tier_15_75": {"input": 15,  "output": 75, "cache_write_5m": 18.75, "cache_write_1h": 30,  "cache_read": 1.5,  "web_search": 0.01},
     "haiku_35":   {"input": 0.8, "output": 4,  "cache_write_5m": 1,     "cache_write_1h": 1.6, "cache_read": 0.08, "web_search": 0.01},
-    "haiku_45":   {"input": 1,   "output": 5,  "cache_write_5m": 1.25,  "cache_write_1h": 2,   "cache_read": 0.1,  "web_search": 0.01}
+    "haiku_45":   {"input": 1,   "output": 5,  "cache_write_5m": 1.25,  "cache_write_1h": 2,   "cache_read": 0.1,  "web_search": 0.01},
+    "tier_2_10":  {"input": 2,   "output": 10, "cache_write_5m": 2.5,   "cache_write_1h": 4,   "cache_read": 0.2,  "web_search": 0.01},
+    "sonnet_55":  {"input": 2,   "output": 10, "cache_write_5m": 2.5,   "cache_write_1h": 4,   "cache_read": 0.1,  "web_search": 0.01},
+    "opus_55":    {"input": 4,   "output": 20, "cache_write_5m": 5,     "cache_write_1h": 8,   "cache_read": 0.2,  "web_search": 0.01},
+    "fable_51":   {"input": 10,  "output": 50, "cache_write_5m": 12.5,  "cache_write_1h": 20,  "cache_read": 0.25, "web_search": 0.01},
+    "haiku_55":   {"input": 0.1, "output": 0.5, "cache_write_5m": 0.125, "cache_write_1h": 0.2, "cache_read": 0.01, "web_search": 0.01},
+    "haiku_55_over_100k": {"input": 0.5, "output": 2.5, "cache_write_5m": 0.625, "cache_write_1h": 1, "cache_read": 0.05, "web_search": 0.01}
   },
 
   "models": {
     "claude-3-5-haiku":  "haiku_35",
     "claude-haiku-4-5":  "haiku_45",
+    "claude-haiku-4-5-20251001": "haiku_45",
+    "claude-haiku-5-5":  "haiku_55",
     "claude-3-5-sonnet": "tier_3_15",
     "claude-3-7-sonnet": "tier_3_15",
     "claude-sonnet-4-0": "tier_3_15",
     "claude-sonnet-4-5": "tier_3_15",
     "claude-sonnet-4-6": "tier_3_15",
-    "claude-sonnet-5":   "tier_3_15",
+    "claude-sonnet-5":   "tier_2_10",
+    "claude-sonnet-5-5": "sonnet_55",
     "claude-opus-4-0":   "tier_15_75",
     "claude-opus-4-1":   "tier_15_75",
     "claude-opus-4-5":   "tier_5_25",
@@ -41,7 +53,10 @@
     "claude-opus-4-7":   "tier_5_25",
     "claude-opus-4-8":   "tier_5_25",
     "claude-opus-5":     "tier_5_25",
+    "claude-opus-5-5":   "opus_55",
     "claude-fable-5":    "tier_10_50",
-    "claude-mythos-5":   "tier_10_50"
+    "claude-fable-5-1":  "fable_51",
+    "claude-mythos-5":   "tier_10_50",
+    "claude-mythos-5-1": "fable_51"
   }
 }
