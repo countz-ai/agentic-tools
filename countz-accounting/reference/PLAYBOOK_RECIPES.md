@@ -121,8 +121,8 @@ the user in one line, register with `--recipe <the RECIPE path> --recipe-version
 VERSION>`, and call no recipe tool. `NONE` (exit 1) means nothing is bundled: fetch.
 
 Call `get_recipe_for_countz_analysis(recipe="<your recipe's name>")` on the `countz`
-server — a named shim knows its name; `countz-analysis` matches the catalog first (its
-SKILL.md). The result carries `recipe_markdown`, `recipe_name` and `recipe_version`.
+server — a named shim knows its name; `countz`, given an ask, matches the catalog first
+(its SKILL.md). The result carries `recipe_markdown`, `recipe_name` and `recipe_version`.
 Write `recipe_markdown` to a file, exactly as returned, then register with `--recipe`
 pointing at that file and `--recipe-version` the served version: the script copies the
 bytes to `<run_dir>/recipes/<recipe_name>.md` and refuses a file whose sha does not
@@ -146,7 +146,7 @@ The script mints `<output_root>/<skill>-<company slug>.<YYYYMMDD-HHMMSS>` and pr
 as `RUN_DIR:`; that path is `<run_dir>` everywhere below. Never compose the name
 yourself. `--params` is everything § 1 collected, verbatim, as one JSON object — the
 ask included, so `run.json` records why the run was scoped as it was. The script reads
-no client file. A `countz-analysis` run on a catalog miss registers without `--recipe`
+no client file. A `countz` run on a catalog miss registers without `--recipe`
 and pins the generated recipe afterwards (its SKILL.md).
 
 Sources arriving after the plan is drafted: run the same script with `<run_dir>` in place

@@ -1,13 +1,13 @@
 # SCRUB — the one text that crosses to the Countz connector
 
 Nothing from a run goes to the server, with one exception (`OBSERVABILITY.md § 4`): on a
-catalog miss, `countz-analysis` sends a **description of the analysis** the user asked
+catalog miss, `countz` sends a **description of the analysis** the user asked
 for, so the server can match it once more or plan a recipe for it. This document states
 what that description may carry. The `scrubber` agent (`agents/scrubber.md`) applies it.
 
 Whether a word identifies a company is a question about meaning, so a reader decides it,
 not a pattern. The procedure — scrub, blind check, record, tell then send — is
-`skills/countz-analysis/SKILL.md` step 4.
+`skills/countz/SKILL.md` § Relay a catalog match or a miss, step 2.
 
 ## What the description keeps
 

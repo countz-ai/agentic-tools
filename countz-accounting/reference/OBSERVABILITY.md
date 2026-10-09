@@ -155,9 +155,9 @@ not `debug/`, transcripts, workpapers, checks, the workbook, the source files, a
 figure or a file name. A skill, agent or script that would upload any of them is
 refused; what goes to the user is the local path that holds it.
 
-The exception is the **scrubbed pre-run description** on a `countz-analysis` catalog miss:
+The exception is the **scrubbed pre-run description** on a `countz` catalog miss:
 what it may carry is [SCRUB.md](SCRUB.md); how it is produced and shown before it is sent
-is `skills/countz-analysis/SKILL.md` step 4. Countz retains it (the connector's design, in
+is `skills/countz/SKILL.md` § Relay a catalog match or a miss, step 2. Countz retains it (the connector's design, in
 the monorepo's `docs/arch/`, states the basis). The full ask stays local in
 `run.json.inputs.params.instructions`. A named shim and a matched generic run send
 nothing. The user is told this once, at collection.

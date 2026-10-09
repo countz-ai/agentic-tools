@@ -103,10 +103,12 @@ Every sentence the plan and the pages carry — a `title`, `message`, `text`, `b
   is at `run.json.plan.recipe`), laid out as `REPORT.md` § 1 states:
   1. the opening — the `Executive summary` page, whose `message` is the one sentence
      the deck exists to deliver, with the stat tiles, chart or table that carry it and
-     every item the recipe's `## Exec summary` says to state beside the headline; then
-     the key-metrics page, headed as the recipe's `metrics.title` and showing the
-     figures its prose names; then, where a schedule is placed `lead`, at most one
-     page carrying the story to it;
+     every item the recipe's `## Exec summary` says to state beside the headline, and
+     the yardstick, the split by nature, the order and the meaning of "adjusted"
+     REPORT.md § 1 requires; then the key-metrics page, headed as the recipe's `metrics.title` and
+     showing the figures its prose names; then `Matters for your attention` where the
+     run raised an integrity pattern, otherwise at most one page carrying the story to
+     the first `lead` schedule;
   2. the schedules the recipe places `lead`, in the recipe's order;
   3. the narrative — under the recipe's `narrative` sections, in that order, where it
      declares them;
@@ -116,8 +118,13 @@ Every sentence the plan and the pages carry — a `title`, `message`, `text`, `b
   Each schedule is one `table:` block with the schedule's own keys (`from`, `columns`,
   `where`, `through`, `periods`, `scale`, `currency`, `dense`) — `columns:` on the block
   names the tab's actual headers that carry the recipe's words, with every period column
-  for `periods: all` and the latest by date for `latest`. Never `max_rows` on one: a long
-  schedule continues over pages. The narrative refers to the schedules' rows and copies
+  for `periods: all` and the latest by date for `latest`. Every schedule carries
+  `nonzero: true`. One still longer than 25 rows is condensed by its kind (REPORT.md § 1,
+  a schedule's length on the deck), whatever the recipe says of full population: a walk
+  at cause grain (`rows:` its opening line, each cause subtotal, its closing line); a flat
+  list in one unit with `largest: <its amount column>` and `max_rows: 25`. An `appendix`
+  schedule goes on the deck only where the narrative cites its rows, and never the roster
+  of items considered. The narrative refers to the schedules' rows and copies
   none of them. A walk the narrative shows is a `waterfall` chart over the walk's lines,
   not the walk's rows again. A run with no recipe opens on the `Executive summary` page
   the same way and goes straight to its narrative.
@@ -170,6 +177,51 @@ numbers before writing pages; no other check reads either. Rules a finished deck
   once.
 - State each limitation once — on the page it limits, or on one limitations page — never
   again on each page it touches.
+- Size the headline: beside it, materiality and the figure it changes as reported, and
+  the corrected figure stated as their sum, computed with `{= [ref] + [ref] | $}` (REPORT.md
+  § 2, References) — never left to the reader to add. Split it by nature from the walk's cause
+  subtotals — between lines or periods, non-cash, misstatement — and never add amounts of
+  unlike kinds into one figure (REPORT.md § 1).
+- Amounts on one page add, or the page says which contains which; a list of pattern
+  amounts states, on that page, what is not already inside the headline. Pending
+  adjustments are gross, never netted.
+- An integrity pattern goes on `Matters for your attention`, in plain words of what it may
+  indicate, only where a record ties it to the person or the money; a resemblance alone (a
+  shared surname, a similar name) or a pattern the workbook rules benign is an open question
+  instead (REPORT.md § 1). On every page, a matter about a role's own entries, approvals, pay or dealings
+  is answered to the audit committee or the board; the role concerned supplies records.
+- A narrative list shows at most eight items, ranked by the amount each can move in the
+  reported figures, never by the Open Items tab's `Size`, and states the count of the rest
+  with the tab that lists them.
+- A walk charted as a waterfall carries `labels:` in plain words for its causes.
+- None of the run's working words on a slide: *minted*, *recipe*, *skill*, *rule 5*, a
+  step token, *this run* (REPORT.md § 3 Run vocabulary).
+- None of the working-paper terms in what you write on a slide (*walk*, *as supported*,
+  *candidate*, *boundary*, *ruled*, *routed*): say what happened to each item in the terms
+  practitioners of this area use, name the schedule what the area calls it, and write
+  *adjusted* for as supported (REPORT.md § 3 Working-paper terms).
+  No page states the count of expectations or patterns tested, the files read,
+  performance materiality or a testing threshold; state a limit as the amount left
+  untested and what it could change.
+- The `Executive summary` message states the headline figure, sized, and nothing else;
+  never join an integrity matter to it. The integrity matters follow directly under it,
+  each on its own line with its amount; then a covenant, liquidity or going-concern
+  consequence; then the balance arithmetic. State the consequence the workbook
+  establishes as a fact (REPORT.md § 1, The order and What it means).
+- The scope page states the date the records run to, referenced, and that events after it
+  were not examined.
+
+Before building, read `report.yaml` back as its reader, page by page, against the
+workbook: a measure stated on two pages is one figure; every list said to make a total
+adds to it; every *raise* or *lower* agrees with the tab's sign convention; every count in
+a headline equals the items under it; every ratio set against its threshold shows which
+side it falls (REPORT.md § 3, One figure, one meaning). Fix what does not hold, then build.
+
+After building, read the built deck's text back slide by slide (`REPORT.md` § 1, rule 4):
+list every item, count and total that appears on more than one page with the figure each
+page states. One item carries one figure from one cell everywhere, and an appendix total
+that differs from the headline is reconciled on its page. Fix `report.yaml` and rebuild
+until the list has no conflict.
 
 Then build:
 
@@ -202,8 +254,8 @@ whose `To reperform` cell is empty, a pane frozen deeper than the title band
 with `--run-dir` it computes the order from the roster and the recipe's `lead` and
 names the strip it wants. `check_report.py` gates the deck (`REPORT.md` § 5): every number on
 a slide backed by a workbook cell or a ledger record, every figure page naming its source
-tabs in the footer, every title a headline and every sentence complete, the structure the
-recipe declares, and no table showing two rows that read alike — a copied tab's twin rows
+tabs in the footer, every title a headline and every sentence complete, no working-paper
+term in what you wrote, the structure the recipe declares, and no table showing two rows that read alike — a copied tab's twin rows
 are the owning check's to name apart. **A non-zero exit is a stop — the deliverable does not
 seal (§ 6).** On a surface YOU wrote — a run-level tab, `report.yaml` — fix it and
 re-gate. On a copied tab you may not repair it: name the cell or the id,

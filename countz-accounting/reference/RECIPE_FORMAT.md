@@ -131,7 +131,10 @@ covers and in what order, and which schedules the deck carries and where each si
 recipe decides it, because readers of different analyses come for different things: a
 quality of earnings review is read for its EBITDA walk, so the walk leads; a revenue-leak
 diagnostic is read for its causes, risks and actions, so the full bridge is support in
-the appendix. Prose first — what the key-metrics page shows, what each narrative section
+the appendix. A substantiation of a balance (cash, debt, payroll) is read by an executive
+for its findings: its schedules sit in the appendix, the walk `required`, and the walk's
+story is told in the narrative as a waterfall. The roster of items considered stays in the
+workbook and is not a schedule. Prose first — what the key-metrics page shows, what each narrative section
 carries, what each schedule shows and why it sits where it does — then exactly one fenced
 ```` ```json ```` block, `{"metrics": {...}, "narrative": [...], "schedules": [...]}`,
 with no other key.
@@ -162,6 +165,7 @@ has nothing for is left out. Absent, the author orders the narrative.
 | `currency` | optional; a lower-case ISO 4217 code `scripts/style.py` defines (`eur`); the book's currency otherwise |
 | `dense` | optional; `true` sets the table at the dense size (REPORT.md § 2) |
 | `ids` | optional; `true` keeps the id column |
+| `required` | optional; `true` pins an `appendix` schedule to the deck, such as a walk; without it an `appendix` schedule is on the deck only where the narrative cites its rows |
 
 `check-report` builds each schedule as one `table:` block with the same keys, in the
 recipe's order within its place; `check_report.py` refuses a deck on which a schedule is

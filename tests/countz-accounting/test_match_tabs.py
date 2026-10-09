@@ -316,6 +316,20 @@ def regressions(run: pathlib.Path) -> list[str]:
             bad.append(f"two sets of one check: {wb.sheetnames}")
     except ValueError as e:
         bad.append(f"two sets of one check are refused: {e}")
+    if o1["figures"][("left", "Matched", "count")] != "F.r2.match.receipts.left.matched.count":
+        bad.append(f"a second set keys by the token past the check id: {o1['figures']}")
+
+    # the check id is written once, so a long one keeps every id one the design gate reads
+    # as an id, not prose in a narrow column
+    try:
+        wb, out, _ = tabs(res, left, right, check="ar_subledger_recon", token="ar_subledger_recon")
+        with zipfile.ZipFile(saved(wb)) as z:
+            prose = [f for f in check_workbook.audit_design(z) if "prose" in f]
+        longest = max(out["figures"].values(), key=len)
+        if not longest.startswith("F.ar_subledger_recon.match.right.") or prose:
+            bad.append(f"an 18-character check id: {longest}, {prose[:2]}")
+    except ValueError as e:
+        bad.append(f"an 18-character check id is refused: {e}")
 
     # an id opening with `=` is text, never a formula
     l8 = pl.DataFrame({"id": ["=1+2", "=HYPERLINK(\"http://x\")"], "date": [D, D], "value": [1.0, 2.0]})
@@ -351,17 +365,23 @@ def regressions(run: pathlib.Path) -> list[str]:
                                 Rule("next day", (), (1, 1), percent=(-0.03, 0.0), difference=n2)])
     try:
         wb, out, L = tabs(fees("card fee (2.9%)", "bank's charge"), l9, r9)
-        if not {"F.r1.match.r1.recon.difference.card_fee_2_9",
-                "F.r1.match.r1.recon.difference.bank_s_charge"} <= set(L.entries):
+        if not {"F.r1.match.recon.difference.card_fee_2_9",
+                "F.r1.match.recon.difference.bank_s_charge"} <= set(L.entries):
             bad.append(f"the differences' figures: {sorted(k for k in L.entries if 'difference' in k)}")
     except ValueError as e:
         bad.append(f"a difference named in words with punctuation is refused: {e}")
     if not refused("name them apart", lambda: tabs(fees("fee", "fee."), l9, r9)):
         bad.append("two differences that key one figure are taken")
+    # a difference name that runs an id past PROSE_MIN is refused before anything is written
+    wb = Workbook()
+    if not refused("Shorten the check id", lambda: tabs(
+            fees("fee the card processor withheld at settlement", "bank's charge"), l9, r9, wb=wb)) or \
+            wb.sheetnames != ["Sheet"]:
+        bad.append("a figure id past PROSE_MIN is written")
     for word in ("En tránsito", "Outstanding (cheques)"):
         try:
             wb, out, L = tabs(res, left, right, after_word=word)
-            if out["figures"][("left", word, "count")] != "F.r1.match.r1.left.in_transit.count":
+            if out["figures"][("left", word, "count")] != "F.r1.match.left.in_transit.count":
                 bad.append(f"after_word {word!r} keys {out['figures'][('left', word, 'count')]}")
         except ValueError as e:
             bad.append(f"after_word {word!r} is refused: {e}")

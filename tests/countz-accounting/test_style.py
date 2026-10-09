@@ -13,12 +13,16 @@ import sys
 # The plugin under test: <repo>/countz-accounting/scripts, from <repo>/tests/countz-accounting.
 SCRIPTS = pathlib.Path(__file__).resolve().parents[2] / "countz-accounting" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
-from style import COL_SCALE, currency, currency_in, date_long, date_short, is_money, minor_units, money, month_label, parse_money, scale_header, scale_of, span_label  # noqa: E402
+from style import COL_SCALE, currency, currency_in, date_long, date_short, is_money, minor_units, money, month_label, parse_money, scale_header, scale_of, span_label, tab_title  # noqa: E402
 
 
 def main() -> int:
     d = dt.date(2025, 9, 30)
     cases = [
+        (tab_title("c9 Cash walk"), "Cash walk"),
+        (tab_title("r4 concentration Customer mix"), "concentration Customer mix"),
+        (tab_title("Basis of Preparation"), "Basis of Preparation"),
+        (tab_title("Exec Summary"), "Exec Summary"),
         (money(9_438_108.22, "usd"), "$9,438,108"),
         (money(9_438_108.22, "usd", "deck"), "$9.4M"),
         (money(1_204_000_000, "usd", "deck"), "$1.2B"),
