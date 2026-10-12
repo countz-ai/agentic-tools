@@ -439,8 +439,8 @@ def register_checks(run: dict, entries: list[dict],
     for e in entries:
         cid, kind = e.get("id"), e.get("kind")
         if not cid or not check_playbook.CHECK_ID.fullmatch(str(cid)):
-            raise Refuse(f"check id {cid!r} is not a check id ([a-z0-9][a-z0-9_]*, no `-`: "
-                         f"it names the check's files)")
+            raise Refuse(f"check id {cid!r} is not a check id ([a-z0-9][a-z0-9_]*, no `-`, at most "
+                         f"{check_playbook.CHECK_ID_MAX} characters: it names the check's files and its tab)")
         if check_row(run, cid):
             raise Refuse(f"check id {cid!r} is already registered")
         if kind not in check_playbook.KINDS:

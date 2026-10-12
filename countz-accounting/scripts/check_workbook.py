@@ -891,7 +891,10 @@ def audit_design(z: zipfile.ZipFile) -> list[str]:
         if summary and "B3" not in texts:
             rule(tab, "B3 holds the position sentence", [], "WORKBOOK.md § 6")
         for ref, t in texts.items():
-            if len(t.rstrip()) >= PREFIX_CUT_MIN and not CUT_END.search(t.rstrip()):
+            # a whole id is a key, never a cut claim: `F.g5.x.fy2022.n` opens
+            # `F.g5.x.fy2022.nrr` and both are whole
+            if len(t.rstrip()) >= PREFIX_CUT_MIN and not CUT_END.search(t.rstrip()) \
+                    and not LEDGER_ID.fullmatch(t.strip()):
                 cut_candidates.append((tab, ref, t.rstrip()))
             all_texts.append(t.rstrip())
     # A label cut to a length: its text is the opening of a longer statement the workbook

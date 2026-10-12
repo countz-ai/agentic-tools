@@ -73,7 +73,10 @@ Where the procedure classifies members — accounts, cost lines, adjustment cand
 - `checks/<check>-<table>.csv` — the item-grain tables of § 2, each with its manifest
   block.
 - `out/tabs/<check>.xlsx` — your tab, blocks per `WORKBOOK.md` § 4, with the schedules as
-  the primary table, the rulings and their bases, and the exceptions.
+  the primary table, the rulings and their bases, and the exceptions. The recipe's
+  `schedules` list names the tables the deck takes from your tab: the entries whose
+  `from` is your family. Build each one under its `block` heading, with its `columns` as
+  the headers (`WORKBOOK.md` § 4, A schedule the recipe declares).
 
 Close `checks/<check>.md` with the answer: whether every member was ruled and every
 schedule footed. Then the members left unruled, the schedules that do not foot, the

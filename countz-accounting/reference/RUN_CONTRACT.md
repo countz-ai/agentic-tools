@@ -140,7 +140,9 @@ next_seq: 8                         # the next unused seq; seqs are never reused
 
 `checks[].id` is an id the run mints (`tie_gl_tb`, `recon_cash`), `[a-z0-9][a-z0-9_]*`;
 it names the check's files and its tab. It takes no `-`, which separates the check id
-from the table name in `checks/<check>-<table>.csv`. `checks[].goal` is kept verbatim;
+from the table name in `checks/<check>-<table>.csv`. It is at most 31 characters, the
+longest tab name Excel holds: the check's tab opens with the id, and the workbook gate
+traces each tab to its check by that opening. `checks[].goal` is kept verbatim;
 `playbook-save` distills it into the saved playbook.
 
 ### Parameters — the standing answers

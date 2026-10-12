@@ -31,8 +31,10 @@ tabs its story rests on.
 
 ### Tab names
 `<token> <Title>` — the check's roster token as the roster spells it, one space, then a
-short Title Case title: `q1 FY2021 statements`, `q6 EBITDA bridge`. At most 31
-characters, no underscores, no slashes. The token leads so a cell that opens with it
+short Title Case title: `q1 FY2021 statements`, `q6 EBITDA bridge`. Where the family
+holds more than one check, the token is the whole check id, its underscores as spaces:
+`a7 Credit balances unapplied` for `a7_credit_balances_unapplied` — `a7 Credit balances`
+names no check. At most 31 characters, no underscores, no slashes. The token leads so a cell that opens with it
 links to the tab (`link_workbook.py` rule 5) and the gate can pair the tab with its
 check. Run-level tabs keep their fixed names. Tab colors and gridlines:
 `WORKBOOK_STYLE.md` § 4.
@@ -123,6 +125,16 @@ AutoFilter where a tab has a table.
 6. **To reperform** — a `Section` heading, then a numbered list, one step per row in
    column B, `Body` style (a procedure is read, not glanced at): the read (file · sheet ·
    range), the selection rule, the arithmetic. The last thing on the tab.
+
+**A schedule the recipe declares.** The recipe's `schedules` list names the tables the
+deck draws from a family's tab: `from` the family, `block` the `Section` heading the table
+sits under (none: the primary table), `columns` the headers it carries — the first is the
+row label, one row per line it names — and `periods: all`, one more column per reported
+period, headed as the plan's `params.columns`. A check of that family builds each such table
+under that heading with those headers, whatever else the tab holds: a roll-forward
+declared `columns: [line]` is a `Line` column (opening, additions, …, closing) beside one
+column per period. `check_report.py` refuses the deck when no table on the tab carries the
+declared columns, and the seal waits on the check.
 
 **A cell holds one claim, whole.** A ruling's reason of two or three sentences is one
 claim; it is never cut to a length. Prose lives in a wrapped column at least 42 wide

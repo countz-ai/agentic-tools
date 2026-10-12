@@ -50,8 +50,8 @@ class ReworkRefused(RuntimeError):
 
 def _check_id(check) -> str:
     if not isinstance(check, str) or not check_playbook.CHECK_ID.fullmatch(check):
-        raise ReworkRefused(f"check id {check!r} is not a check id ([a-z0-9][a-z0-9_]*, no "
-                            f"`-`: a `-` in it would name another check's files)")
+        raise ReworkRefused(f"check id {check!r} is not a check id ([a-z0-9][a-z0-9_]*, at most "
+                            f"{check_playbook.CHECK_ID_MAX} characters, no `-`: a `-` in it would name another check's files)")
     return check
 
 
