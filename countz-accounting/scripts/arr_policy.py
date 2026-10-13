@@ -513,8 +513,9 @@ def _conv_value(k: str, value):
 INSTRUCTION_SOURCES = ("user", "stated", "inferred")
 # An instruction's id: `I<n>` given here, `I.<check_id>.<n>` a step inferred, or
 # `IQ.<check_id>.<n>` the answer to a step's question Q.<check_id>.<n> (ARR_POLICY.md
-# § Applying the policy). A check id is check_playbook.CHECK_ID: no `-`.
-CHECK_ID = r"[a-z0-9][a-z0-9_]*"
+# § Applying the policy). A check id is check_playbook.CHECK_ID: no `-`, at most 31
+# characters.
+CHECK_ID = r"[a-z0-9][a-z0-9_]{0,30}"
 INSTRUCTION_ID = re.compile(rf"I[1-9]\d*|IQ?\.{CHECK_ID}\.[1-9]\d*")
 GAP_ID = {"inferred": re.compile(rf"I\.{CHECK_ID}\.[1-9]\d*"),
           "questions": re.compile(rf"Q\.{CHECK_ID}\.[1-9]\d*")}

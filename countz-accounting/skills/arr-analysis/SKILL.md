@@ -1,17 +1,17 @@
 ---
 name: arr-analysis
 description: >-
-  Analyze the company's recurring revenue from its own billing, contract, customer and
-  ledger records: build a cleansed customer cube at customer, product and month grain,
-  compute ARR independently on a stated definition and trend it by product, segment,
-  channel, region, contract term and every other dimension the data carries, measure
-  gross and net retention, renewal, new, expansion, contraction and churn, present
-  acquired revenue pro forma and separate organic from acquired growth, name the
-  one-time events that break comparability, re-perform management's KPIs with every
-  difference attributed, and reconcile ARR to GAAP revenue — every figure re-performable
-  from the cube. Invoke when the user asks for an ARR or recurring-revenue analysis, a
-  quality of revenue review, net or gross retention, churn, a customer cube, an ARR
-  bridge, or ARR reconciled to GAAP revenue.
+  Calculate and analyze the company's own ARR from first principles, for its operators
+  and board, from its billing, contract, customer and ledger records: build a cleansed
+  customer cube at customer, product and month grain, compute ARR on the company's
+  approved definition and trend it by product, segment, channel, region, contract term
+  and every other dimension the data carries, explain its movement through new,
+  expansion, contraction and churn, measure gross, net and logo retention, renewal and
+  cohorts, separate organic from acquired growth, show what the revenue depends on and
+  what drives growth and retention, with the ARR at stake, and reconcile ARR to GAAP revenue — every
+  figure re-performable from the cube. Invoke when the user asks to calculate ARR, for an
+  ARR or recurring-revenue analysis, net or gross retention, churn, cohorts, a customer
+  cube, an ARR bridge, or ARR reconciled to GAAP revenue.
 context: inline
 ---
 
