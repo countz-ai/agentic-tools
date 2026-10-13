@@ -221,6 +221,48 @@ def step_say(step: str, args: dict) -> str:
     return "Assembling the workbook and the report deck from the check records."
 
 
+# In verbose mode a SAY line opens with the run's position (RUN_CONTRACT.md § Every
+# wave). Example: `Step 3 of 10: <text>`. The run's steps are its checks in
+# first-dispatch order, then the review and the report. Once the review is dispatched, a
+# check with no dispatch will not run and drops out of the total. A step dispatched
+# before the plan registers any check carries no position.
+def check_order(run: dict) -> list[str]:
+    """Check ids in first-dispatch order: a check's step number is its index + 1."""
+    order: list[str] = []
+    for d in run.get("dispatches", []):
+        cid = d.get("check_id")
+        if cid and cid not in order:
+            order.append(cid)
+    return order
+
+
+def checks_counted(run: dict) -> int:
+    """How many of the run's steps are checks."""
+    if any(d.get("step") == "review" for d in run.get("dispatches", [])):
+        return len(check_order(run))
+    return len(run.get("checks") or [])
+
+
+def tail_position(run: dict, step: str) -> list[int]:
+    """The review's and the report's step number; none for any other step."""
+    n = checks_counted(run)
+    return {"review": [n + 1], "report": [n + 2]}.get(step, []) if n else []
+
+
+def at_step(run: dict, text: str, positions: list[int], checks_n: int) -> str:
+    """`text` behind the run's position when verbose mode is on, else `text` alone."""
+    if not ((run.get("inputs") or {}).get("verbose", True) and positions and checks_n):
+        return text
+    ps = sorted(set(positions))
+    if len(ps) == 1:
+        where = f"Step {ps[0]}"
+    elif ps == list(range(ps[0], ps[-1] + 1)):
+        where = f"Steps {ps[0]}–{ps[-1]}"
+    else:
+        where = f"Steps {', '.join(map(str, ps))}"
+    return f"{where} of {checks_n + 2}: {text}"
+
+
 def _now() -> str:
     return datetime.datetime.now(datetime.timezone.utc).isoformat(
         timespec="milliseconds").replace("+00:00", "Z")
@@ -641,7 +683,10 @@ def cmd_dispatch(a) -> int:
                                 recipe_families(run))
         verb = ("Re-running", " on the review's findings") if a.mode == "fix" \
             else ("Running", "")
-        print(say_line(f"{verb[0]} {checks_phrase(len(members))}{verb[1]}: {what}."))
+        order = check_order(run)
+        print(say_line(at_step(
+            run, f"{verb[0]} {checks_phrase(len(members))}{verb[1]}: {what}.",
+            [order.index(c["id"]) + 1 for c in members], checks_counted(run))))
         if len(members) > 1:
             print(LAUNCH)
         for row, brief in rows:
@@ -657,7 +702,8 @@ def cmd_dispatch(a) -> int:
         row = _append_dispatch(run, seq, a.step, STEP_SKILLS[a.step], args, None)
         write_row_brief(run_dir, row)
         save_run(run_dir, run)
-        print(say_line(step_say(a.step, args)))
+        print(say_line(at_step(run, step_say(a.step, args), tail_position(run, a.step),
+                               checks_counted(run))))
         print(next_line(run_dir, row, None))
 
     else:
@@ -800,7 +846,13 @@ def cmd_record(a) -> int:
             [(d.get("check_id") or f"the {d['step']} step", skill_kind.get(d["skill"]),
               (d.get("args") or {}).get("params")) for d in minted],
             recipe_families(run))
-        print(say_line(f"Retrying {checks_phrase(len(minted))} that failed: {what}."))
+        order = check_order(run)
+        where = [p for d in minted for p in
+                 ([order.index(d["check_id"]) + 1] if d.get("check_id")
+                  else tail_position(run, d["step"]))]
+        print(say_line(at_step(
+            run, f"Retrying {checks_phrase(len(minted))} that failed: {what}.",
+            where, checks_counted(run))))
     if briefed:
         print(LAUNCH.replace("NEXT line", "RETRY line"))
     for line in lines:

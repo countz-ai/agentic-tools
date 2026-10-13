@@ -92,7 +92,7 @@ without it reads as verbose.
 
 | | verbose off (result-only) | verbose on (the default) |
 |---|---|---|
-| progress | the `SAY:` line of every wave | the `SAY:` line of every wave |
+| progress | the `SAY:` line of every wave | the `SAY:` line of every wave, opening with the run's position (§ Every wave) |
 | what the preview shows | the engagement preview, `plan.md`, the workbook and the report deck | every artifact as its wave lands: the source inventory and profiles, each check's record and schedules, the review findings, the deck's plan and source, the run summary |
 | the drafted plan | shown, then approved at once: the run continues without waiting | shown and put to the user: nothing runs until they confirm it |
 
@@ -327,8 +327,14 @@ without `brief=` is a plain Skill call; it runs as the skill's fork and starts c
 `SAY:` is the run's progress line, one per wave in either verbose mode: the wave's number,
 how many checks run, and what they are (the recipe's family titles on a plan-driven run;
 id and kind otherwise). The plan, review and report steps and a retry each say what they
-are doing. Put its text to the user as one line of plain chat, verbatim, before the
-launch. Never as a file and never through SendUserFile.
+are doing. In verbose mode the line opens with the run's position.
+Example: `Step 3 of 10:`, or `Steps 4–6 of 10:` for a wave of three. The run's steps are its checks in
+first-dispatch order, then the review and the report. A retry or a fix carries the number
+its check first took. The total drops a check that will not run: a skipped playbook
+step, or a check with no dispatch when the review is dispatched. The plan, recipe and
+ARR-policy steps carry no position: they run before the plan registers any check. Put its text to the
+user as one line of plain chat, verbatim, before the launch. Never as a file and never
+through SendUserFile.
 
 After every wave, in this order:
 

@@ -1340,10 +1340,11 @@ def check(root: pathlib.Path) -> list[str]:
                     bad.append(f"{rel(pn)}: a finished s1 did not advance to s2 "
                                f"(exit {r2.returncode}): "
                                f"{(r2.stdout or r2.stderr).strip()[:100]}")
-                elif "SAY: Wave 2 — running 1 check: s2 (reconciliation)." \
+                elif "SAY: Step 2 of 4: Wave 2 — running 1 check: s2 (reconciliation)." \
                         not in r2.stdout:
                     bad.append(f"{rel(pn)}: a member with no recipe family must be "
-                               f"named by id and kind in the SAY: line: "
+                               f"named by id and kind in the SAY: line, behind the "
+                               f"run's position in verbose mode: "
                                f"{r2.stdout.strip()[:120]}")
                 (rd / "steps" / "0002-tie.json").write_text(json.dumps(
                     {**ok_rec, "error": "died"}))
@@ -1996,6 +1997,15 @@ def check(root: pathlib.Path) -> list[str]:
                                f"line: {r4.stdout.strip()[:120]}")
                 if not run["degraded"]:
                     bad.append(f"{rel(rs)}: a blocked step must set degraded")
+                # Verbose on, a SAY line opens with the run's position: one check, then
+                # the review and the report, so the report is step 3 of 3. The lines
+                # above ran with verbose off and carry none.
+                run["inputs"]["verbose"] = True
+                (rd / "run.json").write_text(json.dumps(run))
+                r5 = rstate(rd, "dispatch", "--step", "report", "--args", '{"title":"T"}')
+                if "SAY: Step 3 of 3: Assembling the workbook" not in r5.stdout:
+                    bad.append(f"{rel(rs)}: in verbose mode a SAY: line must open with "
+                               f"the run's position: {(r5.stdout or r5.stderr).strip()[:120]}")
 
             # (c) + (d): the ledgers. One list-shaped figures ledger with a spaced id,
             # one mapping-shaped ledger, one clean evidence ledger.
