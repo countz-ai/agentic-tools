@@ -2,7 +2,7 @@
 name: going-concern
 description: >-
   Prepare the figures for the going concern evaluation under ASC 205-40 before a first
-  audit: read your files, draft a plan for your confirmation, schedule every obligation due
+  audit: read your files, draft a plan, schedule every obligation due
   in the year after the statements are issued, tie your forecast to the bank, re-perform it
   without the plans not yet implemented and project each covenant on it, measure earlier
   forecasts against actual results, list the conditions and events, test each of your plans

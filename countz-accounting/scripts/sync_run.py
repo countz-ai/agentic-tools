@@ -34,7 +34,7 @@ the instructions that produced it rather than the checkout on its own disk. Excl
 
 `--transcripts` additionally copies each session's `.jsonl` into `<run>/transcripts/`. It
 is the only record of which instruction files a worker opened. It carries client data, so
-it is opt-in: use it on a debug run, not on a client sync.
+it is opt-in: use it on a run you are diagnosing, not on a client sync.
 
 Stdlib only. Exit 0 on success, 2 on refusal (no run.json; --dest target already exists).
 """
@@ -204,7 +204,7 @@ def main() -> int:
     ap.add_argument("--transcripts", action="store_true",
                     help="also copy each session transcript into <run>/transcripts/ before "
                          "syncing - the only record of which instruction files a worker "
-                         "read. Carries client data, so it is opt-in and for a debug run")
+                         "read. Carries client data, so it is opt-in and for a run under diagnosis")
     a = ap.parse_args()
 
     run_dir = pathlib.Path(a.run_dir).expanduser().resolve()

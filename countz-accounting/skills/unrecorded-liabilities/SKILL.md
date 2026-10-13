@@ -2,7 +2,7 @@
 name: unrecorded-liabilities
 description: >-
   Search for unrecorded liabilities and test accruals at a period end: read your files,
-  draft a plan for your confirmation, trace the payments and invoices after the period
+  draft a plan, trace the payments and invoices after the period
   end, the goods received not invoiced and the obligations in contracts, minutes and legal
   invoices back to when each was incurred, test cutoff, state and re-perform each
   accrual's method and trace its reversal, and hand you the walk from recorded to

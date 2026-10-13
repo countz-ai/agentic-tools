@@ -21,7 +21,8 @@ Subcommands:
         slot is printed as DROPPED and not registered — the engine skips it.
 
     approve-plan <run_dir> --definition <run_dir>/plan/<name>.json [--recipe <abs>]
-        Record the user's approval of a drafted plan: validate the definition, record
+        Record the approval of a drafted plan - the user's confirmation in verbose mode,
+        at once otherwise (RUN_CONTRACT.md § Verbose mode): validate the definition, record
         run.json.plan (record, recipe, playbook, approved_at) and run.json.playbook
         (slots are the run's own source ids, so the binding is identity), register the
         steps as checks, append the `plan_approved` event.
@@ -60,11 +61,12 @@ Subcommands:
         Writes <run_dir>/scrub.json, deletes an @<file> draft inside <run_dir>, appends
         `ask_scrubbed`, and prints `SEND:<TAB><text>`: the bytes the relay sends.
 
-    debug <run_dir> [--off]
-        Turn the run's debug mode on or off (OBSERVABILITY.md § 3). While it is on,
-        `record` ends every wave with a GATHER: line the relay runs before the sync,
-        and preview.py surfaces every artifact rather than only the engagement
-        preview, the plan, the workbook and the report deck.
+    verbose <run_dir> [--off]
+        Turn the run's verbose mode on or off: the relay runs it when the user changes
+        `settings.verbose` with `update_countz_config` mid-run (RUN_CONTRACT.md
+        § Verbose mode). While it is on, preview.py surfaces every artifact rather than
+        only the engagement preview, the plan, the workbook and the report deck, and the
+        plan waits for the user's confirmation.
 
 Exit 0 on success; exit 2 on anything refused, with the reason on stderr.
 """
@@ -132,6 +134,17 @@ LAUNCH = ("LAUNCH: in ONE message, one general-purpose sub-agent per NEXT line, 
           "prompted exactly: Read <its brief= path> and do what it says. It is your "
           "entire instruction. - nothing more. Without an Agent tool, run each NEXT "
           "line as its Skill call, one at a time.")
+
+# Verbose mode (RUN_CONTRACT.md § Verbose mode): the user's `settings.verbose` from
+# `get_countz_config`, held as run.json.inputs.verbose; absent reads as on. setup_run.py
+# prints the same lines when it registers a run.
+VERBOSE_ON = ("VERBOSE: on - the preview shows every working paper and the review "
+              "findings as they land, not only the engagement preview, the plan, the "
+              "workbook and the deck, and the plan waits for the user's confirmation "
+              "before anything runs. Tell the user once.")
+VERBOSE_OFF = ("VERBOSE: off - from here the preview shows only the engagement preview, "
+               "the plan, the workbook and the deck, and a drafted plan is approved as "
+               "it lands. Tell the user once.")
 
 # The SAY: line - one per wave, printed before the launch imperatives by this script and
 # playbook_next.py. The relay puts its text to the user as one line of plain chat
@@ -405,19 +418,6 @@ def next_line(run_dir: pathlib.Path, row: dict, brief: pathlib.Path | None,
     return line + (f" brief={_q(brief)}" if brief else "")
 
 
-def gather_line(run_dir: pathlib.Path, run: dict) -> str | None:
-    """The debug gather imperative, when the run's debug mode is on.
-
-    The wave is the only moment the trace is certainly complete AND certainly still on
-    disk: a sub-agent's transcript is finished when it returns, and a cloud container
-    takes every transcript with it when the session ends (OBSERVABILITY.md § 3).
-    """
-    if not run.get("inputs", {}).get("debug"):
-        return None
-    return (f"GATHER: python3 {_q(pathlib.Path(__file__).resolve().parent / 'gather_debug.py')} "
-            f"{_q(run_dir)}   # debug mode - run it BEFORE sync_run.py")
-
-
 def check_row(run: dict, check_id: str) -> dict | None:
     for c in run.get("checks", []):
         if c.get("id") == check_id:
@@ -580,7 +580,8 @@ def cmd_approve_plan(a) -> int:
     added, dropped = steps_as_checks(run, definition, bound)
     save_run(run_dir, run)
     _append_event(run_dir, "plan_approved", seq=row.get("seq"),
-                  playbook=definition["name"])
+                  playbook=definition["name"],
+                  by="user" if (run.get("inputs") or {}).get("verbose", True) else "auto")
     print(f"plan {definition['name']} approved; {len(added)} step(s) registered as checks")
     for line in dropped:
         print(line)
@@ -806,8 +807,6 @@ def cmd_record(a) -> int:
         print(line if isinstance(line, str) else
               next_line(run_dir, line, run_dir / line["brief"] if briefed else None,
                         label="RETRY"))
-    if (g := gather_line(run_dir, run)):
-        print(g)
     if retries:
         print(f"THEN: python3 {_q(pathlib.Path(__file__).resolve())} record {_q(run_dir)}")
     return 0
@@ -877,27 +876,17 @@ def cmd_record_scrub(a) -> int:
     return 0
 
 
-def cmd_debug(a) -> int:
+def cmd_verbose(a) -> int:
     run_dir = a.run_dir.resolve()
     run = load_run(run_dir)
     want = not a.off
-    if run.get("inputs", {}).get("debug", False) == want:
-        print(f"debug mode is already {'on' if want else 'off'}")
+    if run.get("inputs", {}).get("verbose", True) == want:
+        print(f"verbose mode is already {'on' if want else 'off'}")
         return 0
-    run.setdefault("inputs", {})["debug"] = want
+    run.setdefault("inputs", {})["verbose"] = want
     save_run(run_dir, run)
-    _append_event(run_dir, "debug_enabled" if want else "debug_disabled", by="run_state")
-    if want:
-        print("DEBUG: on - every wave gathers the session transcripts into debug/, and "
-              "the preview shows every working paper and the review findings, not only "
-              "the engagement preview, the plan, the workbook and the deck. The run "
-              "directory will carry prompts, tool arguments and model output; it stays "
-              "on this machine (OBSERVABILITY.md § 4). Tell the user once.")
-        print(gather_line(run_dir, run))
-    else:
-        print("DEBUG: off - no further gather. What debug/ already holds stays. The "
-              "preview shows only the engagement preview, the plan, the workbook and "
-              "the deck from here.")
+    _append_event(run_dir, "verbose_enabled" if want else "verbose_disabled", by="run_state")
+    print(VERBOSE_ON if want else VERBOSE_OFF)
     return 0
 
 
@@ -942,10 +931,10 @@ def main() -> int:
     p.add_argument("--json", required=True)
     p.set_defaults(fn=cmd_record_scrub)
 
-    p = sub.add_parser("debug")
+    p = sub.add_parser("verbose")
     p.add_argument("run_dir", type=pathlib.Path)
-    p.add_argument("--off", action="store_true", help="turn debug mode off")
-    p.set_defaults(fn=cmd_debug)
+    p.add_argument("--off", action="store_true", help="turn verbose mode off")
+    p.set_defaults(fn=cmd_verbose)
 
     a = ap.parse_args()
     try:

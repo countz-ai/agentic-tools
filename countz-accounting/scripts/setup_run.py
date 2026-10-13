@@ -48,11 +48,12 @@ the version is minted as `generated+<sha256[:12]>`. A run pins one recipe; a sec
 `--recipe` naming a different one is refused. `run_state.py approve-plan` copies name
 and version into `run.json.plan`.
 
-`--debug` turns the run's debug mode on (OBSERVABILITY.md § 3): every wave gathers the
-session transcripts into `<run_dir>/debug/`, so the run carries its own execution trace,
-and `preview.py` surfaces every artifact rather than only the engagement preview, the
-plan, the workbook and the report deck.
-It is sticky and it can be passed on a later fold to turn a running run's debug on.
+A run is minted in verbose mode (RUN_CONTRACT.md § Verbose mode): `preview.py` surfaces
+every artifact as it lands, and the plan waits for the user's confirmation.
+`--no-verbose` mints it result-only instead - the relay passes it when
+`get_countz_config` returned `settings.verbose: false` - and `preview.py` then shows only
+the engagement preview, the plan, the workbook and the report deck. Either flag on a
+later fold changes a running run's mode, as `run_state.py verbose [--off]` does.
 
 Minting (no `<run_dir>` argument): creates the run directory and its subdirs, seeds
 `run.json` per RUN_CONTRACT.md, appends `run_created` to `events.jsonl`; creating needs
@@ -90,11 +91,15 @@ SKILLS_DIR = pathlib.Path(__file__).resolve().parent.parent / "skills"
 WALK_DEPTH = 3                # directory levels shown below each folder source's root
 WALK_DIR_CAP = 200            # directory rows per source; the cut is stated
 
-DEBUG_ON = ("DEBUG: on - every wave gathers the session transcripts into debug/, and the "
-            "preview shows every working paper and the review findings, not only the "
-            "engagement preview, the plan, the workbook and the deck. The run directory "
-            "will carry prompts, tool arguments and model output; it stays on this "
-            "machine (OBSERVABILITY.md § 4). Tell the user once.")
+# The lines run_state.py prints as VERBOSE_ON and VERBOSE_OFF; the two scripts import
+# nothing from each other.
+VERBOSE_ON = ("VERBOSE: on - the preview shows every working paper and the review "
+              "findings as they land, not only the engagement preview, the plan, the "
+              "workbook and the deck, and the plan waits for the user's confirmation "
+              "before anything runs. Tell the user once.")
+VERBOSE_OFF = ("VERBOSE: off - from here the preview shows only the engagement preview, "
+               "the plan, the workbook and the deck, and a drafted plan is approved as "
+               "it lands. Tell the user once.")
 
 
 def _now() -> str:
@@ -498,8 +503,9 @@ def main() -> int:
     ap.add_argument("--sources", required=True)
     ap.add_argument("--params", default=None,
                     help="run-level parameters collected from the user, one JSON object")
-    ap.add_argument("--debug", action="store_true",
-                    help="capture the run's execution trace (OBSERVABILITY.md § 3)")
+    ap.add_argument("--verbose", action=argparse.BooleanOptionalAction, default=None,
+                    help="the user's settings.verbose (RUN_CONTRACT.md § Verbose mode); "
+                         "a new run is verbose unless --no-verbose")
     ap.add_argument("--recipe", type=pathlib.Path, default=None,
                     help="the recipe document to pin: copied unchanged to "
                          "<run_dir>/recipes/<name>.md")
@@ -550,9 +556,9 @@ def main() -> int:
             if val is not None and val != held:
                 print(f"{key} stays {held!r} - the run already carries it")
         joined = touch_session(run, a.session, ts)
-        debug_on = a.debug and not run.get("inputs", {}).get("debug")
-        if debug_on:
-            run.setdefault("inputs", {})["debug"] = True
+        verbose_set = a.verbose is not None and a.verbose != run.get("inputs", {}).get("verbose", True)
+        if verbose_set:
+            run.setdefault("inputs", {})["verbose"] = a.verbose
         params = run.setdefault("inputs", {}).setdefault("params", {})
         params_changed = [k for k, v in incoming_params.items() if params.get(k) != v]
         params.update(incoming_params)
@@ -584,9 +590,10 @@ def main() -> int:
         if joined:
             _append_event(run_dir, "session_joined", session_id=a.session)
             print(f"session {a.session} joined the run")
-        if debug_on:
-            _append_event(run_dir, "debug_enabled", by="setup_run")
-            print(DEBUG_ON)
+        if verbose_set:
+            _append_event(run_dir, "verbose_enabled" if a.verbose else "verbose_disabled",
+                          by="setup_run")
+            print(VERBOSE_ON if a.verbose else VERBOSE_OFF)
         for s in added:
             print(f"registered {s['id']} -> {s['path']} ({s['kind']})")
         print(f"{len(added)} source(s) folded into {run_path}"
@@ -634,7 +641,7 @@ def main() -> int:
                    "run_dir": str(run_dir),
                    "skill": a.skill,
                    "company": a.company,
-                   "debug": bool(a.debug),
+                   "verbose": a.verbose is not False,
                    "params": incoming_params,
                    "sessions": []},
         "sources": [_entry(s) for s in incoming],
@@ -669,9 +676,11 @@ def main() -> int:
     if pinned:
         _append_event(run_dir, "recipe_pinned", name=pinned["name"], version=pinned["version"])
         print(f"recipe {pinned['name']} ({pinned['version']}) pinned at {pinned['path']}")
-    if a.debug:
-        _append_event(run_dir, "debug_enabled", by="setup_run")
-        print(DEBUG_ON)
+    if run["inputs"]["verbose"]:
+        print(VERBOSE_ON)
+    else:
+        _append_event(run_dir, "verbose_disabled", by="setup_run")
+        print(VERBOSE_OFF)
     for s in run["sources"]:
         print(f"registered {s['id']} -> {s['path']} ({s['kind']})")
     print(f"run.json seeded at {run_path}")

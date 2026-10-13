@@ -2,7 +2,7 @@
 name: debt
 description: >-
   Substantiate borrowings and covenant compliance before a first audit: read your files,
-  draft a plan for your confirmation, roll principal forward against the loan agreements
+  draft a plan, roll principal forward against the loan agreements
   and the lender statements, recompute interest, accrued interest and the effective
   interest amortization of discounts, issuance costs and end-of-term fees, rule each
   amendment, classify each borrowing current or noncurrent with every breach and waiver,

@@ -23,12 +23,13 @@ produced, captioned by the BUNDLE line: a run of many checks then costs the conv
 one card per wave, not one per file, and the files stay where they live in the run
 directory, which the caption names.
 
-Which entries print depends on the run's debug mode (`run.json.inputs.debug`,
-OBSERVABILITY.md § 3). Off - the default - only the engagement preview, the plan, the
-sealed workbook and the report deck reach the user (USER_ROSTER); every other entry is
-still rendered into the run directory, so the synced copy carries it, but is neither
-printed nor recorded as shown - turning debug on mid-run surfaces the working papers
-accumulated so far. On, every entry prints.
+Which entries print depends on the run's verbose mode (`run.json.inputs.verbose`,
+RUN_CONTRACT.md § Verbose mode). On - the default, and what a run.json without the key
+reads as - every entry prints as it lands. Off, only the engagement preview, the plan,
+the sealed workbook and the report deck reach the user (USER_ROSTER); every other entry
+is still rendered into the run directory, so the synced copy carries it, but is neither
+printed nor recorded as shown - turning verbose on mid-run surfaces the working papers
+accumulated so far.
 
 The lines come out in pipeline order, so the last SHOW line printed - the freshest
 artifact - is the one left on the user's screen when the relay sends the bundle first and
@@ -59,8 +60,8 @@ ROOM_FILE_CAP = 120           # rows in the inventory table; the cut is stated
 DELIVERABLE = "deliverable"   # one rendered card each
 WORKING = "working"           # one attach card per wave, captioned by the BUNDLE line
 
-# The entry kinds that print while the run's debug mode is off: what the user rules on
-# or takes away. Debug mode prints every kind.
+# The entry kinds that print while the run's verbose mode is off: what the user rules on
+# or takes away. Verbose mode prints every kind.
 USER_ROSTER = ("engagement", "plan", "workbook", "report")
 
 # The working tier by entry-key prefix: (singular, plural or None for a one-off, where it
@@ -300,11 +301,11 @@ def main() -> int:
     try:
         run = _load_json(run_dir / "run.json")
     except Exception as exc:
-        print(f"preview: run.json unreadable ({exc}) - debug mode read as off",
+        print(f"preview: run.json unreadable ({exc}) - verbose mode read as on",
               file=sys.stderr)
         run = {}
-    debug = bool(((run.get("inputs") if isinstance(run, dict) else None) or {})
-                 .get("debug"))
+    verbose = bool(((run.get("inputs") if isinstance(run, dict) else None) or {})
+                   .get("verbose", True))
 
     state_path = run_dir / "out" / "preview" / ".shown.json"
     try:
@@ -322,7 +323,7 @@ def main() -> int:
         except Exception as exc:
             print(f"preview: {key} skipped ({exc})", file=sys.stderr)
             continue
-        if not debug and key.split(":", 1)[0] not in USER_ROSTER:
+        if not verbose and key.split(":", 1)[0] not in USER_ROSTER:
             continue          # rendered for the run directory; not surfaced, not recorded
         print(f"SHOW:\t{path}\t{caption}\t{tier}")
         if tier == WORKING:

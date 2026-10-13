@@ -2,7 +2,7 @@
 name: opening-balances
 description: >-
   Establish before a first audit that each period opens on the balances the prior period
-  closed on: read your files, draft a plan for your confirmation, tie each opening trial
+  closed on: read your files, draft a plan, tie each opening trial
   balance to the prior trial balance, financial statements and tax returns as last
   reported and across any system change, rule every adjustment posted between a close
   and the next opening, a cash or tax basis to GAAP conversion included, as an error

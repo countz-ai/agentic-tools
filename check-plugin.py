@@ -1016,12 +1016,12 @@ def check(root: pathlib.Path) -> list[str]:
     #     everything else - of the final documents, the deck's source report.yaml and the
     #     run summary - is working, bundled into one attach card per wave whose caption
     #     is the single BUNDLE: line, so a run of many checks costs the conversation one
-    #     card per wave rather than one per file. Its roster follows the run's debug mode
-    #     (run.json.inputs.debug): on, every kind prints; off, only the engagement
+    #     card per wave rather than one per file. Its roster follows the run's verbose mode
+    #     (run.json.inputs.verbose): on, every kind prints; off, only the engagement
     #     preview, the plan, the workbook and the deck - the rest is still rendered into
-    #     the run directory (the sync carries it) and left unrecorded, so turning debug
-    #     on mid-run surfaces what was withheld. The fixture runs with debug on, then
-    #     asserts the off roster.
+    #     the run directory (the sync carries it) and left unrecorded, so turning verbose
+    #     on mid-run surfaces what was withheld; a run.json without the key reads as on.
+    #     The fixture runs with verbose on, then asserts the off roster.
     pv = root / "scripts" / "preview.py"
     if pv.is_file():
         import subprocess
@@ -1030,7 +1030,7 @@ def check(root: pathlib.Path) -> list[str]:
             rd = pathlib.Path(td) / "run"
             (rd / "out" / "tabs").mkdir(parents=True)
             (rd / "steps").mkdir()
-            (rd / "run.json").write_text(json.dumps({"inputs": {"debug": True}}))
+            (rd / "run.json").write_text(json.dumps({"inputs": {"verbose": True}}))
             (rd / "run-view.json").write_text(json.dumps(
                 {"goal": goals[0] if goals else "g"}))
             (rd / "engagement-preview.md").write_text("# engagement\n")
@@ -1115,26 +1115,26 @@ def check(root: pathlib.Path) -> list[str]:
                 if root.name == "countz-accounting":
                     def names(shows):
                         return sorted(pathlib.Path(s.split("\t")[1]).name for s in shows)
-                    (rd / "run.json").write_text("{}")          # debug off
+                    (rd / "run.json").write_text(json.dumps({"inputs": {"verbose": False}}))
                     (rd / "out" / "preview" / ".shown.json").unlink()
                     (rd / "out" / "preview" / "room-inventory.md").unlink()
                     r4, shows4 = run_pv()
                     want4 = sorted(["engagement-preview.md", "plan.md", "workbook.xlsx",
                                     "report.pptx"])
                     if r4.returncode != 0 or names(shows4) != want4:
-                        bad.append(f"{rel(pv)}: with debug off a fresh pass must SHOW "
+                        bad.append(f"{rel(pv)}: with verbose off a fresh pass must SHOW "
                                    f"exactly {', '.join(want4)}, got "
                                    f"{', '.join(names(shows4)) or 'nothing'}")
                     if not (rd / "out" / "preview" / "room-inventory.md").is_file():
-                        bad.append(f"{rel(pv)}: with debug off the withheld artifacts "
+                        bad.append(f"{rel(pv)}: with verbose off the withheld artifacts "
                                    f"are still rendered into out/preview/ (the sync "
                                    f"carries them); room-inventory.md was not")
-                    (rd / "run.json").write_text(json.dumps({"inputs": {"debug": True}}))
+                    (rd / "run.json").write_text(json.dumps({"inputs": {"verbose": True}}))
                     r5, shows5 = run_pv()
                     got5 = names(shows5)
                     if r5.returncode != 0 or "room-inventory.md" not in got5 \
                             or "t1.xlsx" not in got5 or "plan.md" in got5:
-                        bad.append(f"{rel(pv)}: turning debug on mid-run must SHOW the "
+                        bad.append(f"{rel(pv)}: turning verbose on mid-run must SHOW the "
                                    f"working papers withheld so far and nothing already "
                                    f"shown, got {', '.join(got5) or 'nothing'}")
 
@@ -1901,7 +1901,7 @@ def check(root: pathlib.Path) -> list[str]:
             (rd / "run.json").write_text(json.dumps(
                 {"schema": "countz-accounting/run@1", "run_id": "s", "goal": "checks",
                  "created_at": "x", "updated_at": "x", "degraded": False,
-                 "inputs": {"output_root": str(tdp), "run_dir": str(rd), "debug": False,
+                 "inputs": {"output_root": str(tdp), "run_dir": str(rd), "verbose": False,
                             "params": {}, "sessions": []},
                  "sources": [{"id": "gl", "name": "GL", "path": "/x/gl", "kind": "file"},
                              {"id": "tb", "name": "TB", "path": "/x/tb", "kind": "file"}],
@@ -2487,10 +2487,21 @@ def check(root: pathlib.Path) -> list[str]:
             if not (root / "skills" / skill / "SKILL.md").is_file():
                 bad.append(f"{rel(ap_script)}: the ARR policy ships without skills/{skill}")
 
-    # 8. A shipped hook must be executable, or it fails silently at run time.
-    for h in sorted(root.glob("hooks/*.sh")):
+    # 8. A shipped hook must be executable, or it fails silently at run time. A hook
+    #     script that carries a selftest must pass it: the MCP blocklist hook
+    #     (hooks/mcp_blocklist.py) refuses a call `blocked_tools` names, in the main
+    #     session and in subagents alike, and passes built-in tools and
+    #     `get_countz_config` itself.
+    for h in sorted(list(root.glob("hooks/*.sh")) + list(root.glob("hooks/*.py"))):
         if not h.stat().st_mode & 0o111:
             bad.append(f"{rel(h)}: not executable")
+        if h.suffix == ".py" and "--selftest" in h.read_text():
+            import subprocess
+            r = subprocess.run([sys.executable, str(h), "--selftest"],
+                               capture_output=True, text=True)
+            if r.returncode != 0:
+                bad.append(f"{rel(h)}: selftest failed: "
+                           f"{(r.stderr or r.stdout).strip()[:200]}")
     hj = root / "hooks" / "hooks.json"
     if hj.is_file():
         try:

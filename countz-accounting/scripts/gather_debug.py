@@ -29,13 +29,12 @@ distills the views a debugger reads:
 
 Four properties this exists to hold:
 
-  Content capture is a MODE, not a default. `setup_run.py --debug` (or `run_state.py
-  debug <run_dir>`) turns it on for the whole run; `run_state.py record` then ends every
-  wave with the GATHER: line that runs this. Nothing else invokes it.
+  Content capture is run by hand, never by default. No script or wave invokes this;
+  whoever is diagnosing a run runs it (OBSERVABILITY.md § 3).
 
-  The gather happens DURING the run, not after it. A sub-agent's transcript is complete
-  when it returns, and a cloud container takes every transcript with it when the session
-  ends - so the wave, not the close, is when the trace can still be taken.
+  The gather happens while the transcripts are still on disk. A sub-agent's transcript is
+  complete when it returns, and a cloud container takes every transcript with it when the
+  session ends - so run it before the session closes, and before sync_run.py.
 
   What the transcript points at is copied too. A tool result over Claude Code's inline
   limit is written to <session>/tool-results/<id>.txt with a 2KB preview left behind;

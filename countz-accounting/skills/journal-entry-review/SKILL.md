@@ -2,7 +2,7 @@
 name: journal-entry-review
 description: >-
   Review the period's journal entries and transactions for error and management
-  override, from the company's own ledger: draft a plan for your confirmation, prove the
+  override, from the company's own ledger: draft a plan, prove the
   entry population complete against the trial balance for every entity, screen every
   entry against criteria fixed before the results, test every selected entry against its
   support, and hand you the misstated and unsupported entries, the proposed correcting

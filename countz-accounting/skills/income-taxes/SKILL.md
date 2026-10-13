@@ -2,7 +2,7 @@
 name: income-taxes
 description: >-
   Substantiate income taxes under ASC 740 before a first audit: read your files, draft a
-  plan for your confirmation, roll the current tax accounts forward against the returns,
+  plan, roll the current tax accounts forward against the returns,
   payments and notices, recompute current tax per jurisdiction, measure every temporary
   difference from its book and tax bases, roll operating losses and credits forward
   against the returns with any ownership change limitation, weigh the evidence for the
