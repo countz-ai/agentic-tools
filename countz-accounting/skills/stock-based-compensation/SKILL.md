@@ -1,8 +1,7 @@
 ---
 name: stock-based-compensation
 description: >-
-  Test stock-based compensation under ASC 718: read your files, draft a plan for your
-  confirmation, prove every award granted is on the books, support each grant date and
+  Test stock-based compensation under ASC 718: read your files, draft a plan, prove every award granted is on the books, support each grant date and
   grant-date fair value against the valuation in force, recompute every award's expense
   under your elections with its forfeitures, conditions and modifications, roll the
   awards outstanding forward, and hand you the walk from reported to supported expense

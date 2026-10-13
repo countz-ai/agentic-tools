@@ -1,8 +1,7 @@
 ---
 name: payroll
 description: >-
-  Reconcile payroll before a first audit: read your files, draft a plan for your
-  confirmation, tie the payroll register to the ledger per pay run, component and
+  Reconcile payroll before a first audit: read your files, draft a plan, tie the payroll register to the ledger per pay run, component and
   income statement line, prove gross to net, agree the register to the federal and state
   payroll tax returns and the W-2 totals, recompute employer taxes, trace every
   remittance to the bank and the agencies' records, agree provider or PEO invoices to the

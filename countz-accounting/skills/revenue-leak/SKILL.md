@@ -2,8 +2,7 @@
 name: revenue-leak
 description: >-
   Find where invoices fail to turn into cash, from the company's own records, the
-  collections record layered on where it exists: draft a plan for your
-  confirmation, tie the aging to the books, roll the receivable forward, measure DSO
+  collections record layered on where it exists: draft a plan, tie the aging to the books, roll the receivable forward, measure DSO
   against the best-possible DSO the terms set, test each candidate cause of delay as a
   claim the data can refute, trace cash application, give every open item its behavior
   group and, where recorded, its cause, owner and next action, and hand the reader the

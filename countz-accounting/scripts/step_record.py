@@ -29,7 +29,7 @@ object or carries no readable `ts` is skipped, as every reader of the log skips 
 **The brief is refused**, by every function that reads it, when its argument block holds
 a line that is not `    <key>=<value>` (a value spanning lines), a key twice, a `seq`
 that is not the file's, a `params` that is not JSON, or a `check` that is not a check id
-(`check_playbook.CHECK_ID`, `[a-z0-9][a-z0-9_]*`; RUN_CONTRACT.md § run.json).
+(`check_playbook.CHECK_ID`, `[a-z0-9][a-z0-9_]*`, at most 31 characters; RUN_CONTRACT.md § run.json).
 
 **`consumed`** is every file the step opened, with its mtime (UTC), each path absolute
 with its directories resolved (a run directory reached through a symlink is one run
@@ -154,7 +154,8 @@ def _append(run_dir: pathlib.Path, line: dict) -> None:
 # --- ids and arguments -----------------------------------------------------------------
 def _check_id(check) -> str:
     if not isinstance(check, str) or not check_playbook.CHECK_ID.fullmatch(check):
-        raise ValueError(f"check id {check!r} is not a check id ([a-z0-9][a-z0-9_]*, no `-`: "
+        raise ValueError(f"check id {check!r} is not a check id ([a-z0-9][a-z0-9_]*, at most "
+                         f"{check_playbook.CHECK_ID_MAX} characters, no `-`: "
                          f"a check id names its files, and `checks/<check>-<table>.csv` "
                          f"would read a `-` in it as another check's table)")
     return check

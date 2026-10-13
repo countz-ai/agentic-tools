@@ -60,7 +60,7 @@ Layout:
   file), `check_playbook.py` (playbook validation + listing; the kind-to-skill
   map's one home), `playbook_next.py` (the mechanical wave decision — the relay runs it
   first; exit 3 `ESCALATE:` hands the one case to the agent), `preview.py` (names each new
-  artifact with its tier — with debug mode off only the engagement preview, the plan, the
+  artifact with its tier — with verbose mode off only the engagement preview, the plan, the
   workbook and the report deck; on, the findings as a rendered card too and everything
   else as one working-papers bundle per wave), `peek.py` (the bounded first look at any
   client file — index facts, sheet names and extents, the first rows, lines or page
@@ -89,9 +89,11 @@ Layout:
   `build_report.py` (renders `out/report.pptx`
   from `report.yaml` and the sealed workbook — the deck mints nothing;
   `reference/REPORT.md`), `usage_report.py` (duration + estimated cost), `gather_debug.py`
-  (debug mode: every wave copies the session transcripts into `<run_dir>/debug/` and
+  (run by hand on a run under diagnosis: copies the session transcripts into `<run_dir>/debug/` and
   distils the per-dispatch timeline, the offloaded tool results and the instruction
   snapshot — `reference/OBSERVABILITY.md` § 3)
 
-No hooks: there is no unattended pipeline loop to re-enter — the user's session drives
-every wave in-band.
+One hook, `hooks/mcp_blocklist.py`: it records the `blocked_tools` that `get_countz_config`
+returns and refuses the MCP calls they name for the rest of the session, subagents and
+forked skills included (`reference/RUN_CONTRACT.md` § Sign in first). There is no unattended pipeline loop
+to re-enter — the user's session drives every wave in-band.

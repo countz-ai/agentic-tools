@@ -6,7 +6,7 @@ A run keeps three records:
 - `scripts/usage_report.py` (§ 2): what the run took in time, tokens and dollars. Read
   from the session transcripts after the fact.
 - `<run_dir>/debug/` (§ 3): what each dispatch was told, did and got back. Written by
-  `scripts/gather_debug.py` every wave while debug mode is on.
+  `scripts/gather_debug.py`, run by hand.
 
 `run.json` is state, rewritten in place. It is not a history.
 
@@ -25,13 +25,13 @@ before writing a new event.
 | `params_set` | `scripts/setup_run.py` | `keys[]`: run parameters set or changed on an existing run |
 | `session_joined` | `scripts/setup_run.py` | `session_id`: another session picked this run up |
 | `decision` | the playbook engine (`scripts/playbook_next.py`, or the agent on escalation) | `wave`, `steps[]`, `why`: one line per wave decision on a playbook run |
-| `plan_approved` | `scripts/run_state.py` (approve-plan) | `seq`, `playbook`: the user accepted the drafted plan; the definition it names is what runs |
+| `plan_approved` | `scripts/run_state.py` (approve-plan) | `seq`, `playbook`, `by`: the drafted plan was approved — `user` when verbose mode put it to the user, `auto` when it ran as drafted ([RUN_CONTRACT.md](RUN_CONTRACT.md) § Verbose mode); the definition it names is what runs |
 | `step_start` | the step | `seq`, `step`, `check?`, `source?`, `mode?`, `session_id?` |
 | `step_end` | the step | `seq`, `step`, `outcome`, `duration_s`, `produced[]`, `blockers_n`, `error?` |
 | `retry` | `scripts/run_state.py` (record) | `seq`, `attempt_of`, `step`: the one re-dispatch minted for a failed or dead step |
 | `playbook_saved` | the save step | `name`, `path`, `steps_n` |
-| `debug_enabled` | `scripts/setup_run.py` (`--debug`), `scripts/run_state.py` (`debug`) | `by`: debug mode is on for this run (§ 3) |
-| `debug_disabled` | `scripts/run_state.py` (`debug --off`) | `by` |
+| `verbose_enabled` | `scripts/setup_run.py` (`--verbose` on an existing run), `scripts/run_state.py` (`verbose`) | `by`: verbose mode turned back on for this run ([RUN_CONTRACT.md](RUN_CONTRACT.md) § Verbose mode); a run starts verbose with no event |
+| `verbose_disabled` | `scripts/setup_run.py` (`--no-verbose`), `scripts/run_state.py` (`verbose --off`) | `by`: the run is result-only from here |
 | `debug_gathered` | `scripts/gather_debug.py` | `sessions`, `missing`, `tool_calls`, `errors`, `timeline`, `offloads`: counts only; the content lands under `debug/` |
 | `ask_scrubbed` | `scripts/run_state.py` (record-scrub) | `rounds`, `removed_n`, `categories[]` (the [SCRUB.md](SCRUB.md) classes removed), `flags_n` (blind flags across all rounds), `sent_chars`: the scrubbed ask passed both reads; the removed text itself stays in `<run_dir>/scrub.json` |
 | `note` | anyone | `text`: something a reader would want that no other event carries |
@@ -76,31 +76,22 @@ Three time measures:
 To verify a cost, compare against the provider's usage console. It shares no inputs with
 this report.
 
-## 3. Debug mode — the run's own execution trace
+## 3. The execution trace — `<run_dir>/debug/`
 
-Off by default. The user turns it on:
-
-```
-setup_run.py <run_dir> ... --debug          # at registration
-run_state.py debug <run_dir> [--off]        # any time after
-```
-
-`run.json.inputs.debug` carries the mode; `debug_enabled` records it. While on:
-
-- `scripts/preview.py` names every artifact, the working-papers bundle and the review
-  findings included. Off, it names only the engagement preview, the plan, the workbook
-  and the report deck ([RUN_CONTRACT.md](RUN_CONTRACT.md) § Every wave). The synced run
-  directory carries everything in either mode.
-- `run_state.py record` ends every wave with a `GATHER:` line. The relay runs it before
-  `sync_run.py`:
+No mode turns it on and no wave runs it: run it by hand, on a run you are diagnosing.
 
 ```
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gather_debug.py <run_dir> [--cli-debug-log <path>]
 ```
 
-Gather every wave, not at the close of the run. Transcripts live under
-`~/.claude/projects/` on the machine that ran the session; a cloud container discards them
-when it exits, and the CLI prunes old ones.
+Run it before `sync_run.py`, so the archive carries the trace, and while the session's
+transcripts are still on disk. Transcripts live under `~/.claude/projects/` on the
+machine that ran the session; a cloud container discards them when it exits, and the CLI
+prunes old ones. The run directory then carries prompts, tool arguments and model
+output; it stays on this machine (§ 4).
+
+What the preview puts on screen is the run's verbose mode, not this
+([RUN_CONTRACT.md](RUN_CONTRACT.md) § Verbose mode).
 
 ### What lands in `<run_dir>/debug/`
 

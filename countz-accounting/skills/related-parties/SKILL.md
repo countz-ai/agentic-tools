@@ -2,7 +2,7 @@
 name: related-parties
 description: >-
   Identify related parties and every transaction with them before a first audit: read
-  your files, draft a plan for your confirmation, build the related-party list from the
+  your files, draft a plan, build the related-party list from the
   stock ledger, the minutes, the director and officer questionnaires and the affiliates'
   records, match your vendor, customer and employee masters against it, search the books,
   payroll, expense reports and the bank for every transaction and balance with a related

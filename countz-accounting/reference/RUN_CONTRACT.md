@@ -55,16 +55,56 @@ error text, no summary of the data room. Then stop. When the user comes back, ca
 the failure.
 
 On success, continue with the run. The result names the account and its tenant, and
-carries `catalog_yaml` — the server's catalog of analyses, one entry per recipe with
-`name`, `skill`, `description` and `aliases` — with its `catalog_version`. Keep it: a
-skill that matches an ask against the catalog reads this copy and calls nothing again.
+carries:
+
+- `catalog_yaml` — the server's catalog of analyses, one entry per recipe with `name`,
+  `skill`, `description` and `aliases` — with its `catalog_version`. Keep it: a skill
+  that matches an ask against the catalog reads this copy and calls nothing again.
+- `settings` — the user's own config. `settings.verbose` sets the run's verbose mode
+  (§ Verbose mode).
+- `blocked_tools` — the MCP tools this session must not call, set for the tenant; the
+  user cannot change it, and it is empty unless the tenant sets it. An entry is
+  `<server>/<tool>`, `<server>/*`, or `*`. From this call to the end of the session, the
+  plugin's hook (`hooks/mcp_blocklist.py`) refuses every MCP call the list names: in
+  this conversation, in every subagent and in every forked skill. The `countz` server
+  also refuses its own listed tools on every call, with an error that carries `tool_blocked:`. Either refusal is final: do not
+  retry the call or reach the same result another way. Tell the user in one line that
+  the tool is not allowed for their account, and continue without it.
+
 Every signed-in account, the testing tenant included, fetches its recipe body from the
-server (`get_recipe_for_countz_analysis`) and runs everything else locally.
+server (`get_recipe_for_countz_analysis`) and runs everything else locally. The server's
+other two tools: `create_countz_playbook_recipe` takes the scrubbed ask on a catalog
+miss (`skills/countz/SKILL.md`), and `update_countz_config` changes the user's settings
+(§ Verbose mode).
 
 `get_countz_config` takes no arguments. Nothing from a run — no path, no figure,
 no file name — goes to the server; the one text that may cross is the scrubbed pre-run
 ask, on a catalog miss only, scrubbed by an agent under [SCRUB.md](SCRUB.md)
 ([OBSERVABILITY.md](OBSERVABILITY.md) § 4).
+
+## Verbose mode
+
+`get_countz_config` returns `settings.verbose`, the user's own setting; it holds for every
+run they start, and it is `true` until they turn it off. A run is registered verbose;
+pass `setup_run.py --no-verbose` when the setting is `false`, which makes the run
+result-only. `run.json.inputs.verbose` then carries the mode for the run; a `run.json`
+without it reads as verbose.
+
+| | verbose off (result-only) | verbose on (the default) |
+|---|---|---|
+| progress | the `SAY:` line of every wave | the `SAY:` line of every wave, opening with the run's position (§ Every wave) |
+| what the preview shows | the engagement preview, `plan.md`, the workbook and the report deck | every artifact as its wave lands: the source inventory and profiles, each check's record and schedules, the review findings, the deck's plan and source, the run summary |
+| the drafted plan | shown, then approved at once: the run continues without waiting | shown and put to the user: nothing runs until they confirm it |
+
+Whatever the preview withholds is still written to the run directory, and the sync
+carries it. Turning verbose on mid-run shows what was withheld so far.
+
+When the user asks to change it — "turn on verbose mode", "show me each step", "stop
+showing the working papers" — call `update_countz_config(verbose=<true|false>)` on the
+`countz` server. It saves the setting for their later runs too. On a run in progress,
+then run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/run_state.py verbose <run_dir>` (with
+`--off` to turn it off) and tell the user the line it prints. If the call fails, say so
+in one line, and still change this run's mode.
 
 ## The files, and who writes each
 
@@ -84,7 +124,7 @@ ask, on a catalog miss only, scrubbed by an agent under [SCRUB.md](SCRUB.md)
 | `<run_dir>/out/` | each step stages into `out/.staging/` and renames into place | the user, `scripts/preview.py` |
 | `<run_dir>/out/run_sync.tar.gz` | the relay, via `scripts/sync_run.py`, refreshed after every wave | the user: the whole-run download (§ Bringing the run home) |
 | `<run_dir>/events.jsonl` | appended by anyone, never rewritten | a human, `scripts/usage_report.py` |
-| `<run_dir>/debug/` | `scripts/gather_debug.py`, every wave while debug mode is on: the per-dispatch timeline, the transcript copies and the instruction snapshot ([OBSERVABILITY.md](OBSERVABILITY.md) § 3) | a human debugging the run; `scripts/usage_report.py`, when `~/.claude/projects/` holds no transcript |
+| `<run_dir>/debug/` | `scripts/gather_debug.py`, run by hand on a run under diagnosis: the per-dispatch timeline, the transcript copies and the instruction snapshot ([OBSERVABILITY.md](OBSERVABILITY.md) § 3) | a human debugging the run; `scripts/usage_report.py`, when `~/.claude/projects/` holds no transcript |
 
 `run.json` is state and `events.jsonl` is history. State is rewritten in place. Anything
 that happened and then stopped being true (a decision, a retry, a wave that died) lives in
@@ -106,7 +146,7 @@ inputs:
   run_dir: "<abs path>"             # redundant on purpose: the file self-locates if copied
   skill: "qoe"                      # the launcher skill the run was minted for
   company: "Demo ZS"                # whose books, in the user's words; the directory carries its slug
-  debug: false                      # debug mode (OBSERVABILITY.md § 3); sticky once on
+  verbose: true                     # verbose mode (§ Verbose mode), from settings.verbose
   params: {}                        # run-level parameters collected at registration,
                                     # verbatim: period end, declared options, materiality.
                                     # Unset options take § Parameters' standing answers
@@ -140,7 +180,9 @@ next_seq: 8                         # the next unused seq; seqs are never reused
 
 `checks[].id` is an id the run mints (`tie_gl_tb`, `recon_cash`), `[a-z0-9][a-z0-9_]*`;
 it names the check's files and its tab. It takes no `-`, which separates the check id
-from the table name in `checks/<check>-<table>.csv`. `checks[].goal` is kept verbatim;
+from the table name in `checks/<check>-<table>.csv`. It is at most 31 characters, the
+longest tab name Excel holds: the check's tab opens with the id, and the workbook gate
+traces each tab to its check by that opening. `checks[].goal` is kept verbatim;
 `playbook-save` distills it into the saved playbook.
 
 ### Parameters — the standing answers
@@ -174,8 +216,9 @@ around.
   records a saved playbook run: the binding, plus every fully-bound step
   registered as a check. A step fed by an unbound slot prints as `DROPPED:` and the
   engine skips it.
-- `approve-plan <run_dir> --definition <run_dir>/plan/<name>.json` records the user's
-  confirmation of a drafted plan: `run.json.plan` and `run.json.playbook` (a planned
+- `approve-plan <run_dir> --definition <run_dir>/plan/<name>.json` records the approval
+  of a drafted plan, the user's confirmation in verbose mode and at once otherwise
+  (§ Verbose mode): `run.json.plan` and `run.json.playbook` (a planned
   definition's slots are the run's own source ids), the steps as checks, the
   `plan_approved` event.
 - `dispatch <run_dir> --checks id1,id2 [--mode fresh|fix] [--extra '<one-line JSON>']` |
@@ -192,10 +235,9 @@ around.
 - `record <run_dir>` closes a wave: it classifies every outstanding dispatch, folds
   conclusions into the checks, sets `degraded`, and mints retries, each with
   its own brief. `RETRY:` lines carry `brief=` only when two or more are minted at once. A
-  minted retry wave opens with its `SAY:` line. On a debug-mode run it also prints the
-  wave's `GATHER:` line.
-- `debug <run_dir> [--off]` turns the run's debug mode on or off after registration.
-  `setup_run.py --debug` turns it on at registration.
+  minted retry wave opens with its `SAY:` line.
+- `verbose <run_dir> [--off]` turns the run's verbose mode on or off after registration
+  (§ Verbose mode). `setup_run.py --no-verbose` registers a run with it off.
 
 **The brief's argument block.** After the line `Your arguments:`, one line per argument,
 `    key=value` (four spaces), the key `[A-Za-z0-9_]+`. A value holding a line break,
@@ -282,22 +324,25 @@ or fails. Execute the printed lines in their order (`SAY:`, `RECORD:`, `LAUNCH:`
 `NEXT:`, `RETRY:`, `THEN:`) and put every `FAILED:` line to the user. A `NEXT:` line
 without `brief=` is a plain Skill call; it runs as the skill's fork and starts clean.
 
-`SAY:` is the run's progress line, one per wave in either debug mode: the wave's number,
+`SAY:` is the run's progress line, one per wave in either verbose mode: the wave's number,
 how many checks run, and what they are (the recipe's family titles on a plan-driven run;
 id and kind otherwise). The plan, review and report steps and a retry each say what they
-are doing. Put its text to the user as one line of plain chat, verbatim, before the
-launch. Never as a file and never through SendUserFile.
+are doing. In verbose mode the line opens with the run's position.
+Example: `Step 3 of 10:`, or `Steps 4–6 of 10:` for a wave of three. The run's steps are its checks in
+first-dispatch order, then the review and the report. A retry or a fix carries the number
+its check first took. The total drops a check that will not run: a skipped playbook
+step, or a check with no dispatch when the review is dispatched. The plan, recipe and
+ARR-policy steps carry no position: they run before the plan registers any check. Put its text to the
+user as one line of plain chat, verbatim, before the launch. Never as a file and never
+through SendUserFile.
 
 After every wave, in this order:
 
-1. Any `GATHER:` line `record` printed, the debug gather
-   ([OBSERVABILITY.md](OBSERVABILITY.md) § 3). It runs before the sync so the archive
-   carries the wave's trace. If it fails, say so once and keep going.
-2. `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/preview.py <run_dir>`. Send what it prints and
+1. `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/preview.py <run_dir>`. Send what it prints and
    only that. It prints nothing when nothing changed, and re-names a file whose content
-   moved. With debug mode off it names only the engagement preview, `plan.md`,
-   `out/workbook.xlsx` and `out/report.pptx`; with it on, every artifact
-   ([OBSERVABILITY.md](OBSERVABILITY.md) § 3). What it withholds is still rendered into
+   moved. With verbose mode off it names only the engagement preview, `plan.md`,
+   `out/workbook.xlsx` and `out/report.pptx`; with it on, every artifact as it lands
+   (§ Verbose mode). What it withholds is still rendered into
    the run directory, and the sync carries it. Each `SHOW:` line is `path`, `caption`,
    `tier`. The tier decides the send:
    - `working` (the engagement preview, the source inventory, the source profiles, the
@@ -313,7 +358,7 @@ After every wave, in this order:
    Send the bundle first, then the deliverables in printed order. Where SendUserFile does
    not exist, one line per deliverable with its path and caption, and one line for the
    bundle listing its paths.
-3. `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/sync_run.py <run_dir>`, silently. Hand
+2. `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/sync_run.py <run_dir>`, silently. Hand
    `out/run_sync.tar.gz` to the user after a report wave lands, and whenever they ask for
    the run (§ Bringing the run home). If the refresh fails, say so once and keep going.
 
@@ -329,7 +374,7 @@ found the defect computed from the source and needs no re-run.
 Dispatch `check-review` (`dispatch --step review`) over the checks not yet reviewed at
 their current seq. An `extract` step is not a check under review: it computes no
 figure, and its record is the cache manifest every consumer's citations re-state. Put each actionable finding to the user from the review record
-(severity, target, observation); with debug mode off the preview does not show them. The
+(severity, target, observation); with verbose mode off the preview does not show them. The
 user rules on each:
 
 - **fix**: re-dispatch the named checks with `--mode fix`. Each fix snapshots its

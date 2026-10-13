@@ -61,7 +61,7 @@ The same imperatives the script prints:
 ```
 playbook <name>  wave=<n>  <k> dispatch(es)
 <the comparison that decided it, one sentence>
-SAY: Wave <n> — running <k> checks in parallel: <what runs>.
+SAY: Steps <a>–<b> of <m>: Wave <n> — running <k> checks in parallel: <what runs>.
 RECORD: python3 ${CLAUDE_PLUGIN_ROOT}/scripts/run_state.py dispatch <abs run_dir> --briefs <abs brief paths>
 LAUNCH: <the LAUNCH constant in ${CLAUDE_PLUGIN_ROOT}/scripts/run_state.py, verbatim>
 NEXT: Skill check-tie run_dir=<abs> seq=<n> check=<step id> sources=<ids> goal=<...> mode=fresh brief=<abs brief path>
@@ -74,7 +74,11 @@ wave); a wave of one reads `running 1 check:`. `<what runs>` is
 `describe_members` in `${CLAUDE_PLUGIN_ROOT}/scripts/run_state.py`, rendered the same:
 each recipe family the members cover as `<ID> <title>` from its `###` header
 (`run.json.plan.recipe`), counted `<n> × ` where more than one; a member with no recipe
-family as `<id> (<kind word>)` from `KIND_WORDS`.
+family as `<id> (<kind word>)` from `KIND_WORDS`. The `Steps <a>–<b> of <m>:` opening
+is `at_step` in the same script, and only in verbose mode (`run.json.inputs.verbose`,
+absent reads as on): `<a>` is one more than the steps already dispatched, `<b>` is
+`<a> + <k> - 1`, and `<m>` is the definition's steps less those skipped, plus 2 for
+the review and the report. A wave of one reads `Step <a> of <m>:`.
 
 One `NEXT:` line per wave member; a step this decision skips is a `SKIPPED: <step> —
 <reason>` line; the `THEN:` lines close the wave and send the relay back to the script

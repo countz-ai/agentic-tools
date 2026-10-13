@@ -2,7 +2,7 @@
 name: stockholders-equity
 description: >-
   Substantiate stockholders' equity and the instruments the company issued to raise
-  capital: read your files, draft a plan for your confirmation, tie the capitalization
+  capital: read your files, draft a plan, tie the capitalization
   table to the stock ledger, the approvals and the charter, trace every SAFE, note,
   warrant and preferred series to its agreement, classify each as a liability, temporary
   equity or permanent equity, re-perform each financing, conversion and remeasurement,

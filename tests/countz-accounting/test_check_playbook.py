@@ -47,6 +47,10 @@ def main() -> int:
         expect(CHECK_ID.fullmatch(sid) is not None, f"check id {sid!r} accepted")
     for sid in ("a5-bridge", "C4", "_x", "c4 lockbox", "c4\n", ""):
         expect(CHECK_ID.fullmatch(sid) is None, f"check id {sid!r} refused")
+    # the check's tab opens with its id and a tab name holds 31: a 32-character id leaves
+    # the tab no name the gate traces back to the check (accounts_receivable, 2026-10-08)
+    expect(CHECK_ID.fullmatch("a7_writeoff_authority_and_limits") is None, "a 32-character check id refused")
+    expect(CHECK_ID.fullmatch("a" * 31) is not None, "a 31-character check id accepted")
 
     def plan(steps: list[dict]) -> dict:
         return {"schema": "countz-accounting/playbook@1", "name": "p", "title": "t",
@@ -70,6 +74,9 @@ def main() -> int:
     got = problems(plan([{**step, "id": "c1-cutoff"}]))
     expect(any("step entry has no valid `id`" in p and "no `-`" in p for p in got),
            f"a step id with `-` is refused, got {got}")
+    got = problems(plan([{**step, "id": "e8_related_parties_and_secondaries"}]))
+    expect(any("step entry has no valid `id`" in p and "at most 31" in p for p in got),
+           f"a step id longer than a tab name is refused, got {got}")
 
     for b in bad:
         print("FAIL", b)

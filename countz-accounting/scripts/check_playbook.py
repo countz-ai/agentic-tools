@@ -84,8 +84,11 @@ SCHEMA = "countz-accounting/playbook@1"
 SLUG = re.compile(r"[a-z0-9][a-z0-9_-]*")
 # A step id is the check id its files are named by (`checks/<check>-<table>.csv`,
 # `workpapers/figures-<check>.yaml`). `-` separates check and table, so a check id takes
-# none (e.g. `a5` + `bridge-items` would read as `a5-bridge` + `items`).
-CHECK_ID = re.compile(r"[a-z0-9][a-z0-9_]*")
+# none (e.g. `a5` + `bridge-items` would read as `a5-bridge` + `items`). It is at most 31
+# characters: the check's tab opens with it, and Excel holds a tab name to 31, so a longer id
+# leaves its tab no name the workbook gate can trace back to the check.
+CHECK_ID_MAX = 31
+CHECK_ID = re.compile(rf"[a-z0-9][a-z0-9_]{{0,{CHECK_ID_MAX - 1}}}")
 # A playbook is run again, over another company and another period, so its title names the
 # work alone. A period in it — `FY2023`, `2023-09-30`, `September 2023` — dates the file.
 PERIOD_TOKEN = re.compile(
@@ -360,8 +363,8 @@ def validate(path: pathlib.Path, skills_dir: pathlib.Path | None) -> list[str]:
             continue
         sid = st.get("id")
         if not sid or not CHECK_ID.fullmatch(str(sid)):
-            bad.append(f"{path}: step entry has no valid `id` ([a-z0-9][a-z0-9_]*, no `-`: "
-                       f"the step id names the check's files): {st!r}")
+            bad.append(f"{path}: step entry has no valid `id` ([a-z0-9][a-z0-9_]*, no `-`, "
+                       f"at most {CHECK_ID_MAX} characters: the step id names the check's files and its tab): {st!r}")
             continue
         if sid in ids:
             bad.append(f"{path}: step id `{sid}` is declared twice")

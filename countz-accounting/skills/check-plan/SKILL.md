@@ -218,7 +218,8 @@ before the plan reaches the user.
 
 Steps carry: an id slugged per the recipe, naming what the step covers rather than an ordinal —
 `c2_accounts` where the family is one step, `c4_concentration` and `c4_remaining_accounts`
-where it is two — the family's kind (from `KINDS` in
+where it is two, at most 31 characters (the check's tab opens with it, and a tab name holds
+31: `a7_writeoff_authority`, not `a7_credit_and_writeoff_authority`) — the family's kind (from `KINDS` in
 `${CLAUDE_PLUGIN_ROOT}/scripts/check_playbook.py` — a kind the map lacks is reported,
 not invented), the source ids, a one-sentence `goal` naming the entities it covers, the
 grain and the as-of date, `params` for anything the checks must agree on (`family` — the recipe

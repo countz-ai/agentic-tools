@@ -43,14 +43,10 @@ as `RUN_DIR:` — that path is `<run_dir>` below; never compose it yourself. It 
 folds into an existing run named by its path, or refuses a path that is not one; it
 reads no client file; each check binds its own sources.
 
-**Debug mode.** When the user asks for it — "with debug mode", "keep the debug logs" —
-add `--debug`, and say once what it turns on: every wave gathers the session transcripts
-into `<run_dir>/debug/`, so the run carries each dispatch's prompts, tool calls and model
-output, and it all stays on this machine
-(`${CLAUDE_PLUGIN_ROOT}/reference/OBSERVABILITY.md` § 3 and § 4); and the preview puts
-every working paper and the review findings on screen, where it otherwise shows only the
-engagement preview, the plan, the workbook and the report deck. `run_state.py debug
-<run_dir>` turns it on mid-run instead.
+**Verbose mode.** Add `--no-verbose` when `get_countz_config` returned
+`settings.verbose: false`, and tell the user the `VERBOSE:` line the script prints. The mode
+decides what the preview shows (`${CLAUDE_PLUGIN_ROOT}/reference/RUN_CONTRACT.md`
+§ Verbose mode, which also covers a change mid-run).
 
 ## 3. Register the checks
 

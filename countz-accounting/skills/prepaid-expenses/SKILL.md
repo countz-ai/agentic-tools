@@ -2,7 +2,7 @@
 name: prepaid-expenses
 description: >-
   Substantiate prepaid expenses, deposits and other receivables before a first audit:
-  read your files, draft a plan for your confirmation, roll every item forward from
+  read your files, draft a plan, roll every item forward from
   opening through additions and amortization to closing, trace each addition to its
   invoice or contract and service period, recompute the amortization, find expense
   booked outside the period it covers, test deposits and other receivables against

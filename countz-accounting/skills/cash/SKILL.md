@@ -2,7 +2,7 @@
 name: cash
 description: >-
   Prove out the company's cash and cash equivalents before the auditors arrive: read
-  your files, draft an account-by-account plan for your confirmation, rule every account
+  your files, draft an account-by-account plan, rule every account
   against the definition, prove each account's activity and balance to the bank's own
   record, test the period end, and hand you the walk from recorded cash to cash as
   substantiated with the exceptions and open items, every figure re-performable. Invoke

@@ -45,7 +45,7 @@ One JSON file per playbook, named `<name>.json`; the file stem and `name` must m
 
 `scripts/check_playbook.py <file>` validates a file; this document explains the fields.
 `name` and slot ids are lower-case slugs (`[a-z0-9][a-z0-9_-]*`). A step id is a check
-id (`RUN_CONTRACT.md` § run.json): `[a-z0-9][a-z0-9_]*`, no `-`. `sources` and `steps`
+id (`RUN_CONTRACT.md` § run.json): `[a-z0-9][a-z0-9_]*`, no `-`, at most 31 characters. `sources` and `steps`
 are non-empty; every slot is referenced by at least one step; every step names
 at least one slot.
 

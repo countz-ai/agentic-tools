@@ -2,7 +2,7 @@
 name: fixed-assets
 description: >-
   Substantiate property and equipment and capitalized software before a first audit:
-  read your files, draft a plan for your confirmation, roll every asset class forward,
+  read your files, draft a plan, roll every asset class forward,
   trace each addition to its invoice and placed-in-service date, rule each disposal,
   recompute depreciation and amortization from your policy's lives and methods, test
   the capitalization policy both ways, trace capitalized software labor to payroll and

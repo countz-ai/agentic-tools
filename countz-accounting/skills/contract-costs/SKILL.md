@@ -2,8 +2,7 @@
 name: contract-costs
 description: >-
   Test capitalized commissions and other costs to obtain and fulfill customer contracts
-  under ASC 340-40 before a first audit: read your files, draft a plan for your
-  confirmation, read the commission plans against the commissions paid, rule each payment
+  under ASC 340-40 before a first audit: read your files, draft a plan, read the commission plans against the commissions paid, rule each payment
   incremental or not, test the one-year practical expedient, support the amortization
   period against contract terms, renewals and customer life, recompute the amortization
   and the current and noncurrent split, run the impairment test, and hand you the walk

@@ -6,7 +6,8 @@ description: >-
   own words runs the analysis it describes, matched to the server's catalog or authored
   from the ask. Invoke when the user asks what countz-accounting can do, which analysis
   fits their question, how to begin, says "use countz to do analysis: ..." followed by
-  what they want analyzed, or asks for an analysis no named skill covers.
+  what they want analyzed, asks for an analysis no named skill covers, or asks to turn
+  Countz verbose mode on or off.
 argument-hint: "[analysis] [what you want analyzed]"
 context: inline
 ---
@@ -15,6 +16,8 @@ What the user typed after `/countz` decides what you do. Invoked without the sla
 command, take the ask from the message that invoked you.
 
 - **Nothing** → § What countz-accounting runs.
+- **`verbose on` or `verbose off`**, or an ask to show or stop showing each step and
+  the working papers → § Change verbose mode.
 - **The first word is an `ask for` in that table** → invoke that skill with the Skill
   tool (`countz-accounting:<ask for>`), the rest of the text verbatim as its arguments.
   That skill takes the rest as the ask and runs the analysis; you do nothing more.
@@ -60,7 +63,19 @@ reachable — showing the built-in analyses."
 
 Close with how to start one: `/countz <ask for> <what you want>`, or `/countz` followed
 by the analysis described in your own words. Every plan-driven run drafts its plan from
-your files first and runs nothing until you confirm it.
+your files first and shows it to you before anything runs; in verbose mode it also waits
+for you to confirm it.
+
+## Change verbose mode
+
+Call `update_countz_config(verbose=<true for on, false for off>)` on the `countz` server.
+It saves the user's own setting, which every run they start from now on follows. Tell
+the user the setting it returned in one line: verbose on shows every step's working
+papers as they land and waits for their confirmation of each plan; off shows only the
+engagement preview, the plan, the workbook and the deck, and runs the plan as drafted.
+If a run is in progress in this conversation, also change that run's mode
+(`${CLAUDE_PLUGIN_ROOT}/reference/RUN_CONTRACT.md § Verbose mode`). If the call is not
+available or fails, say so in one line.
 
 ## Run the analysis the ask describes
 
@@ -133,8 +148,8 @@ which for this skill runs as:
    **Tell, then send.** Put the `SEND` text to the user in one line — *"Nothing in the
    catalog covers this. I'm sending Countz this description and nothing else, so it can
    serve or plan a recipe for it: `<SEND text>`"* — then call
-   `get_recipe_for_countz_analysis(ask=<SEND text>)`, naming no recipe, with the bytes
-   `record-scrub` printed. The server matches once more against its aliases.
+   `create_countz_playbook_recipe(ask=<SEND text>)` with the bytes `record-scrub`
+   printed. The server matches once more against its aliases.
    - `match` is `alias`: continue as step 1, with the body it returned.
    - `match` is `not_found`: dispatch `create-recipe` (below). The full ask stays in
      `run.json.inputs.params.instructions`; only the `SEND` text crossed.

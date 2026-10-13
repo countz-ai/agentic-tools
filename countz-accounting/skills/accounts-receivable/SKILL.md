@@ -2,7 +2,7 @@
 name: accounts-receivable
 description: >-
   Substantiate trade receivables and the allowance for credit losses before a first
-  audit: read your files, draft a plan for your confirmation, tie the aging to the ledger,
+  audit: read your files, draft a plan, tie the aging to the ledger,
   apply the cash received after the period end to each open item, vouch the items it does
   not clear to the invoice and the evidence of delivery, test the credits and write-offs
   after the period end, reclassify credit balances, recompute the allowance under ASC 326
