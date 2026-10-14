@@ -3,7 +3,7 @@
 
 `get_countz_config` returns `blocked_tools`, the tenant's list of MCP tool calls the
 session must not make (the user cannot change it; empty by default, so nothing is
-blocked), and `settings`, the user's own config. This one script serves two hook events
+blocked), and `settings`, the user's Countz settings. This one script serves two hook events
 (hooks/hooks.json):
 
     PostToolUse on the `countz` server's `get_countz_config` and `update_countz_config`:

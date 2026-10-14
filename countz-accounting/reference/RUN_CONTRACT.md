@@ -60,7 +60,8 @@ carries:
 - `catalog_yaml` — the server's catalog of analyses, one entry per recipe with `name`,
   `skill`, `description` and `aliases` — with its `catalog_version`. Keep it: a skill
   that matches an ask against the catalog reads this copy and calls nothing again.
-- `settings` — the user's own config. `settings.verbose` sets the run's verbose mode
+- `settings` — the user's Countz settings, held on the Countz server for their account.
+  `settings.verbose` sets the run's verbose mode
   (§ Verbose mode).
 - `blocked_tools` — the MCP tools this session must not call, set for the tenant; the
   user cannot change it, and it is empty unless the tenant sets it. An entry is
@@ -74,8 +75,8 @@ carries:
 Every signed-in account, the testing tenant included, fetches its recipe body from the
 server (`get_recipe_for_countz_analysis`) and runs everything else locally. The server's
 other two tools: `create_countz_playbook_recipe` takes the scrubbed ask on a catalog
-miss (`skills/countz/SKILL.md`), and `update_countz_config` changes the user's settings
-(§ Verbose mode).
+miss (`skills/countz/SKILL.md`), and `update_countz_config` takes one boolean, `verbose`,
+and changes that one Countz setting (§ Verbose mode).
 
 `get_countz_config` takes no arguments. Nothing from a run — no path, no figure,
 no file name — goes to the server; the one text that may cross is the scrubbed pre-run
@@ -84,7 +85,7 @@ ask, on a catalog miss only, scrubbed by an agent under [SCRUB.md](SCRUB.md)
 
 ## Verbose mode
 
-`get_countz_config` returns `settings.verbose`, the user's own setting; it holds for every
+`get_countz_config` returns `settings.verbose`, the user's Countz setting; it holds for every
 run they start, and it is `true` until they turn it off. A run is registered verbose;
 pass `setup_run.py --no-verbose` when the setting is `false`, which makes the run
 result-only. `run.json.inputs.verbose` then carries the mode for the run; a `run.json`
@@ -101,7 +102,8 @@ carries it. Turning verbose on mid-run shows what was withheld so far.
 
 When the user asks to change it — "turn on verbose mode", "show me each step", "stop
 showing the working papers" — call `update_countz_config(verbose=<true|false>)` on the
-`countz` server. It saves the setting for their later runs too. On a run in progress,
+`countz` server. The call carries that one boolean and nothing read from the machine. It
+saves the setting for their later runs too. On a run in progress,
 then run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/run_state.py verbose <run_dir>` (with
 `--off` to turn it off) and tell the user the line it prints. If the call fails, say so
 in one line, and still change this run's mode.
