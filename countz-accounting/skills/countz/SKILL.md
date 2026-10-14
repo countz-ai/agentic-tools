@@ -69,7 +69,8 @@ for you to confirm it.
 ## Change verbose mode
 
 Call `update_countz_config(verbose=<true for on, false for off>)` on the `countz` server.
-It saves the user's own setting, which every run they start from now on follows. Tell
+The call carries that one boolean and nothing read from the machine. It saves the
+user's Countz setting, which every run they start from now on follows. Tell
 the user the setting it returned in one line: verbose on shows every step's working
 papers as they land and waits for their confirmation of each plan; off shows only the
 engagement preview, the plan, the workbook and the deck, and runs the plan as drafted.
