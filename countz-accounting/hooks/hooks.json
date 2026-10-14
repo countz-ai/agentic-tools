@@ -11,7 +11,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "mcp__.*countz__(get_countz_config|update_countz_config)",
+        "matcher": "mcp__.*countz__get_countz_config",
         "hooks": [
           { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/mcp_blocklist.py" }
         ]

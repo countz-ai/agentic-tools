@@ -3,11 +3,10 @@
 
 `get_countz_config` returns `blocked_tools`, the tenant's list of MCP tool calls the
 session must not make (the user cannot change it; empty by default, so nothing is
-blocked), and `settings`, the user's Countz settings. This one script serves two hook events
-(hooks/hooks.json):
+blocked). This one script serves two hook events (hooks/hooks.json):
 
-    PostToolUse on the `countz` server's `get_countz_config` and `update_countz_config`:
-        records the result for this session, in
+    PostToolUse on the `countz` server's `get_countz_config`: records that list, and
+        nothing else from the result, for this session, in
         `${CLAUDE_PLUGIN_DATA}/sessions/<session_id>.json` (falls back to
         `~/.countz-accounting/sessions/`).
     PreToolUse on every MCP tool (`mcp__*`): refuses a call the recorded list names,
@@ -41,7 +40,6 @@ import sys
 
 SERVER = "countz"
 CONFIG_TOOL = "get_countz_config"
-UPDATE_TOOL = "update_countz_config"
 _WIRE = re.compile(r"^mcp__(.+)__([^_].*)$")
 
 
@@ -93,7 +91,7 @@ def payload(resp, depth: int = 0) -> dict | None:
                 return got
         return None
     if isinstance(resp, dict):
-        if "blocked_tools" in resp or "settings" in resp:
+        if "blocked_tools" in resp:
             return resp
         for key in ("structuredContent", "result", "content", "text"):
             if key in resp:
@@ -105,23 +103,16 @@ def payload(resp, depth: int = 0) -> dict | None:
 
 def record(event: dict) -> None:
     split = split_wire(event.get("tool_name", ""))
-    if not split or not server_is(split[0], SERVER) or split[1] not in (CONFIG_TOOL, UPDATE_TOOL):
+    if not split or not server_is(split[0], SERVER) or split[1] != CONFIG_TOOL:
         return
     got = payload(event.get("tool_response"))
     sid = event.get("session_id")
-    if got is None or not sid:
+    if got is None or not isinstance(got.get("blocked_tools"), list) or not sid:
         print(f"mcp_blocklist: {split[1]} result not readable - blocked tools unchanged",
               file=sys.stderr)
         return
+    state = {"blocked_tools": [str(e) for e in got["blocked_tools"]]}
     path = state_path(sid)
-    try:
-        state = json.loads(path.read_text()) if path.is_file() else {}
-    except ValueError:
-        state = {}
-    if isinstance(got.get("blocked_tools"), list):
-        state["blocked_tools"] = [str(e) for e in got["blocked_tools"]]
-    if isinstance(got.get("settings"), dict):
-        state["settings"] = got["settings"]
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n")
@@ -184,6 +175,8 @@ def selftest() -> int:
             bad.append("a session with no list refused a call")
         record({**post, "tool_response": [{"type": "text", "text": json.dumps(
             {"blocked_tools": [], "settings": {"verbose": True}})}]})
+        if "settings" in json.loads(state_path("s1").read_text()):
+            bad.append("the config result's settings were recorded")
         if not state_path("s1").is_file():
             bad.append("the config result was not recorded")
         if decide({**pre, "tool_name": drive}) or decide({**pre, "tool_name": recipe}):
@@ -205,10 +198,10 @@ def selftest() -> int:
             bad.append("`*` let a call through")
         record({"hook_event_name": "PostToolUse", "session_id": "s1",
                 "tool_name": "mcp__claude_ai_countz__update_countz_config",
-                "tool_response": json.dumps({"settings": {"verbose": False}})})
+                "tool_response": json.dumps({"blocked_tools": []})})
         st = json.loads(state_path("s1").read_text())
-        if st.get("settings") != {"verbose": False} or st.get("blocked_tools") != ["*"]:
-            bad.append(f"update_countz_config did not merge into the state: {st}")
+        if st != {"blocked_tools": ["*"]}:
+            bad.append(f"update_countz_config changed the state: {st}")
         if split_wire(cfg) != ("plugin_countz-accounting_countz", "get_countz_config"):
             bad.append("split_wire mis-split a plugin tool name")
         if not listed("claude_ai_countz", "get_recipe_for_countz_analysis",
