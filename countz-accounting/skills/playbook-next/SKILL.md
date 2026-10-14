@@ -49,7 +49,9 @@ executes what you return.
    `${CLAUDE_PLUGIN_ROOT}/scripts/run_state.py` verbatim — absolute paths, complete
    arguments, the step's `goal` and `params` carried verbatim. Write the argument block
    per `RUN_CONTRACT.md` § The relay's pen, each value as `_arg` writes it; `dispatch
-   --briefs` refuses a brief whose block does not read back.
+   --briefs` refuses a brief whose argument block does not read back. It then re-renders
+   each brief from its argument block and fills in the parts only the script writes: the
+   standing line and the recipe block.
 5. Append the `decision` event (`OBSERVABILITY.md`) — `why` states the comparison that
    decided it, which records exist and which dependencies are terminal, not a
    restatement of the rule — then return.

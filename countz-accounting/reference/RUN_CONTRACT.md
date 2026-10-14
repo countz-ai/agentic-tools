@@ -120,7 +120,8 @@ in one line, and still change this run's mode.
 | `<run_dir>/steps/<NNNN>-<step>.json` | the step that produced it, once, at its end | the relay (`run_state.py record`), the playbook engine, the review step |
 | `<run_dir>/checks/<check>.md` (and `<check>-*.csv`) | the check step that owns that check id | the review and report steps |
 | `<run_dir>/workpapers/*.yaml` | the step named in the file's suffix | the review and report steps, `scripts/check_prose.py` |
-| `<run_dir>/dispatch/<NNNN>-<step>.md` | `run_state.py dispatch` and `record`, one per dispatch row (a wave of one, a `--step` and a retry included), or `scripts/playbook_next.py`; on escalation, the playbook-engine agent, rendering `run_state.py`'s `BRIEF` template verbatim | that dispatch's sub-agent, as its entire launch instruction. On a plain Skill call nobody reads it at launch; it is the archive of what the fork was told |
+| `<run_dir>/dispatch/<NNNN>-<step>.md` | `run_state.py dispatch` and `record`, one per dispatch row (a wave of one, a `--step` and a retry included), or `scripts/playbook_next.py`; on escalation, the playbook-engine agent drafts it from `run_state.py`'s `BRIEF` template and `dispatch --briefs` re-renders it from its argument block. A plan-driven step's brief carries its family section and the schedules the deck takes from its tab | that dispatch's sub-agent, as its entire launch instruction. On a plain Skill call nobody reads it at launch; it is the archive of what the fork was told |
+| `<run_dir>/dispatch/recipe-rules.md` | `run_state.py`, which rewrites it with every plan-driven brief. It holds `PLAYBOOK_RECIPES.md` § What every recipe inherits, then the pinned recipe from its start to `## The families` | every plan-driven step, which reads it once instead of the recipe (`agents/worker.md` § Your procedure) |
 | `<run_dir>/out/` | each step stages into `out/.staging/` and renames into place | the user, `scripts/preview.py` |
 | `<run_dir>/out/run_sync.tar.gz` | the relay, via `scripts/sync_run.py`, refreshed after every wave | the user: the whole-run download (§ Bringing the run home) |
 | `<run_dir>/events.jsonl` | appended by anyone, never rewritten | a human, `scripts/usage_report.py` |
@@ -323,6 +324,11 @@ runs first, always; the `playbook-next` skill (the agent) runs when it prints `E
 or fails. Execute the printed lines in their order (`SAY:`, `RECORD:`, `LAUNCH:`,
 `NEXT:`, `RETRY:`, `THEN:`) and put every `FAILED:` line to the user. A `NEXT:` line
 without `brief=` is a plain Skill call; it runs as the skill's fork and starts clean.
+A `LAUNCH:` wave runs as `countz-accounting:worker` sub-agents, the agent type every
+check skill forks into. Their system prompt is the worker charter followed by
+`CONDUCT.md`, `DOCTRINE.md` and `EVIDENCE.md`, which `scripts/build_agents.py` appends to
+`agents/worker.md`. No step starts by reading those documents, and the whole wave shares
+them as one cached prefix.
 
 `SAY:` is the run's progress line, one per wave in either verbose mode: the wave's number,
 how many checks run, and what they are (the recipe's family titles on a plan-driven run;

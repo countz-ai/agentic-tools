@@ -18,11 +18,10 @@ the books side first, the evidence side second), `goal`, `params` (the period en
 window — see below; `items_from` where in-transit items come from a reconciliation),
 `mode` (`fresh` | `fix`), and on `fix`, `findings_from`.
 
-Read, in this order: `${CLAUDE_PLUGIN_ROOT}/reference/DOCTRINE.md` (§ Voice),
-`${CLAUDE_PLUGIN_ROOT}/reference/EVIDENCE.md` (§ 3 and § 5), then `sources/<id>.md` for
-each source where it exists (a plan-driven run's planner writes the profiles; derive
-your own binding where none answers it), and the dependency's record where
-`params.items_from` names one.
+Follow `DOCTRINE.md` (§ Voice) and `EVIDENCE.md` (§ 3 and § 5). Read `sources/<id>.md` for each source where it
+exists. A plan-driven run's planner writes these profiles; where no profile answers a
+question, derive the binding yourself. Where `params.items_from` names a dependency,
+also read its record.
 
 Throughout, *bank* reads as the evidence side: the bank for a cash cutoff; the delivery,
 acceptance, service or fulfillment record a recipe family names otherwise.

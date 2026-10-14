@@ -17,10 +17,9 @@ the target sources the items are traced INTO, subsequent statements typically), 
 `params` (must name where the items come from — see below), `mode` (`fresh` | `fix`),
 and on `fix`, `findings_from`.
 
-Read, in this order: `${CLAUDE_PLUGIN_ROOT}/reference/DOCTRINE.md` (§ Voice),
-`${CLAUDE_PLUGIN_ROOT}/reference/EVIDENCE.md` (§ 3 and § 5), then `sources/<id>.md` for
-each target source where it exists (a plan-driven run's planner writes the profiles;
-derive your own binding where none answers it), then the item origin.
+Follow `DOCTRINE.md` (§ Voice) and `EVIDENCE.md` (§ 3 and § 5). Read `sources/<id>.md` for each target source
+where it exists, then the item origin. A plan-driven run's planner writes these
+profiles; where no profile answers a question, derive the binding yourself.
 
 ## 1. Establish the item population
 

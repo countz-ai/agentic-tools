@@ -81,6 +81,7 @@ import shlex
 import sys
 
 import check_playbook  # sibling: the one home of KINDS, SLUG and definition validation
+import recipe_format  # sibling: the recipe's sections and its `## Report` block
 
 PLUGIN_ROOT = pathlib.Path(__file__).resolve().parent.parent
 RUN_SCHEMA = "countz-accounting/run@1"
@@ -99,9 +100,9 @@ This file is your entire instruction.
 token; expand it to that directory each time, including on a path you reach from inside
 another file.
 
-1. Read `{agent}` — your standing instructions.
+{standing}
 2. Read `{plug}/skills/{skill}/SKILL.md` — your procedure.
-
+{recipe}
 An argument whose value starts with `"` is one JSON string: read it with its escapes
 decoded (`\\n` is a line break).
 
@@ -110,6 +111,31 @@ Your arguments:
     run_dir={run_dir}
     seq={seq}
 {args}"""
+
+# Step 1 of a brief. A sub-agent of the skill's agent type already has the agent file as
+# its system prompt (for the worker, with CONDUCT, DOCTRINE and EVIDENCE appended by
+# scripts/build_agents.py). Any other sub-agent reads the file.
+STANDING = "1. Read `{agent}` — your standing instructions."
+STANDING_TYPED = ("1. Your standing instructions are in `{agent}`. If you are running as a "
+                  "`{atype}` sub-agent, that file is already your system prompt. Otherwise, "
+                  "read it first.")
+AGENT_TYPES = {"worker"}
+
+# A plan-driven brief's recipe block (agents/worker.md § Your procedure). It points to the
+# run's inherited rules, written once to RULES_REL, then gives the family section and the
+# schedules the deck takes from the step's tab inline. The step reads its own part last,
+# and no step reads the whole recipe.
+RULES_REL = "dispatch/recipe-rules.md"
+INHERITS = "What every recipe inherits"
+FAMILIES = "The families"
+RECIPE_BLOCK = """3. Read `{rules}` — the rules every family of this run inherits.
+4. Below is your family section, from the recipe at `{recipe}`. It is your procedure.
+
+## Your family section
+
+{section}
+{schedules}
+"""
 
 # The argument block, read back by `parse_brief_args` (here and in step_record.py): the
 # lines after ARGS_HEAD, one `    <key>=<value>` per line, the key ARG_KEY. A value holding
@@ -130,7 +156,11 @@ CHECK_ARG_ORDER = ("sources", "goal", "params", "mode")
 # Printed once per briefed wave, by this script and playbook_next.py. Re-invoking one
 # forked skill while an earlier invocation is running waits for it, so a wave run as
 # repeated Skill calls silently serializes - hence sub-agents on briefs.
-LAUNCH = ("LAUNCH: in ONE message, one general-purpose sub-agent per NEXT line, each "
+# Every check kind forks into the worker (check_playbook.KINDS), so a wave launches
+# worker sub-agents. Their system prompt is the charter plus the documents every step
+# reads, and the whole wave shares it as one cached prefix.
+LAUNCH = ("LAUNCH: in ONE message, one sub-agent per NEXT line, of subagent_type "
+          "countz-accounting:worker (general-purpose where that type is not available), each "
           "prompted exactly: Read <its brief= path> and do what it says. It is your "
           "entire instruction. - nothing more. Without an Agent tool, run each NEXT "
           "line as its Skill call, one at a time.")
@@ -337,9 +367,77 @@ def render_brief(run_dir: pathlib.Path, seq: int, step: str, skill: str,
                      f"{', '.join(TEMPLATE_KEYS)} - the brief carries those itself")
     lines = [f"    check={check_id}\n"] if check_id else []
     lines += [f"    {k}={_arg(v)}\n" for k, v in args.items()]
-    return BRIEF.format(nnnn=f"{seq:04d}", step=step, plug=PLUGIN_ROOT,
-                        agent=skill_agent(skill), skill=skill, run_dir=_arg(str(run_dir)),
-                        seq=seq, args="".join(lines))
+    agent = skill_agent(skill)
+    standing = (STANDING_TYPED.format(agent=agent, atype=f"countz-accounting:{agent.stem}")
+                if agent.stem in AGENT_TYPES else STANDING.format(agent=agent))
+    family = str(((args.get("params") or {}) if isinstance(args.get("params"), dict)
+                  else {}).get("family") or "")
+    return BRIEF.format(nnnn=f"{seq:04d}", step=step, plug=PLUGIN_ROOT, standing=standing,
+                        recipe=recipe_block(run_dir, family), skill=skill,
+                        run_dir=_arg(str(run_dir)), seq=seq, args="".join(lines))
+
+
+def pinned_recipe(run_dir: pathlib.Path) -> tuple[pathlib.Path, str] | None:
+    """The recipe a plan-driven run executes (`run.json.plan.recipe`) and its text; None
+    before the plan is approved, or when this machine cannot read it."""
+    try:
+        run = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+        path = pathlib.Path((run.get("plan") or {}).get("recipe") or "")
+        return (path, path.read_text(encoding="utf-8")) if path.is_file() else None
+    except (OSError, ValueError):
+        return None
+
+
+def family_section(text: str, family: str) -> str | None:
+    """The recipe's `### <ID> — ...` section for a family slug (`g6`), heading included,
+    up to the next `##` or `###` heading; None when the recipe has no such family."""
+    m = re.search(rf"^### {re.escape(family.upper())} — .*?(?=^#{{2,3}} |\Z)", text, re.S | re.M)
+    return m.group(0).rstrip() if m else None
+
+
+def write_recipe_rules(run_dir: pathlib.Path, recipe: pathlib.Path, text: str) -> pathlib.Path:
+    """Write RULES_REL: PLAYBOOK_RECIPES.md § What every recipe inherits, then the recipe
+    from its start to `## The families`. These are the rules every family of the run
+    inherits, in one file that every plan-driven step reads once. The file is rewritten on
+    each dispatch, so it always matches the pinned recipe, also in a re-pinned copy of a
+    run."""
+    inherits = recipe_format.section_body(
+        (PLUGIN_ROOT / "reference" / "PLAYBOOK_RECIPES.md").read_text(encoding="utf-8"),
+        INHERITS) or ""
+    head = text.split(f"\n## {FAMILIES}", 1)[0].rstrip()
+    body = (f"# The rules every family of this run inherits\n\n"
+            f"This file has two parts, copied when the step was dispatched: "
+            f"`${{CLAUDE_PLUGIN_ROOT}}/reference/PLAYBOOK_RECIPES.md` § {INHERITS}, then the "
+            f"recipe at `{recipe}` from its start to `## {FAMILIES}`. Your family section is "
+            f"in your brief.\n\n"
+            f"## {INHERITS}\n{inherits.rstrip()}\n\n"
+            f"---\n\nThe recipe, from its start to `## {FAMILIES}`:\n\n{head}\n")
+    path = run_dir / RULES_REL
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not path.is_file() or path.read_text(encoding="utf-8") != body:
+        tmp = path.with_suffix(".md.tmp")
+        tmp.write_text(body, encoding="utf-8")
+        tmp.replace(path)
+    return path
+
+
+def recipe_block(run_dir: pathlib.Path, family: str) -> str:
+    """Return a plan-driven brief's steps 3 and 4 and the family section (RECIPE_BLOCK).
+    Return an empty string when the dispatch has no family, when this machine cannot read
+    the recipe, or when the recipe lacks the family. The worker then reads the recipe by
+    section itself (agents/worker.md § Your procedure)."""
+    pinned = pinned_recipe(run_dir) if family else None
+    section = family_section(pinned[1], family) if pinned else None
+    if not section:
+        return ""
+    rules = write_recipe_rules(run_dir, *pinned)
+    sched = [s for s in (recipe_format.report_schedules(pinned[1]) or [])
+             if str(s.get("from") or "").lower() == family.lower()]
+    schedules = ("The deck takes these schedules from your tab. They are the entries in "
+                 "the recipe's `## Report` whose `from` is your family:\n\n```json\n"
+                 + json.dumps(sched, indent=1) + "\n```\n") if sched else ""
+    return "\n" + RECIPE_BLOCK.format(rules=rules, recipe=pinned[0], section=section,
+                                       schedules=schedules)
 
 
 def parse_brief_args(text: str) -> dict[str, str | None]:
@@ -719,7 +817,11 @@ def cmd_dispatch(a) -> int:
             if c is None:
                 raise Refuse(f"{b['path'].name}: check {b['check']!r} is not registered "
                              f"- bind-playbook or approve-plan registers the steps")
-            _append_dispatch(run, b["seq"], b["step"], b["skill"], b["args"], b["check"])
+            row = _append_dispatch(run, b["seq"], b["step"], b["skill"], b["args"], b["check"])
+            # Re-render the brief from the recorded args. Only this script fills some
+            # parts of the template (the standing line and the recipe block), so an
+            # engine-written brief launches the same as one this script wrote.
+            write_row_brief(run_dir, row)
             c["seq"], c["status"] = b["seq"], "pending"
         run["next_seq"] = seq0 + len(parsed)
         save_run(run_dir, run)
