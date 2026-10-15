@@ -23,6 +23,13 @@ finding.
 
 After the mechanical gates, validate nine things, in this order.
 
+A scoped run executes only the families the user picked and the ones they read from
+(`run.json.plan.scope`; PLAYBOOK_RECIPES.md § Ask what to run). Its yardstick is that
+scope: the boundary, the objective and the hand-ons below are held to the families in
+it. A family left out is the user's choice. An account only a left-out family covers, or a
+hand-on addressed to one, raises no finding when the deliverable names that family as
+not run.
+
 1. **Foot the tables.** Every table in the checks' records and tabs sums to the totals it
    displays. Where two tables state the same quantity, e.g. a statement total restated in
    a tab, check that they agree.
@@ -49,7 +56,10 @@ After the mechanical gates, validate nine things, in this order.
 7. **Judge the objective.** The run's goal is supported by what the checks establish, or
    it is not. Where it is not, the deliverable states which families ran, at what grain,
    over what coverage. A deliverable that reads as complete over a population no check
-   tested is a blocking finding.
+   tested is a blocking finding. On a scoped run, the goal is the objective as far as the
+   families in scope reach, and the deliverable names the families left out; one that
+   does not, or that states a figure only a left-out family establishes, is a blocking
+   finding.
 8. **Hold each check to its own procedure.** Resolve the check's kind to its worker skill
    through `KINDS` in `${CLAUDE_PLUGIN_ROOT}/scripts/check_playbook.py`, and read that
    skill's numbered sections — its procedure — with `section.py`. Stop there: `mode: fix`

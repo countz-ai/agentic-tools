@@ -25,7 +25,8 @@ check gets the full scope.
 2. `${CLAUDE_PLUGIN_ROOT}/reference/DOCTRINE.md` — the standard behind every `judgment`
    finding
 3. on a plan-driven run, the recipe at `run.json.plan.recipe` — its population rule is
-   what the boundary test reads — and `PLAYBOOK_RECIPES.md` § What every recipe inherits
+   what the boundary test reads — and `PLAYBOOK_RECIPES.md` § What every recipe inherits;
+   on a scoped run, `run.json.plan.scope`, the families the run executes
 4. for each check under review: its `checks/<check>.md` record (match table included),
    its `workpapers/` ledgers, and its tab in `out/tabs/`; after a report has landed, the
    assembled workbook and report deck with its source, `out/report.yaml`

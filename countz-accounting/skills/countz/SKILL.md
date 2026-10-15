@@ -109,7 +109,8 @@ You are the relay for a plan-driven run whose recipe is not fixed in advance. Yo
 analysis and you open no client file. Your `--skill` is `countz`: the run directory is
 `<output_root>/countz-<company>.<YYYYMMDD-HHMMSS>`.
 
-The relay procedure's § 1 collects the ask in the user's words as `instructions`. What
+The relay procedure's § 2 collects the ask in the user's words as `instructions`. On a
+match, its § 1 shows the matched recipe's steps first, as for a named shim. What
 differs from a named shim is `PLAYBOOK_RECIPES.md § Fetch the recipe and register`,
 which for this skill runs as:
 
@@ -179,6 +180,11 @@ on `revise=`.
 
    Show the recipe to the user (`preview.py` names it) before the plan step. A generated
    recipe belongs to this run: a later run over the same analysis generates again.
+4. **What to run.** Put the generated recipe's steps to the user as
+   `PLAYBOOK_RECIPES.md § Ask what to run` does, over the pinned file, and register the
+   picks with `setup_run.py <run_dir> --session ${CLAUDE_SESSION_ID} --sources '[]'
+   --scope <picks>` (`PLAYBOOK_RECIPES.md § Fetch the recipe and register`, *The
+   scope*).
 
 Where the pinned recipe declares `arr_policy`, served or generated, settle it first
 (`PLAYBOOK_RECIPES.md § Fetch the recipe and register`, *The ARR policy*). Then

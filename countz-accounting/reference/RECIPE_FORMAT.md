@@ -107,7 +107,10 @@ to the bank (kind \`recon\`, per bank account)`. `<F>` is one upper-case letter,
 digit, `<kind>` a key of `KINDS`. Number from 0 where family 0 is the population walk,
 from 1 otherwise. Each family states what it establishes, what it reads from the data
 room, and what it reads from other families — the reads the plan carries as `_from`
-params. A family never states an order: the plan derives each step's `after` from its
+params — in a paragraph opening `**Reads:**` that names each family it reads by id. The
+user picks a run's steps from the families (`PLAYBOOK_RECIPES.md` § Ask what to run), and
+`scripts/recipe_scope.py` adds what a pick reads from that paragraph, or, where a family
+has none, from its sentences carrying a `_from` param. A family never states an order: the plan derives each step's `after` from its
 reads (`PLAYBOOKS.md` § The file), because the order depends on the data room the
 recipe cannot see. `validate_recipe.py` refuses `after ...` in a family header.
 

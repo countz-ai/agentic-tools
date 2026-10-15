@@ -25,7 +25,10 @@ Subcommands:
         at once otherwise (RUN_CONTRACT.md § Verbose mode): validate the definition, record
         run.json.plan (record, recipe, playbook, approved_at) and run.json.playbook
         (slots are the run's own source ids, so the binding is identity), register the
-        steps as checks, append the `plan_approved` event.
+        steps as checks, append the `plan_approved` event. On a scoped run
+        (run.json.inputs.scope) it refuses a step outside the scope that no step in it
+        reads, and records run.json.plan.scope: {picked, families} - the families picked
+        and every family the approved steps run, in recipe order.
 
     dispatch <run_dir> --checks id1,id2 [--mode fresh|fix] [--extra '<one-line JSON>']
     dispatch <run_dir> --step plan|recipe|arr_policy|review|report --args '<one-line JSON>'
@@ -40,6 +43,8 @@ Subcommands:
         playbook_next.py (or the engine agent) already wrote. Every --checks and --step
         dispatch also prints one SAY: line first — the progress line the relay puts to
         the user as plain chat (RUN_CONTRACT.md § Every wave): what runs, and how many.
+        A plan dispatch on a scoped run (run.json.inputs.scope) carries `families`, the
+        scope's family ids, unless --args already names them: the plan's to-do list.
 
     record <run_dir>
         Close a wave: classify every outstanding dispatch from its step record —
@@ -180,6 +185,17 @@ def recipe_families(run: dict) -> dict[str, str]:
     return {fid.lower(): title for fid, title in FAMILY_HEADER.findall(text)}
 
 
+def recipe_order(run: dict, recipe, ids: set[str]) -> list[str]:
+    """`ids` in the order the recipe declares its families; an id the recipe does not
+    carry goes last."""
+    try:
+        text = pathlib.Path(str(recipe)).read_text(encoding="utf-8")
+    except OSError:
+        text = ""
+    order = [fid.lower() for fid, _ in FAMILY_HEADER.findall(text)]
+    return [f for f in order if f in ids] + sorted(i for i in ids if i and i not in order)
+
+
 def describe_members(members: list[tuple[str, str | None, dict | None]],
                      families: dict[str, str]) -> str:
     """What a wave runs, for its SAY line. `members` are (name, kind, params) in wave
@@ -205,7 +221,9 @@ def describe_members(members: list[tuple[str, str | None, dict | None]],
 def step_say(step: str, args: dict) -> str:
     """The SAY text for a plan / recipe / review / report dispatch."""
     if step == "plan":
-        return ("Redrafting the check plan on your instruction." if args.get("revise")
+        if args.get("revise"):
+            return "Redrafting the check plan on your instruction."
+        return ("Drafting the check plan for the steps you picked." if args.get("families")
                 else "Drafting the check plan from the data room.")
     if step == "recipe":
         return ("Writing the recipe from your answers." if args.get("answers")
@@ -601,6 +619,15 @@ def cmd_approve_plan(a) -> int:
     recipe = a.recipe or (row.get("args") or {}).get("recipe")
     if not recipe:
         raise Refuse("the plan dispatch args carry no recipe - use --recipe")
+    # A scoped run executes the families the user picked and what they read
+    # (PLAYBOOK_RECIPES.md § Ask what to run); a step past that is the plan's to drop.
+    scope = scope_of(run)
+    if scope:
+        extra = out_of_scope(definition, scope)
+        if extra:
+            raise Refuse(f"step(s) {', '.join(extra)} run a family outside the run's scope "
+                         f"({', '.join(scope['families'])}) and no step in it reads them - "
+                         f"re-draft the plan without them")
     bound = {sl: sl for sl in (s["slot"] for s in definition["sources"])}
     sources = {s["id"] for s in run.get("sources", [])}
     for sl in bound:
@@ -618,6 +645,13 @@ def cmd_approve_plan(a) -> int:
     run["plan"] = {"record": row.get("record"), "recipe": str(recipe),
                    "recipe_name": pinned.get("name"), "recipe_version": pinned.get("version"),
                    "playbook": rel, "approved_at": _now()}
+    if scope:
+        # what the deliverable is held to: the families picked, and every family a step
+        # of the approved plan runs (the picks' reads included)
+        ran = {str((st.get("params") or {}).get("family") or "").lower()
+               for st in definition["steps"]}
+        run["plan"]["scope"] = {"picked": scope["picked"],
+                                "families": recipe_order(run, recipe, ran)}
     run["playbook"] = {"name": definition["name"], "path": str(def_path), "bound": bound}
     added, dropped = steps_as_checks(run, definition, bound)
     save_run(run_dir, run)
@@ -628,6 +662,31 @@ def cmd_approve_plan(a) -> int:
     for line in dropped:
         print(line)
     return 0
+
+
+def scope_of(run: dict) -> dict | None:
+    """The families the user picked for this run and their reads
+    (`run.json.inputs.scope`, set by `setup_run.py --scope`); None for a run over every
+    family."""
+    scope = (run.get("inputs") or {}).get("scope")
+    return scope if isinstance(scope, dict) and scope.get("families") else None
+
+
+def out_of_scope(definition: dict, scope: dict) -> list[str]:
+    """The steps of `definition` a scoped run does not execute: a step runs when its
+    family is in the scope, or when a step that runs reads it (`after`, which the
+    definition derives from the step's `_from` params) - an `extract` step, or a read the
+    recipe's text did not name."""
+    steps = {st["id"]: st for st in definition["steps"]}
+    keep = {sid for sid, st in steps.items()
+            if str((st.get("params") or {}).get("family") or "").lower() in scope["families"]}
+    todo = list(keep)
+    while todo:
+        for dep in steps[todo.pop()].get("after") or []:
+            if dep in steps and dep not in keep:
+                keep.add(dep)
+                todo.append(dep)
+    return [sid for sid in steps if sid not in keep]
 
 
 def _alloc(run: dict) -> int:
@@ -698,6 +757,9 @@ def cmd_dispatch(a) -> int:
         args = json.loads(a.args) if a.args else {}
         if not isinstance(args, dict):
             raise Refuse("--args must be a JSON object")
+        # the plan's to-do list: on a scoped run the planner drafts these families only
+        if a.step == "plan" and (scope := scope_of(run)) and "families" not in args:
+            args["families"] = scope["families"]
         seq = _alloc(run)
         row = _append_dispatch(run, seq, a.step, STEP_SKILLS[a.step], args, None)
         write_row_brief(run_dir, row)

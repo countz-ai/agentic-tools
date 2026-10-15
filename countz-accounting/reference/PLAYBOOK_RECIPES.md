@@ -84,15 +84,36 @@ selection rule, arithmetic (EVIDENCE.md § 4, WORKBOOK.md § 6).
 You are the relay for a plan-driven run. The recipe's frontmatter fixes the objective.
 The plan step drafts the checks from the data, against the recipe; the user confirms
 them before anything runs. You do no analysis and you open no client file. The recipe is
-served by the Countz connector (§ 2) and pinned into the run directory; read its
+served by the Countz connector (§ 3) and pinned into the run directory; read its
 frontmatter from the pinned copy. Run inline; the run records this session's id.
 
 Read [`RUN_CONTRACT.md`](RUN_CONTRACT.md) before your first dispatch: the workspace,
 `run.json` (every write goes through `scripts/setup_run.py` or `scripts/run_state.py`),
 classification, and what every wave owes the user.
 
-### 1. Collect, in one message
+### 1. Ask what to run
 
+Fetch the recipe before anything else is asked: § Fetch the recipe and register, up to
+the registration — the bundled copy, or the served `recipe_markdown` written to a file.
+Then run
+
+```
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/recipe_scope.py table <that file>
+```
+
+and open the § 2 message with what it prints between `SHOW:` and `END`, verbatim: a
+note, then a table of the recipe's steps, one checkbox per family and its title, under
+*Run everything*, ticked. The `KEY:` lines are yours alone: they map each row number to
+the family id you register. Never put a family id, an underscore or the code's own markup
+in front of the user.
+
+The user picks what they want, by number or by name, and nothing more: a step a pick
+reads from is added on its own. No pick, or *Run everything*, is the whole recipe.
+
+### 2. Collect, in one message
+
+- **What to run**: the table (§ 1), first. Take the user's picks as the row numbers the
+  `KEY:` lines carry.
 - **The data sources**: a short id for each and what it is. Name the recipe's source
   classes and the records each lists. Take what exists; the plan states what each
   missing record costs. Do not press.
@@ -103,16 +124,18 @@ classification, and what every wave owes the user.
   § Parameters). `arr_policy` is the exception: it is a file, not a one-line choice. Ask
   whether the company has an approved ARR policy (`ARR_POLICY.md` § Where a policy
   lives). A policy in the library for this company is offered by name. The rest is
-  settled after registration (§ 2).
+  settled after registration (§ 3).
 - **The company** whose books the run is over, in the user's words. It names the run
   folder.
 - **Where the output goes**: a folder you may write into. Do not guess paths.
 - **The ask**, in the user's own words, as `instructions` — what they want this run to
   establish or lead with, beyond the recipe's objective. Take it from the message that
   started the run; ask for it only where that message said nothing. It never edits the
-  recipe; it reaches the plan step as an argument (§ 3).
+  recipe; it reaches the plan step as an argument (§ 4).
 
-### 2. Fetch the recipe and register
+### 3. Fetch the recipe and register
+
+§ 1 fetched the recipe; register it with the collected answers. The fetch itself:
 
 First look for a bundled copy:
 `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/bundled_recipe.py <your recipe's name>`. When it
@@ -139,15 +162,24 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/setup_run.py \
     --sources '[{"id": "gl", "path": "<abs>", "name": "<the user's words>"}, ...]' \
     --params '{"period_end": "<as collected>", "period": "<as collected, where given>",
                "instructions": "<the ask, verbatim>", "<declared key>": "<the choice>", ...}' \
-    --recipe <the file you wrote> --recipe-version <recipe_version>
+    --recipe <the file you wrote> --recipe-version <recipe_version> \
+    --scope <the picks: row numbers, or all>
 ```
 
 The script mints `<output_root>/<skill>-<company slug>.<YYYYMMDD-HHMMSS>` and prints it
 as `RUN_DIR:`; that path is `<run_dir>` everywhere below. Never compose the name
-yourself. `--params` is everything § 1 collected, verbatim, as one JSON object — the
+yourself. `--params` is everything § 2 collected, verbatim, as one JSON object — the
 ask included, so `run.json` records why the run was scoped as it was. The script reads
 no client file. A `countz` run on a catalog miss registers without `--recipe`
 and pins the generated recipe afterwards (its SKILL.md).
+
+**The scope.** `--scope` resolves the picks with every family they read from into
+`run.json.inputs.scope`, and prints `SCOPE:` and `SAY:`. Put the `SAY:` text to the user
+in one line, verbatim: it names what runs and what was added because a pick depends on
+it. `all` registers no scope, and the run executes every family. To change the scope
+before the plan is approved, run `setup_run.py <run_dir> --session ${CLAUDE_SESSION_ID}
+--sources '[]' --scope <picks>`, then re-dispatch `check-plan` with `revise=` naming the
+change.
 
 Sources arriving after the plan is drafted: run the same script with `<run_dir>` in place
 of `--output-root`, `--skill` and `--company`, then re-dispatch `check-plan` with
@@ -170,14 +202,16 @@ dispatching the plan, run `scripts/preview.py <run_dir>` and send what it prints
 decides what the preview shows and whether the plan waits for the user
 ([`RUN_CONTRACT.md`](RUN_CONTRACT.md) § Verbose mode, which also covers a change mid-run).
 
-### 3. Plan
+### 4. Plan
 
 Dispatch `check-plan` as a wave of one: `run_state.py dispatch <run_dir> --step plan
 --args '<one-line JSON>'`, then a plain Skill call. Arguments: `recipe=` the pinned
 recipe's absolute path (`<run_dir>/recipes/<name>.md`, never a plugin path), `name=` and
 `objective=` from its frontmatter (objective verbatim), `instructions=` the ask
 verbatim, `period_end`, `period` where collected, and `declared=` the collected values
-where the recipe declares options. The recipe is read as written: `instructions` shapes
+where the recipe declares options. On a scoped run, `dispatch` adds `families=` to the
+`NEXT:` line: the plan's to-do list, which the planner plans from instead of every
+family. Pass the line's arguments as printed. The recipe is read as written: `instructions` shapes
 the plan, not the recipe. The planner indexes every file with a relevance verdict against
 the objective, reads what the recipe needs, records the entities rosters and drafts the
 definition.
@@ -193,7 +227,8 @@ ruling decides:
 
 - confirm: `run_state.py approve-plan <run_dir> --definition <plan path>`. Records
   `run.json.plan` and `run.json.playbook`, registers the steps as checks, appends
-  `plan_approved`.
+  `plan_approved`. On a scoped run it refuses a step outside the scope that no step in
+  it reads; re-dispatch `check-plan` with `revise=` quoting the refusal.
 - adjust: re-dispatch `check-plan` with `revise=` their instruction on a new seq, an
   overruled set-aside file included.
 - stop.
@@ -206,7 +241,7 @@ with `revise=` their instruction on a new seq, and approve the revised plan the 
 
 Nothing below runs before the plan has reached the user through the preview.
 
-### 4. Execute
+### 5. Execute
 
 The `playbook` skill's run loop. Run
 `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/playbook_next.py <run_dir> <definition path>` and
@@ -217,12 +252,14 @@ imperatives, then return to the script. Repeat until `DONE:`. Relay any skipped 
 steps it names. Where the recipe declares `arr_policy`, each `record` is followed by
 `ARR_POLICY.md` § Applying the policy, step 6, before the script runs again.
 
-### 5. Review and report
+### 6. Review and report
 
 Per `RUN_CONTRACT.md` § Review and report: `check-review` over the unreviewed checks, the
-user's ruling on its findings, then `check-report` with the plan's report title.
+user's ruling on its findings, then `check-report` with the plan's report title. A scoped run's review and report are held
+to the families it ran (`run.json.plan.scope`), and the deliverable names the families the
+user left out.
 
-### 6. Close
+### 7. Close
 
 The deliverables are `out/workbook.xlsx` and `out/report.pptx`; the report wave's preview
 put them on screen as rendered cards. `out/RUN_SUMMARY.md` is in that wave's working
@@ -231,5 +268,5 @@ over the run archive `out/run_sync.tar.gz` per `RUN_CONTRACT.md` § Bringing the
 extracted under the user's result root it lands at `<short_name>.<datetime>` with
 `sync.json` carrying the run's session ids. Relay the exception schedule and the open
 items, each with its amount, what closes it and who owns it, and the coverage the run
-achieved. Invite instructions: a directed fix re-runs the owning check and reseals the
+achieved; on a scoped run, also the steps the user left out. Invite instructions: a directed fix re-runs the owning check and reseals the
 report.

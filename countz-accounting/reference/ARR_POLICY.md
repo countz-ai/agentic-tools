@@ -168,7 +168,7 @@ resets monthly is annualized at twelve times the tier.
 A recipe that computes ARR, recurring revenue, retention, churn or an ARR bridge declares
 `arr_policy` in its frontmatter (`RECIPE_FORMAT.md` § The document). The relay settles
 it through the `create-arr-policy` skill and pins it before the plan is drafted
-(`PLAYBOOK_RECIPES.md` § 2), and the plan writes its path into the `params.arr_policy`
+(`PLAYBOOK_RECIPES.md` § 3), and the plan writes its path into the `params.arr_policy`
 of every step the recipe names. From there, § Applying the policy governs, and
 § Computing ARR says how each value becomes a figure.
 
