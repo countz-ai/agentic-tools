@@ -432,16 +432,29 @@ def _walk_dirs(root: pathlib.Path) -> tuple[list[tuple[str, int, int]], int]:
     return rows, deeper
 
 
-def scope_text(inputs: dict) -> str:
-    """The run's scope in the user's words, for the engagement preview."""
+def scope_lines(inputs: dict) -> list[str]:
+    """The run's scope for the engagement preview: every step of the pinned recipe, ticked
+    where the run executes it (recipe_scope.py)."""
     scope = inputs.get("scope")
     path = pathlib.Path(((inputs.get("recipe") or {}).get("path")) or "")
-    if not scope:
-        return "Every step of the recipe."
+    if not path.is_file():
+        return ["The recipe is not pinned yet."]
     try:
-        return recipe_scope.say(recipe_scope.load(path), scope)
+        fams = recipe_scope.load(path)
     except recipe_scope.Refuse:
-        return f"{len(scope.get('families') or [])} of the recipe's steps."
+        return ["Every step of the recipe." if not scope
+                else f"{len(scope.get('families') or [])} of the recipe's steps."]
+    runs = set(scope["families"]) if scope else {f["id"] for f in fams}
+    picked = set(scope["picked"]) if scope else set()
+    rows = ["| | # | Step | Why it runs |", "|:-:|--:|---|---|"] if scope else \
+        ["| | # | Step |", "|:-:|--:|---|"]
+    for n, f in enumerate(fams, 1):
+        row = f"| {'☑' if f['id'] in runs else '☐'} | {n} | {recipe_format.plain_title(f['title'])} |"
+        if scope:
+            row += " " + ("" if f["id"] not in runs else "Picked" if f["id"] in picked
+                          else "Needed by a step you picked") + " |"
+        rows.append(row)
+    return rows
 
 
 def write_preview(run_dir: pathlib.Path, run: dict) -> None:
@@ -457,7 +470,7 @@ def write_preview(run_dir: pathlib.Path, run: dict) -> None:
         lines += [f"| {_cell(k)} | {_cell(v)} |" for k, v in params.items()]
     else:
         lines.append("None collected.")
-    lines += ["", "## What runs", "", scope_text(inputs)]
+    lines += ["", "## What runs", ""] + scope_lines(inputs)
     lines += ["", "## Data room"]
     for s in run.get("sources", []):
         path = pathlib.Path(s["path"])
