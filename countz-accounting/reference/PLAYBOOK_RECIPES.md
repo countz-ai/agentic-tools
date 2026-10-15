@@ -93,27 +93,43 @@ classification, and what every wave owes the user.
 
 ### 1. Ask what to run
 
-Fetch the recipe before anything else is asked: § Fetch the recipe and register, up to
-the registration — the bundled copy, or the served `recipe_markdown` written to a file.
-Then run
+This is the run's first question, and it goes to the user before anything else is done:
+no file written, no folder made, no other question asked.
 
-```
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/recipe_scope.py table <that file>
-```
+1. Get the recipe: the bundled copy, or the served body (§ Fetch the recipe and
+   register, its first two paragraphs). Do not write the served body to a file yet;
+   § 3 does that after the user answers.
+2. Print the choice. For a bundled copy, pass its path:
+   `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/recipe_scope.py ask <the RECIPE path>`. For a
+   served body, pipe in only its family headers, the lines that open `### ` under
+   `## The families`, copied exactly:
 
-and open the § 2 message with what it prints between `SHOW:` and `END`, verbatim: a
-note, then a table of the recipe's steps, one checkbox per family and its title, under
-*Run everything*, ticked. The `KEY:` lines are yours alone: they map each row number to
-the family id you register. Never put a family id, an underscore or the code's own markup
-in front of the user.
+   ```
+   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/recipe_scope.py ask <<'EOF'
+   ### C0 — the population, drawn from the balance sheet (kind `analysis`, one check)
+   ...
+   EOF
+   ```
 
-The user picks what they want, by number or by name, and nothing more: a step a pick
-reads from is added on its own. No pick, or *Run everything*, is the whole recipe.
+3. Put the choice to the user. Where the AskUserQuestion tool exists, call it with the
+   JSON the `ASK:` line carries, verbatim: each step is a checkbox the user clicks, in the
+   desktop app and in a terminal alike. Without that tool, or without an `ASK:` line,
+   send what the script prints between `SHOW:` and `END`, verbatim, as the whole
+   message.
+4. Stop and wait for the answer. Nothing goes with the question: § 2's questions come
+   after the user has picked. AskUserQuestion returns their answer to you; a table
+   ends your turn.
+
+The `KEY:` lines are yours alone: each maps a row number to its family id and title.
+Read the user's picks — the labels they clicked, or the numbers or names they typed — as
+row numbers through them. *Run everything*, alone or beside other picks, or no pick, is
+the whole recipe. A step a pick reads from is added at registration. Never put a family
+id, an underscore or the code's own markup in front of the user.
 
 ### 2. Collect, in one message
 
-- **What to run**: the table (§ 1), first. Take the user's picks as the row numbers the
-  `KEY:` lines carry.
+Once the user has picked what to run (§ 1), ask the rest in one message:
+
 - **The data sources**: a short id for each and what it is. Name the recipe's source
   classes and the records each lists. Take what exists; the plan states what each
   missing record costs. Do not press.
@@ -135,7 +151,8 @@ reads from is added on its own. No pick, or *Run everything*, is the whole recip
 
 ### 3. Fetch the recipe and register
 
-§ 1 fetched the recipe; register it with the collected answers. The fetch itself:
+§ 1 fetched the recipe; now write the served body to a file and register it with the
+collected answers and the picks. The fetch itself:
 
 First look for a bundled copy:
 `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/bundled_recipe.py <your recipe's name>`. When it

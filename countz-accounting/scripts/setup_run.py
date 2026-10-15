@@ -51,7 +51,7 @@ and version into `run.json.plan`.
 
 `--scope <picks>` records which of the pinned recipe's families the run executes
 (PLAYBOOK_RECIPES.md § Ask what to run): `all`, or the row numbers and family ids the user
-picked from `recipe_scope.py table`. It needs a pinned recipe, in the same call or an
+picked from `recipe_scope.py ask`. It needs a pinned recipe, in the same call or an
 earlier one, and is refused once the plan is approved. The picks are resolved with every
 family they read from (`recipe_scope.py resolve`) into `run.json.inputs.scope` —
 `{picked, families, added}`, family ids in recipe order — and the `SCOPE:` and `SAY:`
@@ -569,7 +569,7 @@ def main() -> int:
                          "<run_dir>/arr_policy.yaml (reference/ARR_POLICY.md)")
     ap.add_argument("--scope", default=None,
                     help="the families the run executes: `all`, or the row numbers and "
-                         "family ids picked from recipe_scope.py table")
+                         "family ids picked from recipe_scope.py ask")
     a = ap.parse_args()
     if a.recipe_version and not a.recipe:
         return fail("--recipe-version needs --recipe")
