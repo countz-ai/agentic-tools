@@ -81,6 +81,7 @@ import shlex
 import sys
 
 import check_playbook  # sibling: the one home of KINDS, SLUG and definition validation
+import handoff  # sibling: what a step's inputs already hold, appended to its brief
 import recipe_format  # sibling: the recipe's sections and its `## Report` block
 
 PLUGIN_ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -372,9 +373,17 @@ def render_brief(run_dir: pathlib.Path, seq: int, step: str, skill: str,
                 if agent.stem in AGENT_TYPES else STANDING.format(agent=agent))
     family = str(((args.get("params") or {}) if isinstance(args.get("params"), dict)
                   else {}).get("family") or "")
-    return BRIEF.format(nnnn=f"{seq:04d}", step=step, plug=PLUGIN_ROOT, standing=standing,
+    body = BRIEF.format(nnnn=f"{seq:04d}", step=step, plug=PLUGIN_ROOT, standing=standing,
                         recipe=recipe_block(run_dir, family), skill=skill,
                         run_dir=_arg(str(run_dir)), seq=seq, args="".join(lines))
+    # What the step's inputs already hold (scripts/handoff.py): a fresh worker otherwise
+    # spends its first turns rediscovering cache ids, item tables, figure ids and the kit.
+    # A handoff that cannot be built leaves the brief as it was.
+    try:
+        body += handoff.render(run_dir, args.get("params"))
+    except Exception as exc:  # noqa: BLE001 - the brief must still be written
+        body += f"\n(no handoff: {type(exc).__name__}: {exc})\n"
+    return body
 
 
 def pinned_recipe(run_dir: pathlib.Path) -> tuple[pathlib.Path, str] | None:
