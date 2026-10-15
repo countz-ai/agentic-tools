@@ -9,20 +9,16 @@ what to run).
 relay pipes those from the body it was served, so nothing is written to disk before the
 user picks. It prints:
 
-- `ASK:\t<one-line JSON>` — `{"questions": [...]}` for the AskUserQuestion tool,
-  verbatim: multi-select questions of at most four options each, the first option *Run
-  everything (Recommended)*, then one option per family, labeled with its title
-  (`recipe_format.plain_title`). Absent when the families do not fit in four questions.
-- the same choice as a markdown table between `SHOW:` and `END`, for a surface with no
-  AskUserQuestion tool: a note, then one row per family with a checkbox, a number and
-  its title, under a first row, *Run everything*, ticked.
+- between `SHOW:` and `END`, the message the relay sends: the recipe's steps as an
+  overview, one numbered row per family with its title (`recipe_format.plain_title`),
+  then the prompt under the table — *run 5, 6* or *run all*.
 - one `KEY:\t<n>\t<family id>\t<title>` line per family, for the relay alone: it maps
-  the label, number or name the user picked to the row number it registers.
+  the number or name the user gave to the row number it registers.
 
 No family id reaches the user.
 
 `resolve` reads `<picks>` — `all`, or row numbers and family ids, comma- or
-space-separated (`4,5`, `c4 c5`) — and prints `SCOPE:\t<ids>`: the picked families and
+space-separated (`4,5`, `c4 c5`), a leading `run` ignored (`run 5, 6`) — and prints `SCOPE:\t<ids>`: the picked families and
 every family they read from, transitively (`recipe_format.scope_closure`), or `all` when
 that is every family. `SAY:` is the line the relay puts to the user, naming in plain
 words what runs and what was added because a picked step depends on it. `setup_run.py
@@ -32,7 +28,6 @@ Stdlib only. Exit 0; 2 on an unreadable recipe or a pick naming no row.
 """
 from __future__ import annotations
 
-import json
 import pathlib
 import re
 import sys
@@ -40,13 +35,10 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import recipe_format  # noqa: E402
 
-NOTE = ("**What should this run cover?** *Run everything* is selected. To run less, "
-        "pick only the steps you want, by number or by name. Any earlier step a pick "
-        "depends on is added for you.")
-
-
-ASK_MAX = 4          # AskUserQuestion: at most four questions, of two to four options each
-RUN_ALL = "Run everything (Recommended)"
+HEAD = "**The steps in this analysis**"
+PROMPT = ("Tell me what you want to run, e.g. *run 5, 6* or *run all*. Any earlier step "
+          "a pick depends on is added for you.")
+FILLER = {"run", "and", "step", "steps"}     # `run 5 and 6`: words around the picks
 
 
 class Refuse(Exception):
@@ -56,7 +48,7 @@ class Refuse(Exception):
 def resolve(fams: list[dict], picks: str) -> dict | None:
     """`{"picked", "families", "added"}` for `picks`, every list of family ids in recipe
     order; None for a run over every family. Refuses a pick naming no row and no id."""
-    toks = [t for t in re.split(r"[,\s]+", picks.strip().lower()) if t]
+    toks = [t for t in re.split(r"[,\s]+", picks.strip().lower()) if t and t not in FILLER]
     if not toks or toks == ["all"] or "0" in toks:
         return None
     ids = [f["id"] for f in fams]
@@ -86,46 +78,11 @@ def say(fams: list[dict], scope: dict | None) -> str:
     return line
 
 
-def describe(cardinality: str) -> str:
-    """A family's grain as an option's description: `per bank account` -> `Per bank
-    account`."""
-    c = recipe_format.plain_title(cardinality)
-    return c if len(c) <= 80 else c[:79].rstrip() + "…"
-
-
-def questions(fams: list[dict]) -> list[dict] | None:
-    """The AskUserQuestion `questions`: *Run everything* and every family, split into at
-    most four multi-select questions of two to four options; None when they do not fit."""
-    n = len(fams)
-    items = [{"label": RUN_ALL, "description": f"All {n} steps of the recipe"}]
-    items += [{"label": recipe_format.plain_title(f["title"]),
-               "description": describe(f["cardinality"])} for f in fams]
-    k = -(-len(items) // ASK_MAX)
-    if k > ASK_MAX or len({i["label"] for i in items}) != len(items):
-        return None
-    sizes = [len(items) // k + (1 if i < len(items) % k else 0) for i in range(k)]
-    out, at = [], 0
-    for qi, size in enumerate(sizes):
-        chunk = items[at:at + size]
-        first = at if qi else 1                 # row numbers: Run everything has none
-        last = at + size - 1
-        at += size
-        span = f"{first}–{last}" if first != last else f"{first}"
-        if qi == 0:
-            text = ("Which steps should this run cover? Pick only the steps you want; any "
-                    "earlier step they depend on is added for you.")
-        else:
-            text = f"Which of steps {span} should the run also cover?"
-        out.append({"question": text, "header": f"Steps {span}", "multiSelect": True,
-                    "options": chunk})
-    return out
-
-
 def table(fams: list[dict]) -> list[str]:
-    rows = [NOTE, "", "| | # | Step |", "|:-:|--:|---|", "| ☑ | | **Run everything** |"]
-    rows += [f"| ☐ | {n} | {recipe_format.plain_title(f['title'])} |"
+    rows = [HEAD, "", "| # | Step |", "|--:|---|"]
+    rows += [f"| {n} | {recipe_format.plain_title(f['title'])} |"
              for n, f in enumerate(fams, 1)]
-    return rows
+    return rows + ["", PROMPT]
 
 
 def load(path: pathlib.Path | None) -> list[dict]:
@@ -145,8 +102,6 @@ def main(argv: list[str]) -> int:
     try:
         if len(argv) in (1, 2) and argv[0] == "ask":
             fams = load(pathlib.Path(argv[1]) if len(argv) == 2 else None)
-            if (qs := questions(fams)) is not None:
-                print("ASK:\t" + json.dumps({"questions": qs}, ensure_ascii=False))
             print("SHOW:")
             print("\n".join(table(fams)))
             print("END")

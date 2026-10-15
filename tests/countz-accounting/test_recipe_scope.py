@@ -83,27 +83,15 @@ def main() -> int:
     expect("The cash ledger reconciled to the bank" in say and "The population" in say, say)
 
     shown = "\n".join(recipe_scope.table(fams))
-    expect("☑ | | **Run everything**" in shown, "run everything is first and ticked")
-    expect(shown.count("☐") == 4, "one unticked row per family")
+    expect("| 3 | The cash ledger reconciled to the bank |" in shown, f"numbered rows:\n{shown}")
+    expect("☐" not in shown and "☑" not in shown and "Run everything" not in shown,
+           "an overview: no checkbox, no run-everything row")
+    expect(shown.rstrip().endswith(recipe_scope.PROMPT), "the prompt sits under the table")
     expect("D2" not in shown and "_" not in shown and "`" not in shown,
            f"no family id, underscore or markup reaches the user:\n{shown}")
-
-    # the clickable form: Run everything first, every family once, within the tool's
-    # limits (at most four questions of two to four options), no id in a label
-    qs = recipe_scope.questions(fams)
-    labels = [o["label"] for q in qs for o in q["options"]]
-    expect(labels[0] == recipe_scope.RUN_ALL and len(labels) == 5, f"labels: {labels}")
-    expect(all(q["multiSelect"] and 2 <= len(q["options"]) <= 4 and len(q["header"]) <= 12
-               for q in qs) and len(qs) <= 4, f"questions: {qs}")
-    expect(not any("D2" in lab or "_" in lab for lab in labels), f"labels: {labels}")
-    ten = [{"id": f"x{i}", "title": f"step number {i}", "cardinality": "one check",
-            "reads": []} for i in range(10)]
-    qs = recipe_scope.questions(ten)
-    expect([len(q["options"]) for q in qs] == [4, 4, 3], f"ten families: {qs}")
-    expect([q["header"] for q in qs] == ["Steps 1–3", "Steps 4–7", "Steps 8–10"],
-           f"headers: {[q['header'] for q in qs]}")
-    many = ten + [dict(f, id=f"y{i}", title=f"another {i}") for i, f in enumerate(ten)]
-    expect(recipe_scope.questions(many) is None, "past 15 families: the table alone")
+    expect(recipe_scope.resolve(fams, "run 3") == recipe_scope.resolve(fams, "3"),
+           "`run 3` reads as the pick 3")
+    expect(recipe_scope.resolve(fams, "run all") is None, "`run all` is a full run")
     # the headers alone are enough to ask: the relay pipes them, writing no file
     heads = "\n".join(line for line in RECIPE.splitlines() if line.startswith("### "))
     expect([f["id"] for f in recipe_format.families(heads)] == ["d0", "d1", "d2", "d3"],

@@ -111,19 +111,16 @@ no file written, no folder made, no other question asked.
    EOF
    ```
 
-3. Put the choice to the user. Where the AskUserQuestion tool exists, call it with the
-   JSON the `ASK:` line carries, verbatim: each step is a checkbox the user clicks, in the
-   desktop app and in a terminal alike. Without that tool, or without an `ASK:` line,
-   send what the script prints between `SHOW:` and `END`, verbatim, as the whole
-   message.
-4. Stop and wait for the answer. Nothing goes with the question: § 2's questions come
-   after the user has picked. AskUserQuestion returns their answer to you; a table
-   ends your turn.
+3. Send what the script prints between `SHOW:` and `END`, verbatim, as the whole
+   message: the recipe's steps as a numbered overview, and under it the prompt to name
+   what to run, *run 5, 6* or *run all*. Use no question tool: the user reads the whole
+   list, then answers in their own words.
+4. Stop. Your turn ends with that message. § 2's questions come after the user has
+   answered.
 
 The `KEY:` lines are yours alone: each maps a row number to its family id and title.
-Read the user's picks — the labels they clicked, or the numbers or names they typed — as
-row numbers through them. *Run everything*, alone or beside other picks, or no pick, is
-the whole recipe. A step a pick reads from is added at registration. Never put a family
+Read the user's picks — the numbers or the step names they typed — as row numbers
+through them. *Run all*, or an answer that names no step, is the whole recipe. A step a pick reads from is added at registration. Never put a family
 id, an underscore or the code's own markup in front of the user.
 
 ### 2. Collect, in one message
