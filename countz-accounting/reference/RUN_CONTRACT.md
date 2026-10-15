@@ -35,9 +35,7 @@ reply):
 ```markdown
 **Add Countz connector to run this analysis**
 
-Countz Connector supplies the procedure recipe for this analysis, in its most recently tuned version.
-
-No financial data ever goes to Countz. The connector sends recipes to you; it receives no file, no figure and no company name.
+Countz Connector supplies the procedure recipe for this analysis, in its most recently tuned version. No financial data ever goes to Countz.
 
 **To connect**
 1. Open **Settings → Plugins**.
