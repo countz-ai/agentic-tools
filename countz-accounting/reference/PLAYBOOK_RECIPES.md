@@ -211,11 +211,6 @@ location and the data room's directory shape, from directory metadata only. Befo
 dispatching the plan, run `scripts/preview.py <run_dir>` and send what it prints
 (RUN_CONTRACT.md § Every wave).
 
-**Verbose mode.** Add `--no-verbose` when `get_countz_config` returned
-`settings.verbose: false`, and tell the user the `VERBOSE:` line the script prints. The mode
-decides what the preview shows and whether the plan waits for the user
-([`RUN_CONTRACT.md`](RUN_CONTRACT.md) § Verbose mode, which also covers a change mid-run).
-
 ### 4. Plan
 
 Dispatch `check-plan` as a wave of one: `run_state.py dispatch <run_dir> --step plan
@@ -230,14 +225,10 @@ the plan, not the recipe. The planner indexes every file with a relevance verdic
 the objective, reads what the recipe needs, records the entities rosters and drafts the
 definition.
 
-`record`, preview (`plan.md` reaches the user). What follows depends on the run's
-verbose mode (`run.json.inputs.verbose`; [`RUN_CONTRACT.md`](RUN_CONTRACT.md) § Verbose
-mode).
-
-**Verbose on: put the plan to the user** and wait. Say what runs per entity and at what
-grain, what was set aside and why, what is degraded or dropped and what data would
-restore it, and every proposed parameter awaiting confirmation, windows first. Their
-ruling decides:
+`record`, preview (`plan.md` reaches the user), then put the plan to them: what runs per
+entity and at what grain, what was set aside and why, what is degraded or dropped and
+what data would restore it, and every proposed parameter awaiting confirmation, windows
+first. Their ruling decides:
 
 - confirm: `run_state.py approve-plan <run_dir> --definition <plan path>`. Records
   `run.json.plan` and `run.json.playbook`, registers the steps as checks, appends
@@ -247,13 +238,9 @@ ruling decides:
   overruled set-aside file included.
 - stop.
 
-**Verbose off: approve the plan at once** with the same `approve-plan` call, and tell the
-user in one line that the plan is running as drafted and that they can stop it or
-change it at any point. The proposed parameters stand as proposed. When they ask for a
-change before the execute step finishes, stop dispatching, re-dispatch `check-plan`
-with `revise=` their instruction on a new seq, and approve the revised plan the same way.
-
-Nothing below runs before the plan has reached the user through the preview.
+Nothing below runs before the user has seen the plan. Once they confirm it, the run goes
+on to the deliverable without asking again, except about the data room
+([`RUN_CONTRACT.md`](RUN_CONTRACT.md) § Running to completion).
 
 ### 5. Execute
 
@@ -269,15 +256,15 @@ steps it names. Where the recipe declares `arr_policy`, each `record` is followe
 ### 6. Review and report
 
 Per `RUN_CONTRACT.md` § Review and report: `check-review` over the unreviewed checks, the
-user's ruling on its findings, then `check-report` with the plan's report title. A scoped run's review and report are held
-to the families it ran (`run.json.plan.scope`), and the deliverable names the families the
+findings acted on without a ruling, then `check-report` with the plan's report title. A
+scoped run's review and report are held to the families it ran (`run.json.plan.scope`), and the deliverable names the families the
 user left out.
 
 ### 7. Close
 
 The deliverables are `out/workbook.xlsx` and `out/report.pptx`; the report wave's preview
 put them on screen as rendered cards. `out/RUN_SUMMARY.md` is in that wave's working
-bundle on a verbose-mode run and in the run directory otherwise. Point at all three. Hand
+bundle. Point at all three. Hand
 over the run archive `out/run_sync.tar.gz` per `RUN_CONTRACT.md` § Bringing the run home;
 extracted under the user's result root it lands at `<short_name>.<datetime>` with
 `sync.json` carrying the run's session ids. Relay the exception schedule and the open

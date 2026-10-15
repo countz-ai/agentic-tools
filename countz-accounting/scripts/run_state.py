@@ -21,8 +21,7 @@ Subcommands:
         slot is printed as DROPPED and not registered — the engine skips it.
 
     approve-plan <run_dir> --definition <run_dir>/plan/<name>.json [--recipe <abs>]
-        Record the approval of a drafted plan - the user's confirmation in verbose mode,
-        at once otherwise (RUN_CONTRACT.md § Verbose mode): validate the definition, record
+        Record the user's approval of a drafted plan: validate the definition, record
         run.json.plan (record, recipe, playbook, approved_at) and run.json.playbook
         (slots are the run's own source ids, so the binding is identity), register the
         steps as checks, append the `plan_approved` event. On a scoped run
@@ -56,22 +55,16 @@ Subcommands:
         first failure or death mints one re-dispatch (same args, new seq, its own
         brief, `attempt_of` set, a `retry` event) printed as a RETRY: line with a THEN:
         to run record again — RETRY lines carry brief= only when two or more are
-        minted at once; a second is terminal — the check is marked failed and the
-        FAILED: line is for the relay to put to the user. A minted retry wave opens
-        with its own SAY: line.
+        minted at once; a second mints a repair, the same args plus `prior_errors`
+        (what stopped each earlier attempt, verbatim); a third is terminal — the
+        check is marked failed and the FAILED: line is for the relay to tell the user
+        before it goes on. A minted retry wave opens with its own SAY: line.
 
     record-scrub <run_dir> --json '<one-line JSON>' | @<file>
         Record the scrubbed pre-run ask (reference/SCRUB.md): {"send", "rounds"}.
         Refuses no rounds, more than three, or a last round that is not `clean`.
         Writes <run_dir>/scrub.json, deletes an @<file> draft inside <run_dir>, appends
         `ask_scrubbed`, and prints `SEND:<TAB><text>`: the bytes the relay sends.
-
-    verbose <run_dir> [--off]
-        Turn the run's verbose mode on or off: the relay runs it when the user changes
-        `settings.verbose` with `update_countz_config` mid-run (RUN_CONTRACT.md
-        § Verbose mode). While it is on, preview.py surfaces every artifact rather than
-        only the engagement preview, the plan, the workbook and the report deck, and the
-        plan waits for the user's confirmation.
 
 Exit 0 on success; exit 2 on anything refused, with the reason on stderr.
 """
@@ -139,17 +132,6 @@ LAUNCH = ("LAUNCH: in ONE message, one general-purpose sub-agent per NEXT line, 
           "prompted exactly: Read <its brief= path> and do what it says. It is your "
           "entire instruction. - nothing more. Without an Agent tool, run each NEXT "
           "line as its Skill call, one at a time.")
-
-# Verbose mode (RUN_CONTRACT.md § Verbose mode): the user's `settings.verbose` from
-# `get_countz_config`, held as run.json.inputs.verbose; absent reads as on. setup_run.py
-# prints the same lines when it registers a run.
-VERBOSE_ON = ("VERBOSE: on - the preview shows every working paper and the review "
-              "findings as they land, not only the engagement preview, the plan, the "
-              "workbook and the deck, and the plan waits for the user's confirmation "
-              "before anything runs. Tell the user once.")
-VERBOSE_OFF = ("VERBOSE: off - from here the preview shows only the engagement preview, "
-               "the plan, the workbook and the deck, and a drafted plan is approved as "
-               "it lands. Tell the user once.")
 
 # The SAY: line - one per wave, printed before the launch imperatives by this script and
 # playbook_next.py. The relay puts its text to the user as one line of plain chat
@@ -239,7 +221,7 @@ def step_say(step: str, args: dict) -> str:
     return "Assembling the workbook and the report deck from the check records."
 
 
-# In verbose mode a SAY line opens with the run's position (RUN_CONTRACT.md § Every
+# A SAY line opens with the run's position (RUN_CONTRACT.md § Every
 # wave). Example: `Step 3 of 10: <text>`. The run's steps are its checks in
 # first-dispatch order, then the review and the report. Once the review is dispatched, a
 # check with no dispatch will not run and drops out of the total. A step dispatched
@@ -268,8 +250,9 @@ def tail_position(run: dict, step: str) -> list[int]:
 
 
 def at_step(run: dict, text: str, positions: list[int], checks_n: int) -> str:
-    """`text` behind the run's position when verbose mode is on, else `text` alone."""
-    if not ((run.get("inputs") or {}).get("verbose", True) and positions and checks_n):
+    """`text` behind the run's position, or `text` alone before the plan registers a
+    check."""
+    if not (positions and checks_n):
         return text
     ps = sorted(set(positions))
     if len(ps) == 1:
@@ -656,8 +639,7 @@ def cmd_approve_plan(a) -> int:
     added, dropped = steps_as_checks(run, definition, bound)
     save_run(run_dir, run)
     _append_event(run_dir, "plan_approved", seq=row.get("seq"),
-                  playbook=definition["name"],
-                  by="user" if (run.get("inputs") or {}).get("verbose", True) else "auto")
+                  playbook=definition["name"])
     print(f"plan {definition['name']} approved; {len(added)} step(s) registered as checks")
     for line in dropped:
         print(line)
@@ -843,10 +825,12 @@ def classify_record(run_dir: pathlib.Path, row: dict) -> tuple[str, dict | None,
     return "died", rec, f"outcome {outcome!r} outside the vocabulary"
 
 
-def _retry(run_dir: pathlib.Path, run: dict, row: dict) -> dict:
-    """Mint the one re-dispatch: same args, new seq, its own brief, attempt_of set."""
+def _retry(run_dir: pathlib.Path, run: dict, row: dict, args: dict | None = None) -> dict:
+    """Mint a re-dispatch: `args` (the row's own by default), new seq, its own brief,
+    attempt_of set."""
     seq = _alloc(run)
-    new = _append_dispatch(run, seq, row["step"], row["skill"], row.get("args") or {},
+    new = _append_dispatch(run, seq, row["step"], row["skill"],
+                           args if args is not None else (row.get("args") or {}),
                            row.get("check_id"), attempt_of=row["seq"])
     write_row_brief(run_dir, new)
     if row.get("check_id"):
@@ -854,6 +838,14 @@ def _retry(run_dir: pathlib.Path, run: dict, row: dict) -> dict:
         if c is not None:
             c["seq"], c["status"] = seq, "pending"
     return new
+
+
+def _attempt_error(run_dir: pathlib.Path, row: dict) -> str:
+    """What stopped an earlier attempt: its record's `error`, or why it counted as died."""
+    if not row:
+        return "(no record)"
+    cls, rec, why = classify_record(run_dir, row)
+    return str((rec or {}).get("error") or why or cls)
 
 
 def cmd_record(a) -> int:
@@ -882,13 +874,24 @@ def cmd_record(a) -> int:
             lines.append(f"{head}: seq={row['seq']} {who}"
                          + (f" blockers={nb}" if cls == "blocked" else "")
                          + f" — {row['conclusion'] or '(no conclusion)'}")
-        elif row.get("attempt_of") is not None:  # the retry itself died: terminal
+        elif row.get("attempt_of") is not None and "prior_errors" not in (row.get("args") or {}):
+            # the mechanical retry failed too: one repair, told what stopped both attempts
+            first = next((d for d in run.get("dispatches", []) if d["seq"] == row["attempt_of"]), {})
+            errors = [f"seq {first.get('seq')}: {_attempt_error(run_dir, first)}",
+                      f"seq {row['seq']}: {why}"]
+            new = _retry(run_dir, run, row, {**(row.get("args") or {}), "prior_errors": errors})
+            retries.append({"seq": new["seq"], "attempt_of": row["seq"],
+                            "step": row["step"], "repair": True})
+            lines.append(f"{cls.upper()}: seq={row['seq']} {who} — {why}; repairing")
+            lines.append(new)
+        elif row.get("attempt_of") is not None:  # the repair failed too: terminal
             run["degraded"] = True
             c = check_row(run, row.get("check_id") or "")
             if c is not None:
                 c["status"] = "failed"
-            lines.append(f"FAILED: seq={row['seq']} {who} — {why}; second attempt, not "
-                         f"retried — tell the user what died and what it blocks")
+            lines.append(f"FAILED: seq={row['seq']} {who} — {why}; third attempt, not "
+                         f"retried — tell the user in one line what failed and what it "
+                         f"blocks, and go on")
         else:
             new = _retry(run_dir, run, row)
             retries.append({"seq": new["seq"], "attempt_of": row["seq"],
@@ -990,20 +993,6 @@ def cmd_record_scrub(a) -> int:
     return 0
 
 
-def cmd_verbose(a) -> int:
-    run_dir = a.run_dir.resolve()
-    run = load_run(run_dir)
-    want = not a.off
-    if run.get("inputs", {}).get("verbose", True) == want:
-        print(f"verbose mode is already {'on' if want else 'off'}")
-        return 0
-    run.setdefault("inputs", {})["verbose"] = want
-    save_run(run_dir, run)
-    _append_event(run_dir, "verbose_enabled" if want else "verbose_disabled", by="run_state")
-    print(VERBOSE_ON if want else VERBOSE_OFF)
-    return 0
-
-
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -1044,11 +1033,6 @@ def main() -> int:
     p.add_argument("run_dir", type=pathlib.Path)
     p.add_argument("--json", required=True)
     p.set_defaults(fn=cmd_record_scrub)
-
-    p = sub.add_parser("verbose")
-    p.add_argument("run_dir", type=pathlib.Path)
-    p.add_argument("--off", action="store_true", help="turn verbose mode off")
-    p.set_defaults(fn=cmd_verbose)
 
     a = ap.parse_args()
     try:

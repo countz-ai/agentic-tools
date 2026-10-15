@@ -308,13 +308,14 @@ def place_tab(run_dir, seq_or_check) -> pathlib.Path:
 # --- consumed and produced ---------------------------------------------------------------
 def own_files(run_dir, check: str) -> list[pathlib.Path]:
     """The check's own files that exist, under `run_dir` as given, in this order:
-    `checks/<check>.md`, `checks/<check>-*.csv` (sorted), `workpapers/figures-<check>.yaml`,
+    `checks/<check>.md`, `checks/<check>-summary.md`, `checks/<check>-*.csv` (sorted),
+    `workpapers/figures-<check>.yaml`,
     `workpapers/evidence-<check>.yaml`, `out/tabs/<check>.xlsx` and its cells map
     `out/tabs/<check>.cells.json`. Refuses a check id outside
     CHECK_ID."""
     rd = pathlib.Path(run_dir)
     check = _check_id(check)
-    found = [rd / "checks" / f"{check}.md"]
+    found = [rd / "checks" / f"{check}.md", rd / "checks" / f"{check}-summary.md"]
     found += sorted((rd / "checks").glob(f"{check}-*.csv"))
     found += [rd / "workpapers" / f"figures-{check}.yaml",
               rd / "workpapers" / f"evidence-{check}.yaml",

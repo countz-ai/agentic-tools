@@ -198,7 +198,7 @@ def emit_wave(run_dir, pb_path, definition, decision, state, bound, run) -> None
     what = run_state.describe_members(
         [(st["id"], st["check"], st.get("params")) for st in members],
         run_state.recipe_families(run))
-    # The run's position, in verbose mode: a skipped step leaves the total.
+    # The run's position: a skipped step leaves the total.
     done = sum(state[st["id"]] is not None for st in definition["steps"])
     print(run_state.say_line(run_state.at_step(
         run, f"Wave {wave} — running {run_state.checks_phrase(k)}: {what}.",

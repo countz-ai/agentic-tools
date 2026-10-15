@@ -29,12 +29,6 @@ nothing new joins) records the session. Every `setup_run.py` run writes
 shape; run `scripts/preview.py <run_dir>` and send what it prints per
 `RUN_CONTRACT.md § Every wave` right after registering, before anything dispatches.
 
-**Verbose mode.** Add `--no-verbose` to the `setup_run.py` call in either mode below when
-`get_countz_config` returned `settings.verbose: false`, and tell the user the `VERBOSE:`
-line the script prints. The mode
-decides what the preview shows (`${CLAUDE_PLUGIN_ROOT}/reference/RUN_CONTRACT.md`
-§ Verbose mode, which also covers a change mid-run).
-
 ## Interactive session
 
 1. Ask, in one message, for the data sources (short id each, and what each one is), the
@@ -56,7 +50,7 @@ decides what the preview shows (`${CLAUDE_PLUGIN_ROOT}/reference/RUN_CONTRACT.md
    never by re-deriving.
 3. When the user is done checking — or asks for the deliverable — run the standard tail
    per `RUN_CONTRACT.md § Review and report`: `check-review` over the unreviewed checks,
-   their ruling on findings, then
+   its findings acted on without a ruling, then
    `check-report`. Point at `out/workbook.xlsx`, `out/report.pptx`, `out/RUN_SUMMARY.md` and
    relay the summary's open items.
 
@@ -108,6 +102,7 @@ listing and lookup.
 
 Every dispatch, classification, retry, preview and archive refresh follows
 `RUN_CONTRACT.md` — execute the scripts' printed lines in their order; every `run.json`
-write through `scripts/setup_run.py` or `scripts/run_state.py`, never your own edit; one
-re-dispatch for a dead step (`record` mints it), then the user decides. You relay; you
+write through `scripts/setup_run.py` or `scripts/run_state.py`, never your own edit; the
+retries `record` mints for a failed step, then the run goes on without it
+(`RUN_CONTRACT.md § Running to completion`). You relay; you
 do not summarize, and you never write a decision the records cannot show.

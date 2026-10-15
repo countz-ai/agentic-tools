@@ -1016,12 +1016,10 @@ def check(root: pathlib.Path) -> list[str]:
     #     everything else - of the final documents, the deck's source report.yaml and the
     #     run summary - is working, bundled into one attach card per wave whose caption
     #     is the single BUNDLE: line, so a run of many checks costs the conversation one
-    #     card per wave rather than one per file. Its roster follows the run's verbose mode
-    #     (run.json.inputs.verbose): on, every kind prints; off, only the engagement
-    #     preview, the plan, the workbook and the deck - the rest is still rendered into
-    #     the run directory (the sync carries it) and left unrecorded, so turning verbose
-    #     on mid-run surfaces what was withheld; a run.json without the key reads as on.
-    #     The fixture runs with verbose on, then asserts the off roster.
+    #     card per wave rather than one per file. Every kind prints as it lands. A
+    #     family's summary (out/families/*.md) is a deliverable card captioned with its
+    #     status, and a step's own summary (checks/<check>-summary.md) reaches the user
+    #     only through its family's.
     pv = root / "scripts" / "preview.py"
     if pv.is_file():
         import subprocess
@@ -1030,7 +1028,7 @@ def check(root: pathlib.Path) -> list[str]:
             rd = pathlib.Path(td) / "run"
             (rd / "out" / "tabs").mkdir(parents=True)
             (rd / "steps").mkdir()
-            (rd / "run.json").write_text(json.dumps({"inputs": {"verbose": True}}))
+            (rd / "run.json").write_text(json.dumps({"inputs": {}}))
             (rd / "run-view.json").write_text(json.dumps(
                 {"goal": goals[0] if goals else "g"}))
             (rd / "engagement-preview.md").write_text("# engagement\n")
@@ -1115,28 +1113,21 @@ def check(root: pathlib.Path) -> list[str]:
                 if root.name == "countz-accounting":
                     def names(shows):
                         return sorted(pathlib.Path(s.split("\t")[1]).name for s in shows)
-                    (rd / "run.json").write_text(json.dumps({"inputs": {"verbose": False}}))
-                    (rd / "out" / "preview" / ".shown.json").unlink()
-                    (rd / "out" / "preview" / "room-inventory.md").unlink()
+                    fam = rd / "out" / "families"
+                    fam.mkdir(parents=True, exist_ok=True)
+                    (fam / "01-the-books-agree.md").write_text(
+                        "# 1. The books agree\n\n**Status:** Complete\n")
+                    (rd / "checks").mkdir(exist_ok=True)
+                    (rd / "checks" / "c1_books-summary.md").write_text("We agreed.\n")
                     r4, shows4 = run_pv()
-                    want4 = sorted(["engagement-preview.md", "plan.md", "workbook.xlsx",
-                                    "report.pptx"])
-                    if r4.returncode != 0 or names(shows4) != want4:
-                        bad.append(f"{rel(pv)}: with verbose off a fresh pass must SHOW "
-                                   f"exactly {', '.join(want4)}, got "
-                                   f"{', '.join(names(shows4)) or 'nothing'}")
-                    if not (rd / "out" / "preview" / "room-inventory.md").is_file():
-                        bad.append(f"{rel(pv)}: with verbose off the withheld artifacts "
-                                   f"are still rendered into out/preview/ (the sync "
-                                   f"carries them); room-inventory.md was not")
-                    (rd / "run.json").write_text(json.dumps({"inputs": {"verbose": True}}))
-                    r5, shows5 = run_pv()
-                    got5 = names(shows5)
-                    if r5.returncode != 0 or "room-inventory.md" not in got5 \
-                            or "t1.xlsx" not in got5 or "plan.md" in got5:
-                        bad.append(f"{rel(pv)}: turning verbose on mid-run must SHOW the "
-                                   f"working papers withheld so far and nothing already "
-                                   f"shown, got {', '.join(got5) or 'nothing'}")
+                    fam4 = [x for x in shows4 if "01-the-books-agree.md" in x]
+                    if r4.returncode != 0 or not fam4 or not fam4[0].endswith("\tdeliverable") \
+                            or "Complete" not in fam4[0]:
+                        bad.append(f"{rel(pv)}: a family's summary must SHOW as a deliverable "
+                                   f"card captioned with its status, got {fam4 or 'nothing'}")
+                    if any("c1_books-summary.md" in x for x in shows4):
+                        bad.append(f"{rel(pv)}: a step's summary reaches the user through its "
+                                   f"family's, never as a check record of its own")
 
     # 8i. Playbook declarations are executed by an agent reading them, so a broken one
     #     fails at its next run, in front of the user. Where a plugin ships the validator
@@ -1344,7 +1335,7 @@ def check(root: pathlib.Path) -> list[str]:
                         not in r2.stdout:
                     bad.append(f"{rel(pn)}: a member with no recipe family must be "
                                f"named by id and kind in the SAY: line, behind the "
-                               f"run's position in verbose mode: "
+                               f"run's position: "
                                f"{r2.stdout.strip()[:120]}")
                 (rd / "steps" / "0002-tie.json").write_text(json.dumps(
                     {**ok_rec, "error": "died"}))
@@ -1902,7 +1893,7 @@ def check(root: pathlib.Path) -> list[str]:
             (rd / "run.json").write_text(json.dumps(
                 {"schema": "countz-accounting/run@1", "run_id": "s", "goal": "checks",
                  "created_at": "x", "updated_at": "x", "degraded": False,
-                 "inputs": {"output_root": str(tdp), "run_dir": str(rd), "verbose": False,
+                 "inputs": {"output_root": str(tdp), "run_dir": str(rd),
                             "params": {}, "sessions": []},
                  "sources": [{"id": "gl", "name": "GL", "path": "/x/gl", "kind": "file"},
                              {"id": "tb", "name": "TB", "path": "/x/tb", "kind": "file"}],
@@ -1938,10 +1929,13 @@ def check(root: pathlib.Path) -> list[str]:
                     if "brief=" in out or "LAUNCH:" in out:
                         bad.append(f"{rel(rs)}: a wave of one must print a plain Skill "
                                    f"line - no LAUNCH, no brief=: {out.strip()[:100]}")
-                # Every dispatch opens with its SAY: progress line: a step names what it
-                # does, a check wave names its checks by id and kind (no recipe here).
-                if "SAY: Assembling the workbook and the report deck" not in r1.stdout \
-                        or "SAY: Re-running 1 check on the review's findings: " \
+                # Every dispatch opens with its SAY: progress line, behind the run's
+                # position: one check, then the review and the report, so the report is
+                # step 3 of 3. A step names what it does, a check wave names its checks
+                # by id and kind (no recipe here).
+                if "SAY: Step 3 of 3: Assembling the workbook and the report deck" \
+                        not in r1.stdout \
+                        or "SAY: Step 1 of 3: Re-running 1 check on the review's findings: " \
                            "tie_gl_tb (tie-out)." not in r2.stdout:
                     bad.append(f"{rel(rs)}: a dispatch must print its SAY: line - the "
                                f"report step naming the deliverables, a fix wave naming "
@@ -1991,21 +1985,40 @@ def check(root: pathlib.Path) -> list[str]:
                     bad.append(f"{rel(rs)}: an error-only record must FAIL, mint one "
                                f"retry with its own brief, and print it as a plain Skill "
                                f"RETRY line: {(r4.stdout or r4.stderr).strip()[:120]}")
-                elif "SAY: Retrying 1 check that failed: tie_gl_tb (tie-out)." \
+                elif "SAY: Step 1 of 3: Retrying 1 check that failed: tie_gl_tb (tie-out)." \
                         not in r4.stdout:
                     bad.append(f"{rel(rs)}: a minted retry wave must open with its SAY: "
                                f"line: {r4.stdout.strip()[:120]}")
                 if not run["degraded"]:
                     bad.append(f"{rel(rs)}: a blocked step must set degraded")
-                # Verbose on, a SAY line opens with the run's position: one check, then
-                # the review and the report, so the report is step 3 of 3. The lines
-                # above ran with verbose off and carry none.
-                run["inputs"]["verbose"] = True
-                (rd / "run.json").write_text(json.dumps(run))
-                r5 = rstate(rd, "dispatch", "--step", "report", "--args", '{"title":"T"}')
-                if "SAY: Step 3 of 3: Assembling the workbook" not in r5.stdout:
-                    bad.append(f"{rel(rs)}: in verbose mode a SAY: line must open with "
-                               f"the run's position: {(r5.stdout or r5.stderr).strip()[:120]}")
+                # The retry failing too mints one repair carrying `prior_errors`; the
+                # repair failing is terminal: the check is failed and nothing is minted.
+                if retry_rows:
+                    s1 = retry_rows[0]["seq"]
+                    (rd / "steps" / f"{s1:04d}-tie.json").write_text(json.dumps(
+                        {"seq": s1, "step": "tie", "outcome": "complete", "error": "boom2",
+                         "conclusion": "c"}))
+                    r6 = rstate(rd, "record")
+                    run = json.loads((rd / "run.json").read_text())
+                    rep_rows = [d for d in run["dispatches"] if d.get("attempt_of") == s1]
+                    errs = (rep_rows[0].get("args") or {}).get("prior_errors") if rep_rows else None
+                    if r6.returncode or len(rep_rows) != 1 or not errs or len(errs) != 2 \
+                            or "boom" not in errs[0] or "boom2" not in errs[1]:
+                        bad.append(f"{rel(rs)}: a failed retry must mint one repair whose "
+                                   f"args carry prior_errors, one per earlier attempt: "
+                                   f"{(r6.stdout or r6.stderr).strip()[:160]}")
+                    else:
+                        s2 = rep_rows[0]["seq"]
+                        (rd / "steps" / f"{s2:04d}-tie.json").write_text(json.dumps(
+                            {"seq": s2, "step": "tie", "outcome": "complete",
+                             "error": "boom3", "conclusion": "c"}))
+                        r7 = rstate(rd, "record")
+                        run = json.loads((rd / "run.json").read_text())
+                        tie = next(c for c in run["checks"] if c["id"] == "tie_gl_tb")
+                        if r7.returncode or "FAILED: seq=" not in r7.stdout \
+                                or "RETRY:" in r7.stdout or tie.get("status") != "failed":
+                            bad.append(f"{rel(rs)}: a failed repair is terminal - the check "
+                                       f"failed, nothing minted: {r7.stdout.strip()[:160]}")
 
             # (c) + (d): the ledgers. One list-shaped figures ledger with a spaced id,
             # one mapping-shaped ledger, one clean evidence ledger.

@@ -85,7 +85,8 @@ accounts behind each — never from which account names read as in scope. The se
 carries the definition the population family rules against and the accounts outside the
 line it reaches, each ruled in or out, and states how the run rules an item the records do
 not settle. Where the population family's ruling differs from the plan's, its record states
-the divergence and the relay puts it to the user (§ 3).
+the divergence, the relay tells the user in one line, and the later families run on the
+population family's ruling (`RUN_CONTRACT.md` § Running to completion).
 
 #### `Source classes`
 

@@ -75,8 +75,7 @@ wave); a wave of one reads `running 1 check:`. `<what runs>` is
 each recipe family the members cover as `<ID> <title>` from its `###` header
 (`run.json.plan.recipe`), counted `<n> × ` where more than one; a member with no recipe
 family as `<id> (<kind word>)` from `KIND_WORDS`. The `Steps <a>–<b> of <m>:` opening
-is `at_step` in the same script, and only in verbose mode (`run.json.inputs.verbose`,
-absent reads as on): `<a>` is one more than the steps already dispatched, `<b>` is
+is `at_step` in the same script: `<a>` is one more than the steps already dispatched, `<b>` is
 `<a> + <k> - 1`, and `<m>` is the definition's steps less those skipped, plus 2 for
 the review and the report. A wave of one reads `Step <a> of <m>:`.
 

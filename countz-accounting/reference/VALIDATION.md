@@ -127,8 +127,15 @@ corrected. That record closes the finding.
 
 A defect a later review re-finds standing after its fix round keeps its id, gains
 `fix_attempted: true`, and is re-routed: `blocking` to `withhold`, `material` or
-`advisory` to `review_call`. The user rules on it. A blocking finding is never carried
-into the deliverable as a footnote. It is fixed, or the figure is withheld.
+`advisory` to `review_call`, carried as a stated limitation. A blocking finding is never
+carried into the deliverable as a footnote. It is fixed, or the figure is withheld.
+
+The relay acts on every route without a ruling (RUN_CONTRACT.md § Running to
+completion), so route a defect the run can repair to `rerun_check`. A check that ended
+`blocked` on its own gate's refusal, or on a defect in its own work, is a `rerun_check`
+finding, with the gate's output in `fix_input`. `data_request` and `management_question`
+are for what only the company's records or people can settle; name in `fix_input` the
+figure the answer decides.
 
 ### At termination
 

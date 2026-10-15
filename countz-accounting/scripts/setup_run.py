@@ -58,13 +58,6 @@ family they read from (`recipe_scope.py resolve`) into `run.json.inputs.scope` �
 lines are printed; `all`, or picks whose closure is every family, removes it. A
 `run.json` without `inputs.scope` runs every family.
 
-A run is minted in verbose mode (RUN_CONTRACT.md § Verbose mode): `preview.py` surfaces
-every artifact as it lands, and the plan waits for the user's confirmation.
-`--no-verbose` mints it result-only instead - the relay passes it when
-`get_countz_config` returned `settings.verbose: false` - and `preview.py` then shows only
-the engagement preview, the plan, the workbook and the report deck. Either flag on a
-later fold changes a running run's mode, as `run_state.py verbose [--off]` does.
-
 Minting (no `<run_dir>` argument): creates the run directory and its subdirs, seeds
 `run.json` per RUN_CONTRACT.md, appends `run_created` to `events.jsonl`; creating needs
 at least one source. `<run_dir>` given, `run.json` present: folds the new sources in — a
@@ -105,15 +98,6 @@ SKILLS_DIR = pathlib.Path(__file__).resolve().parent.parent / "skills"
 WALK_DEPTH = 3                # directory levels shown below each folder source's root
 WALK_DIR_CAP = 200            # directory rows per source; the cut is stated
 
-# The lines run_state.py prints as VERBOSE_ON and VERBOSE_OFF; the two scripts import
-# nothing from each other.
-VERBOSE_ON = ("VERBOSE: on - the preview shows every working paper and the review "
-              "findings as they land, not only the engagement preview, the plan, the "
-              "workbook and the deck, and the plan waits for the user's confirmation "
-              "before anything runs. Tell the user once.")
-VERBOSE_OFF = ("VERBOSE: off - from here the preview shows only the engagement preview, "
-               "the plan, the workbook and the deck, and a drafted plan is approved as "
-               "it lands. Tell the user once.")
 
 
 def _now() -> str:
@@ -568,9 +552,6 @@ def main() -> int:
     ap.add_argument("--sources", required=True)
     ap.add_argument("--params", default=None,
                     help="run-level parameters collected from the user, one JSON object")
-    ap.add_argument("--verbose", action=argparse.BooleanOptionalAction, default=None,
-                    help="the user's settings.verbose (RUN_CONTRACT.md § Verbose mode); "
-                         "a new run is verbose unless --no-verbose")
     ap.add_argument("--recipe", type=pathlib.Path, default=None,
                     help="the recipe document to pin: copied unchanged to "
                          "<run_dir>/recipes/<name>.md")
@@ -624,9 +605,6 @@ def main() -> int:
             if val is not None and val != held:
                 print(f"{key} stays {held!r} - the run already carries it")
         joined = touch_session(run, a.session, ts)
-        verbose_set = a.verbose is not None and a.verbose != run.get("inputs", {}).get("verbose", True)
-        if verbose_set:
-            run.setdefault("inputs", {})["verbose"] = a.verbose
         params = run.setdefault("inputs", {}).setdefault("params", {})
         params_changed = [k for k, v in incoming_params.items() if params.get(k) != v]
         params.update(incoming_params)
@@ -668,10 +646,6 @@ def main() -> int:
         if joined:
             _append_event(run_dir, "session_joined", session_id=a.session)
             print(f"session {a.session} joined the run")
-        if verbose_set:
-            _append_event(run_dir, "verbose_enabled" if a.verbose else "verbose_disabled",
-                          by="setup_run")
-            print(VERBOSE_ON if a.verbose else VERBOSE_OFF)
         for s in added:
             print(f"registered {s['id']} -> {s['path']} ({s['kind']})")
         print(f"{len(added)} source(s) folded into {run_path}"
@@ -719,7 +693,6 @@ def main() -> int:
                    "run_dir": str(run_dir),
                    "skill": a.skill,
                    "company": a.company,
-                   "verbose": a.verbose is not False,
                    "params": incoming_params,
                    "sessions": []},
         "sources": [_entry(s) for s in incoming],
@@ -763,11 +736,6 @@ def main() -> int:
         if run["inputs"].get("scope"):
             _append_event(run_dir, "scope_set", families=run["inputs"]["scope"]["families"])
         print("\n".join(scoped[1]))
-    if run["inputs"]["verbose"]:
-        print(VERBOSE_ON)
-    else:
-        _append_event(run_dir, "verbose_disabled", by="setup_run")
-        print(VERBOSE_OFF)
     for s in run["sources"]:
         print(f"registered {s['id']} -> {s['path']} ({s['kind']})")
     print(f"run.json seeded at {run_path}")
