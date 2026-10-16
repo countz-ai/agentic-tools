@@ -89,6 +89,19 @@ def main() -> int:
     expect(shown.rstrip().endswith(recipe_scope.PROMPT), "the prompt sits under the table")
     expect("D2" not in shown and "_" not in shown and "`" not in shown,
            f"no family id, underscore or markup reaches the user:\n{shown}")
+    # a specific request: the prompt proposes the steps it bears on, by row number
+    proposed = "\n".join(recipe_scope.table(fams, "d3, d2"))
+    expect(proposed.rstrip().endswith(
+        "Based on your request, steps 3, 4 are relevant, shall we run them?"),
+        f"two steps proposed, in row order:\n{proposed}")
+    expect(recipe_scope.PROMPT not in proposed, "a proposal replaces the open prompt")
+    expect(recipe_scope.suggestion(fams, "2")
+           == "Based on your request, step 2 is relevant, shall we run it?", "one step")
+    try:
+        recipe_scope.suggestion(fams, "d7")
+        bad.append("a proposal naming no step is refused")
+    except recipe_scope.Refuse:
+        pass
     expect(recipe_scope.resolve(fams, "run 3") == recipe_scope.resolve(fams, "3"),
            "`run 3` reads as the pick 3")
     expect(recipe_scope.resolve(fams, "run all") is None, "`run all` is a full run")

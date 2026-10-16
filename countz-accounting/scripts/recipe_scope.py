@@ -2,7 +2,7 @@
 """The run's scope: which of a recipe's families it executes (PLAYBOOK_RECIPES.md § Ask
 what to run).
 
-    recipe_scope.py ask [<recipe.md>]          # no path: the family headers on stdin
+    recipe_scope.py ask [<recipe.md>] [--suggest <picks>]   # no path: headers on stdin
     recipe_scope.py resolve <recipe.md> <picks>
 
 `ask` needs only the recipe's `### <F><n> — <title> (kind ..., ...)` header lines: the
@@ -11,7 +11,10 @@ user picks. It prints:
 
 - between `SHOW:` and `END`, the message the relay sends: the recipe's steps as an
   overview, one numbered row per family with its title (`recipe_format.plain_title`),
-  then the prompt under the table — *run 5, 6* or *run all*.
+  then the prompt under the table. Without `--suggest` it asks what to run — *run 5,
+  6* or *run all*. With `--suggest <picks>` (family ids or row numbers, as `resolve`
+  reads them: the steps the user's request bears on) it proposes them by row number —
+  *Based on your request, steps 5, 6 are relevant, shall we run them?*
 - one `KEY:\t<n>\t<family id>\t<title>` line per family, for the relay alone: it maps
   the number or name the user gave to the row number it registers.
 
@@ -78,11 +81,32 @@ def say(fams: list[dict], scope: dict | None) -> str:
     return line
 
 
-def table(fams: list[dict]) -> list[str]:
+def suggestion(fams: list[dict], picks: str) -> str:
+    """The prompt proposing the steps `picks` names, by row number, in recipe order."""
+    toks = [t for t in re.split(r"[,\s]+", picks.strip().lower()) if t and t not in FILLER]
+    ids = [f["id"] for f in fams]
+    rows: list[int] = []
+    for t in toks:
+        n = int(t) if t.isdigit() else (ids.index(t) + 1 if t in ids else 0)
+        if not 1 <= n <= len(ids):
+            raise Refuse(f"--suggest {t!r} names no step: a row number 1-{len(ids)} or a "
+                         f"family id ({', '.join(ids)})")
+        if n not in rows:
+            rows.append(n)
+    if not rows:
+        raise Refuse("--suggest names no step")
+    rows.sort()
+    if len(rows) == 1:
+        return f"Based on your request, step {rows[0]} is relevant, shall we run it?"
+    return (f"Based on your request, steps {', '.join(map(str, rows))} are relevant, "
+            f"shall we run them?")
+
+
+def table(fams: list[dict], suggest: str | None = None) -> list[str]:
     rows = [HEAD, "", "| # | Step |", "|--:|---|"]
     rows += [f"| {n} | {recipe_format.plain_title(f['title'])} |"
              for n, f in enumerate(fams, 1)]
-    return rows + ["", PROMPT]
+    return rows + ["", suggestion(fams, suggest) if suggest else PROMPT]
 
 
 def load(path: pathlib.Path | None) -> list[dict]:
@@ -100,10 +124,20 @@ def load(path: pathlib.Path | None) -> list[dict]:
 
 def main(argv: list[str]) -> int:
     try:
-        if len(argv) in (1, 2) and argv[0] == "ask":
-            fams = load(pathlib.Path(argv[1]) if len(argv) == 2 else None)
+        if argv[:1] == ["ask"]:
+            rest, suggest = argv[1:], None
+            if "--suggest" in rest:
+                i = rest.index("--suggest")
+                if i + 1 >= len(rest):
+                    raise Refuse("--suggest needs the steps to propose")
+                suggest = rest[i + 1]
+                rest = rest[:i] + rest[i + 2:]
+            if len(rest) > 1:
+                raise Refuse("ask takes one recipe path at most")
+            fams = load(pathlib.Path(rest[0]) if rest else None)
+            shown = table(fams, suggest)
             print("SHOW:")
-            print("\n".join(table(fams)))
+            print("\n".join(shown))
             print("END")
             for n, f in enumerate(fams, 1):
                 print(f"KEY:\t{n}\t{f['id']}\t{recipe_format.plain_title(f['title'])}")

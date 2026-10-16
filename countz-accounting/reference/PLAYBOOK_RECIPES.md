@@ -99,29 +99,45 @@ no file written, no folder made, no other question asked.
 1. Get the recipe: the bundled copy, or the served body (§ Fetch the recipe and
    register, its first two paragraphs). Do not write the served body to a file yet;
    § 3 does that after the user answers.
-2. Print the choice. For a bundled copy, pass its path:
+2. Read the user's request against the family headers. The request is the text that
+   invoked the skill: the arguments after its name, or the message that started the
+   run. It is **specific** when it names a measure, a cut, an account, a population or
+   a question that only some of the families answer (example: *"show me the ARR and
+   retention for various dimensions in my data so I see what may be contributing to my
+   low ARR"*, on the ARR recipe, bears on the customer cube, how ARR moves and what the
+   base keeps, and the lines of inquiry into the revenue base). It is **broad** when it
+   asks for the analysis as a whole, names nothing narrower than the recipe's
+   objective, or is empty. When in doubt, it is broad. On a specific request, take the
+   families whose headers answer it: the ones it bears on directly, not the ones they
+   read from, which registration adds.
+3. Print the choice, with `--suggest <their ids, comma-separated>` on a specific
+   request and without it on a broad one. For a bundled copy, pass its path:
    `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/recipe_scope.py ask <the RECIPE path>`. For a
    served body, pipe in only its family headers, the lines that open `### ` under
    `## The families`, copied exactly:
 
    ```
-   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/recipe_scope.py ask <<'EOF'
+   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/recipe_scope.py ask --suggest c4,c5 <<'EOF'
    ### C0 — the population, drawn from the balance sheet (kind `analysis`, one check)
    ...
    EOF
    ```
 
-3. Send what the script prints between `SHOW:` and `END`, verbatim, as the whole
-   message: the recipe's steps as a numbered overview, and under it the prompt to name
-   what to run, *run 5, 6* or *run all*. Use no question tool: the user reads the whole
+4. Send what the script prints between `SHOW:` and `END`, verbatim, as the whole
+   message: the recipe's steps as a numbered overview, and under it the prompt. On a
+   broad request the prompt asks what to run, *run 5, 6* or *run all*; on a specific
+   one it proposes the steps the request bears on, *Based on your request, steps 5, 6
+   are relevant, shall we run them?* Use no question tool: the user reads the whole
    list, then answers in their own words.
-4. Stop. Your turn ends with that message. § 2's questions come after the user has
+5. Stop. Your turn ends with that message. § 2's questions come after the user has
    answered.
 
 The `KEY:` lines are yours alone: each maps a row number to its family id and title.
-Read the user's picks — the numbers or the step names they typed — as row numbers
-through them. *Run all*, or an answer that names no step, is the whole recipe. A step a pick reads from is added at registration. Never put a family
-id, an underscore or the code's own markup in front of the user.
+Read the user's answer through them. A yes to a proposal runs the steps it proposed.
+Otherwise read the picks — the numbers or the step names they typed — as row numbers.
+*Run all*, or an answer that names no step and accepts no proposal, is the whole
+recipe. A step a pick reads from is added at registration. Never put a family id, an
+underscore or the code's own markup in front of the user.
 
 ### 2. Collect, in one message
 
