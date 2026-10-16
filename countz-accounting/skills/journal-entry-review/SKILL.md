@@ -18,13 +18,14 @@ Your first tool call is `get_countz_config` on the `countz` server. Then, whatev
 returned, run this one command, and read nothing else first:
 
 ```
-R=; for d in "${CLAUDE_PLUGIN_ROOT}" "${CLAUDE_SKILL_DIR}/../.." "$COUNTZ_PLUGIN_ROOT" "$HOME"/.claude/plugins/synced/*/countz-accounting $(ls -td "$HOME"/.claude/plugins/cache/*/countz-accounting/*/ 2>/dev/null); do [ -f "$d/scripts/section.py" ] && R=$(cd "$d" && pwd) && break; done; [ -n "$R" ] || { f=$(find "$HOME/.claude/plugins" -maxdepth 7 -path "*/countz-accounting/scripts/section.py" 2>/dev/null | head -1); [ -n "$f" ] && R=${f%/scripts/section.py}; }; echo "PLUGIN_ROOT=$R"; python3 "$R/scripts/section.py" RUN_CONTRACT.md "Sign in first"; python3 "$R/scripts/section.py" PLAYBOOK_RECIPES.md "Ask what to run"; python3 "$R/scripts/bundled_recipe.py" journal-entry-review
+R=; for d in "${CLAUDE_PLUGIN_ROOT}" "${CLAUDE_SKILL_DIR}/../.." "$COUNTZ_PLUGIN_ROOT" "$HOME"/.claude/plugins/synced/*/countz-accounting $(ls -td "$HOME"/.claude/plugins/cache/*/countz-accounting/*/ 2>/dev/null); do [ -f "$d/scripts/section.py" ] && R=$(cd "$d" && pwd) && break; done; [ -n "$R" ] || { f=$(find "$HOME/.claude/plugins" -maxdepth 7 -path "*/countz-accounting/scripts/section.py" 2>/dev/null | head -1); [ -n "$f" ] && R=${f%/scripts/section.py}; }; [ -n "$R" ] || { f=$(find / \( -path /proc -o -path /sys -o -path /dev \) -prune -o -path "*/countz-accounting/scripts/section.py" -print 2>/dev/null | head -1); [ -n "$f" ] && R=${f%/scripts/section.py}; }; echo "PLUGIN_ROOT=$R"; python3 "$R/scripts/section.py" RUN_CONTRACT.md "Sign in first"; python3 "$R/scripts/section.py" PLAYBOOK_RECIPES.md "Ask what to run"; python3 "$R/scripts/bundled_recipe.py" journal-entry-review
 ```
 
 `PLUGIN_ROOT=` names this plugin's folder: wherever these documents write
-`${CLAUDE_PLUGIN_ROOT}`, use that path. The command already searches `~/.claude/plugins`
-when the known places miss; search nowhere else. If the line names no path, tell the user
-in one line that this plugin's files are not installed in the session, and stop. Act on the sign-in result as § Sign in first says. Then ask what to run as
+`${CLAUDE_PLUGIN_ROOT}`, use that path. When the known places miss, the command searches
+`~/.claude/plugins`, then the whole filesystem, itself; run no search of your own. If the
+line names no path, tell the user in one line that this plugin's files are not installed
+in the session, and stop. Act on the sign-in result as § Sign in first says. Then ask what to run as
 § Ask what to run says: its recipe is the bundled copy the last line names, or, on
 `NONE`, the one the server serves. Once the user has answered, read
 `<PLUGIN_ROOT>/reference/RUN_CONTRACT.md` whole and the rest of the relay procedure
