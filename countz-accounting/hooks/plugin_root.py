@@ -39,7 +39,7 @@ def run() -> int:
             pass
     print(f"countz-accounting plugin root: {folder}. Wherever a countz-accounting skill "
           f"writes ${{CLAUDE_PLUGIN_ROOT}}, it means this folder: read reference/ and run "
-          f"scripts/ from here, and never search the filesystem for it.")
+          f"scripts/ from here.")
     return 0
 
 
