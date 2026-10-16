@@ -2566,8 +2566,8 @@ def check(root: pathlib.Path) -> list[str]:
     #     the whole filesystem (minutes before the user's first question).
     for sk in sorted(root.glob("skills/*/SKILL.md")):
         text = sk.read_text(encoding="utf-8")
-        if '"Running a recipe"' in text and 'echo "PLUGIN_ROOT=$R"' not in text:
-            bad.append(f"{rel(sk)}: a relay skill opens with the PLUGIN_ROOT= command "
+        if '"Running a recipe"' in text and 'echo "CLAUDE_PLUGIN_ROOT=$R"' not in text:
+            bad.append(f"{rel(sk)}: a relay skill opens with the CLAUDE_PLUGIN_ROOT= command "
                        f"(skills/cash/SKILL.md), not a read under ${{CLAUDE_PLUGIN_ROOT}}")
 
     return bad

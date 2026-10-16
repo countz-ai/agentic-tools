@@ -86,18 +86,9 @@ which entry matched and why in one line, or that none did. Then:
 
 ### Relay a catalog match or a miss
 
-Find this plugin's folder and read the run contract and the relay procedure, in one
-command:
-
 ```
-R=; for d in "${CLAUDE_PLUGIN_ROOT}" "${CLAUDE_SKILL_DIR}/../.." "$HOME"/.claude/plugins/synced/*/countz-accounting $(ls -td "$HOME"/.claude/plugins/cache/*/countz-accounting/*/ 2>/dev/null); do [ -f "$d/scripts/section.py" ] && R=$(cd "$d" && pwd) && break; done; [ -n "$R" ] || { f=$(find "$HOME/.claude/plugins" -maxdepth 7 -path "*/countz-accounting/scripts/section.py" 2>/dev/null | head -1); [ -n "$f" ] && R=${f%/scripts/section.py}; }; [ -n "$R" ] || { f=$(find / \( -path /proc -o -path /sys -o -path /dev \) -prune -o -path "*/countz-accounting/scripts/section.py" -print 2>/dev/null | head -1); [ -n "$f" ] && R=${f%/scripts/section.py}; }; echo "PLUGIN_ROOT=$R"; cat "$R/reference/RUN_CONTRACT.md"; python3 "$R/scripts/section.py" PLAYBOOK_RECIPES.md "Running a recipe"
+R=; for d in "${CLAUDE_PLUGIN_ROOT}" "${CLAUDE_SKILL_DIR}/../.." "$HOME"/.claude/plugins/synced/*/countz-accounting $(ls -td "$HOME"/.claude/plugins/cache/*/countz-accounting/*/ 2>/dev/null); do [ -f "$d/scripts/section.py" ] && R=$(cd "$d" && pwd) && break; done; [ -n "$R" ] || { f=$(find "$HOME/.claude/plugins" -maxdepth 7 -path "*/countz-accounting/scripts/section.py" 2>/dev/null | head -1); [ -n "$f" ] && R=${f%/scripts/section.py}; }; [ -n "$R" ] || { f=$(find / \( -path /proc -o -path /sys -o -path /dev \) -prune -o -path "*/countz-accounting/scripts/section.py" -print 2>/dev/null | head -1); [ -n "$f" ] && R=${f%/scripts/section.py}; }; if [ -z "$R" ]; then echo "NOT INSTALLED: this plugin's files are not in the session. Tell the user so in one line, and stop."; else echo "CLAUDE_PLUGIN_ROOT=$R"; cat "$R/reference/RUN_CONTRACT.md"; python3 "$R/scripts/section.py" PLAYBOOK_RECIPES.md "Running a recipe"; fi
 ```
-
-`PLUGIN_ROOT=` names this plugin's folder: wherever these documents write
-`${CLAUDE_PLUGIN_ROOT}`, use that path. When the known places miss, the command searches
-`~/.claude/plugins`, then the whole filesystem, itself; run no search of your own. If the
-line names no path, tell the user in one line that this plugin's files are not installed
-in the session, and stop.
 
 You are the relay for a plan-driven run whose recipe is not fixed in advance. You do no
 analysis and you open no client file. Your `--skill` is `countz`: the run directory is

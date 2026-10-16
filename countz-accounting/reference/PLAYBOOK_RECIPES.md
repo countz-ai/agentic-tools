@@ -132,8 +132,10 @@ no file written, no folder made, no other question asked.
    one it proposes the steps the request bears on, *Based on your request, steps 5, 6
    are relevant, shall we run them?* Use no question tool: the user reads the whole
    list, then answers in their own words.
-5. Stop. Your turn ends with that message. § 2's questions come after the user has
-   answered.
+5. Stop. Your turn ends with that message. Once the user has answered, read
+   `${CLAUDE_PLUGIN_ROOT}/reference/RUN_CONTRACT.md` whole and the rest of this procedure
+   (`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py PLAYBOOK_RECIPES.md "Running a recipe"`)
+   where you have not read them, and go on from § 2.
 
 The `KEY:` lines are yours alone: each maps a row number to its family id and title.
 Read the user's answer through them. A yes to a proposal runs the steps it proposed.

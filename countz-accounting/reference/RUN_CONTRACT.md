@@ -25,10 +25,11 @@ absolute path also works. Open a file whole only where the citation names no sec
 ## Sign in first
 
 Every skill that opens a run makes `get_countz_config` on the `countz` server — the
-Countz connector, declared in the plugin's `.mcp.json` — its first tool call: before any
-file is opened, any directory listed, any parameter collected. (The `countz` index skill
-calls it too, and lists the built-in checks when that fails.) Name the tool by its short
-name on that server. If the tool is not available, or the call fails, the whole reply is
+Countz connector, declared in the plugin's `.mcp.json` — its first tool call after the
+skill's opening command, where it has one: before any client file is opened, any
+directory listed, any parameter collected. (The `countz` index skill calls it too, and
+lists the built-in checks when that fails.) Name the tool by its short name on that
+server. If the tool is not available, or the call fails, the whole reply is
 the message below, written as it stands, as markdown (the fence is not part of the
 reply):
 
