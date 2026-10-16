@@ -100,8 +100,8 @@ no file written, no folder made, no other question asked.
    <its name>` (your skill's first command runs it) prints `RECIPE:` and `VERSION:` when
    the package carries a copy: that path is the recipe. On `NONE`, call
    `get_recipe_for_countz_analysis(recipe="<its name>")` on the `countz` server; the
-   body is its `recipe_markdown`. Do not write the served body to a file yet: § 3 does
-   that after the user answers.
+   body is its `recipe_markdown`. Do not write the served body to a file: § 3 pins it after the
+   user answers, from the saved result where the host saved one.
 2. Read the user's request against the family headers. The request is the text that
    invoked the skill: the arguments after its name, or the message that started the
    run. It is **specific** when it names a measure, a cut, an account, a population or
@@ -180,10 +180,17 @@ VERSION>`, and call no recipe tool. `NONE` means nothing is bundled: fetch.
 Call `get_recipe_for_countz_analysis(recipe="<your recipe's name>")` on the `countz`
 server — a named shim knows its name; `countz`, given an ask, matches the catalog first
 (its SKILL.md). The result carries `recipe_markdown`, `recipe_name` and `recipe_version`.
-Write `recipe_markdown` to a file, exactly as returned, then register with `--recipe`
-pointing at that file and `--recipe-version` the served version: the script copies the
-bytes to `<run_dir>/recipes/<recipe_name>.md` and refuses a file whose sha does not
-match the version, so the run pins the bytes the server served. A named shim sends no
+Pin it one of two ways; either way the script copies the bytes to
+`<run_dir>/recipes/<recipe_name>.md` and refuses bytes whose sha does not match the
+version, so the run pins the bytes the server served:
+
+- **The host saved the result to a file** (it shows the file's path in place of the full
+  result): register with `--recipe-result <that path>` and write nothing yourself. The
+  script reads `recipe_markdown` and `recipe_version` from the file. This is the fast way:
+  copying the body out by hand takes minutes.
+- **Otherwise**, write `recipe_markdown` to a file, exactly as returned, and register with
+  `--recipe` pointing at that file and `--recipe-version` the served version. If
+  `--recipe-result` refused the file, do the same. A named shim sends no
 `ask`. `match: not_found` for a named recipe means the server no longer carries it: put
 that to the user and stop.
 
@@ -196,9 +203,12 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/setup_run.py \
     --sources '[{"id": "gl", "path": "<abs>", "name": "<the user's words>"}, ...]' \
     --params '{"period_end": "<as collected>", "period": "<as collected, where given>",
                "instructions": "<the ask, verbatim>", "<declared key>": "<the choice>", ...}' \
-    --recipe <the file you wrote> --recipe-version <recipe_version> \
+    --recipe-result <the saved result> \
     --scope <the picks: row numbers, or all>
 ```
+
+Without a saved result, `--recipe <the file you wrote> --recipe-version <recipe_version>`
+stands in place of `--recipe-result`.
 
 The script mints `<output_root>/<skill>-<company slug>.<YYYYMMDD-HHMMSS>` and prints it
 as `RUN_DIR:`; that path is `<run_dir>` everywhere below. Never compose the name

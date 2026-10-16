@@ -10,6 +10,7 @@ mechanical, not a dispatch: no seq, no step record.
     setup_run.py <run_dir> --session <session id> --sources '<one-line JSON>' \
         [--params '<one-line JSON>']                       # fold into / join a run
     setup_run.py ... --recipe <path> [--recipe-version <v>]  # pin the run's recipe
+    setup_run.py ... --recipe-result <file>                  # pin it from the saved tool result
     setup_run.py <run_dir> ... --arr-policy <path>           # pin the run's ARR policy
     setup_run.py ... --scope <picks>                         # the families the run executes
 
@@ -48,6 +49,14 @@ generated one (the `create-recipe` step wrote it under `<run_dir>/recipes/` alre
 the version is minted as `generated+<sha256[:12]>`. A run pins one recipe; a second
 `--recipe` naming a different one is refused. `run_state.py approve-plan` copies name
 and version into `run.json.plan`.
+
+`--recipe-result <file>` pins the recipe from the connector's own answer, saved to a file
+by the host when the tool result was too large to show in full: the file holds the
+`get_recipe_for_countz_analysis` result as JSON, or a list of content blocks whose text
+is that JSON. Its `recipe_markdown` is pinned exactly as `--recipe` pins a file, at its
+`recipe_version` (unless `--recipe-version` is given), the sha check included. The relay
+then never writes the body out itself. A file that carries no `recipe_markdown` is
+refused, and the relay falls back to writing the body to a file.
 
 `--scope <picks>` records which of the pinned recipe's families the run executes
 (PLAYBOOK_RECIPES.md § Ask what to run): `all`, or the row numbers and family ids the user
@@ -263,6 +272,42 @@ def recipe_name(text: str) -> str | None:
         if m:
             return m.group(1).strip("'\"")
     return None
+
+
+def recipe_from_result(path: pathlib.Path) -> tuple[str, str | None] | str:
+    """(recipe_markdown, recipe_version) from a saved `get_recipe_for_countz_analysis`
+    result, or the refusal. The result may be the tool's JSON object, a list of content
+    blocks whose `text` is that JSON, or either nested once more."""
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return f"--recipe-result: cannot read {path}: {exc}"
+
+    def find(node, depth=0):
+        if depth > 6:
+            return None
+        if isinstance(node, str):
+            try:
+                node = json.loads(node)
+            except ValueError:
+                return None
+        if isinstance(node, dict):
+            if isinstance(node.get("recipe_markdown"), str):
+                return node
+            for v in node.values():
+                if (hit := find(v, depth + 1)) is not None:
+                    return hit
+        if isinstance(node, list):
+            for v in node:
+                if (hit := find(v, depth + 1)) is not None:
+                    return hit
+        return None
+    hit = find(raw)
+    if hit is None:
+        return (f"--recipe-result: {path} carries no `recipe_markdown` - write the body "
+                f"to a file and pass --recipe instead")
+    version = hit.get("recipe_version")
+    return hit["recipe_markdown"], version if isinstance(version, str) and version else None
 
 
 def pin_recipe(run_dir: pathlib.Path, run: dict, src: pathlib.Path,
@@ -555,6 +600,9 @@ def main() -> int:
     ap.add_argument("--recipe", type=pathlib.Path, default=None,
                     help="the recipe document to pin: copied unchanged to "
                          "<run_dir>/recipes/<name>.md")
+    ap.add_argument("--recipe-result", type=pathlib.Path, default=None,
+                    help="the saved get_recipe_for_countz_analysis result: its "
+                         "recipe_markdown is pinned at its recipe_version")
     ap.add_argument("--recipe-version", default=None,
                     help="the recipe_version the connector served with the body; its "
                          "sha must match the file")
@@ -565,6 +613,16 @@ def main() -> int:
                     help="the families the run executes: `all`, or the row numbers and "
                          "family ids picked from recipe_scope.py ask")
     a = ap.parse_args()
+    if a.recipe_result is not None:
+        if a.recipe is not None:
+            return fail("give --recipe or --recipe-result, not both")
+        got = recipe_from_result(a.recipe_result)
+        if isinstance(got, str):
+            return fail(got)
+        import tempfile
+        tmp = pathlib.Path(tempfile.mkdtemp(prefix="countz-recipe-")) / "recipe.md"
+        tmp.write_bytes(got[0].encode("utf-8"))
+        a.recipe, a.recipe_version = tmp, a.recipe_version or got[1]
     if a.recipe_version and not a.recipe:
         return fail("--recipe-version needs --recipe")
 

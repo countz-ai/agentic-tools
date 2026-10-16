@@ -111,8 +111,9 @@ which for this skill runs as:
 1. **On a match**, run `scripts/bundled_recipe.py <the entry's name>` first and pin the
    bundled copy when it prints one (`PLAYBOOK_RECIPES.md § Fetch the recipe and register`).
    Otherwise call `get_recipe_for_countz_analysis(recipe=<the entry's name>)` and
-   continue as a named shim does: write `recipe_markdown` to a file and register with
-   `--recipe <that file> --recipe-version <recipe_version>`
+   continue as a named shim does: register with `--recipe-result <the saved result>`
+   where the host saved the result to a file, else write `recipe_markdown` to a file and
+   register with `--recipe <that file> --recipe-version <recipe_version>`
    (`PLAYBOOK_RECIPES.md § Fetch the recipe and register`).
 2. **On a miss**, scrub the ask before anything crosses, under
    `${CLAUDE_PLUGIN_ROOT}/reference/SCRUB.md` (read it whole). Register the run first
