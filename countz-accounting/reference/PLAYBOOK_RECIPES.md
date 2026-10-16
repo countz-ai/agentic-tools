@@ -96,9 +96,12 @@ classification, and what every wave owes the user.
 This is the run's first question, and it goes to the user before anything else is done:
 no file written, no folder made, no other question asked.
 
-1. Get the recipe: the bundled copy, or the served body (§ Fetch the recipe and
-   register, its first two paragraphs). Do not write the served body to a file yet;
-   § 3 does that after the user answers.
+1. Get the recipe your skill names. `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/bundled_recipe.py
+   <its name>` (your skill's first command runs it) prints `RECIPE:` and `VERSION:` when
+   the package carries a copy: that path is the recipe. On `NONE`, call
+   `get_recipe_for_countz_analysis(recipe="<its name>")` on the `countz` server; the
+   body is its `recipe_markdown`. Do not write the served body to a file yet: § 3 does
+   that after the user answers.
 2. Read the user's request against the family headers. The request is the text that
    invoked the skill: the arguments after its name, or the message that started the
    run. It is **specific** when it names a measure, a cut, an account, a population or

@@ -13,8 +13,21 @@ description: >-
 context: inline
 ---
 
-Read `${CLAUDE_PLUGIN_ROOT}/reference/RUN_CONTRACT.md`, and the relay procedure with
-`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py reference/PLAYBOOK_RECIPES.md "Running a recipe"`.
+Your first tool call is `get_countz_config` on the `countz` server. Then, whatever it
+returned, run this one command, and read nothing else first:
+
+```
+R=$(for d in "${CLAUDE_PLUGIN_ROOT}" "$COUNTZ_PLUGIN_ROOT" "$HOME"/.claude/plugins/synced/*/countz-accounting $(ls -td "$HOME"/.claude/plugins/cache/*/countz-accounting/*/ 2>/dev/null); do [ -f "$d/scripts/section.py" ] && echo "${d%/}" && break; done); echo "PLUGIN_ROOT=$R"; python3 "$R/scripts/section.py" RUN_CONTRACT.md "Sign in first"; python3 "$R/scripts/section.py" PLAYBOOK_RECIPES.md "Ask what to run"; python3 "$R/scripts/bundled_recipe.py" unrecorded-liabilities
+```
+
+`PLUGIN_ROOT=` names this plugin's folder: wherever these documents write
+`${CLAUDE_PLUGIN_ROOT}`, use that path. Never search the filesystem for it. If the line
+names no path, run `find "$HOME/.claude" -maxdepth 7 -path '*/countz-accounting/scripts/section.py'`
+once. Act on the sign-in result as § Sign in first says. Then ask what to run as
+§ Ask what to run says: its recipe is the bundled copy the last line names, or, on
+`NONE`, the one the server serves. Once the user has answered, read
+`<PLUGIN_ROOT>/reference/RUN_CONTRACT.md` whole and the rest of the relay procedure
+(`section.py PLAYBOOK_RECIPES.md "Running a recipe"`), and go on from its § 2.
 
 You are the relay for a plan-driven run. Your recipe is `unrecorded-liabilities`: fetch it
 with `get_recipe_for_countz_analysis(recipe="unrecorded-liabilities")` on the `countz`

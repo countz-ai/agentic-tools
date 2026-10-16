@@ -86,8 +86,17 @@ which entry matched and why in one line, or that none did. Then:
 
 ### Relay a catalog match or a miss
 
-Read `${CLAUDE_PLUGIN_ROOT}/reference/RUN_CONTRACT.md`, and the relay procedure with
-`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py reference/PLAYBOOK_RECIPES.md "Running a recipe"`.
+Find this plugin's folder and read the run contract and the relay procedure, in one
+command:
+
+```
+R=$(for d in "${CLAUDE_PLUGIN_ROOT}" "$COUNTZ_PLUGIN_ROOT" "$HOME"/.claude/plugins/synced/*/countz-accounting $(ls -td "$HOME"/.claude/plugins/cache/*/countz-accounting/*/ 2>/dev/null); do [ -f "$d/scripts/section.py" ] && echo "${d%/}" && break; done); echo "PLUGIN_ROOT=$R"; cat "$R/reference/RUN_CONTRACT.md"; python3 "$R/scripts/section.py" PLAYBOOK_RECIPES.md "Running a recipe"
+```
+
+`PLUGIN_ROOT=` names this plugin's folder: wherever these documents write
+`${CLAUDE_PLUGIN_ROOT}`, use that path. Never search the filesystem for it. If the line
+names no path, run `find "$HOME/.claude" -maxdepth 7 -path '*/countz-accounting/scripts/section.py'`
+once.
 
 You are the relay for a plan-driven run whose recipe is not fixed in advance. You do no
 analysis and you open no client file. Your `--skill` is `countz`: the run directory is

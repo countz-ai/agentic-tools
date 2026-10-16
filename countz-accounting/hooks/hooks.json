@@ -1,11 +1,24 @@
 {
-  "description": "Refuse the MCP tools the Countz account blocks, for the rest of the session, subagents included (hooks/mcp_blocklist.py).",
+  "description": "Tell the session where this plugin's files are (hooks/plugin_root.py), and refuse the MCP tools the Countz account blocks, for the rest of the session, subagents included (hooks/mcp_blocklist.py).",
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/plugin_root.py"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "mcp__.*",
         "hooks": [
-          { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/mcp_blocklist.py" }
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/mcp_blocklist.py"
+          }
         ]
       }
     ],
@@ -13,7 +26,10 @@
       {
         "matcher": "mcp__.*countz__get_countz_config",
         "hooks": [
-          { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/mcp_blocklist.py" }
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/mcp_blocklist.py"
+          }
         ]
       }
     ]

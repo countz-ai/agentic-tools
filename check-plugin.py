@@ -2538,6 +2538,16 @@ def check(root: pathlib.Path) -> list[str]:
         except Exception as exc:
             bad.append(f"{rel(hj)}: not valid JSON ({exc})")
 
+    # 8. A relay skill finds the plugin's folder with one command before it reads any
+    #     plugin file: a host may leave `${CLAUDE_PLUGIN_ROOT}` unresolved or point it at
+    #     a copy of the skill folder alone, and a model left to find the folder searches
+    #     the whole filesystem (minutes before the user's first question).
+    for sk in sorted(root.glob("skills/*/SKILL.md")):
+        text = sk.read_text(encoding="utf-8")
+        if '"Running a recipe"' in text and 'echo "PLUGIN_ROOT=$R"' not in text:
+            bad.append(f"{rel(sk)}: a relay skill opens with the PLUGIN_ROOT= command "
+                       f"(skills/cash/SKILL.md), not a read under ${{CLAUDE_PLUGIN_ROOT}}")
+
     return bad
 
 
