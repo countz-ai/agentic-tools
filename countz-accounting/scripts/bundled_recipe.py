@@ -13,8 +13,9 @@ frontmatter `name` is `<name>`, prints
 
 and exits 0; the relay registers with `--recipe <path> --recipe-version <version>`
 (PLAYBOOK_RECIPES.md § Fetch the recipe and register) and calls no recipe tool.
-Exit 1 with `NONE` when nothing is bundled under that name: fetch from the connector as
-usual. Exit 2 when a file is there but its frontmatter names another recipe.
+Exit 0 with `NONE` when nothing is bundled under that name, the usual case: fetch from
+the connector as usual. It is an answer, not a failure, so it exits 0 and the host shows
+no error. Exit 2 when a file is there but its frontmatter names another recipe.
 """
 from __future__ import annotations
 
@@ -48,7 +49,7 @@ def main() -> int:
     path = BUNDLED_DIR / f"{name}.md"
     if not path.is_file():
         print("NONE")
-        return 1
+        return 0
     data = path.read_bytes()
     held = frontmatter_name(data.decode("utf-8", "replace"))
     if held != name:

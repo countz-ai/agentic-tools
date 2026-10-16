@@ -10,7 +10,9 @@ mechanical, not a dispatch: no seq, no step record.
     setup_run.py <run_dir> --session <session id> --sources '<one-line JSON>' \
         [--params '<one-line JSON>']                       # fold into / join a run
     setup_run.py ... --recipe <path> [--recipe-version <v>]  # pin the run's recipe
+    setup_run.py ... --recipe-result <file>                  # pin it from the saved tool result
     setup_run.py <run_dir> ... --arr-policy <path>           # pin the run's ARR policy
+    setup_run.py ... --scope <picks>                         # the families the run executes
 
 A new run's directory is MINTED here, never named by the relay:
 `<output_root>/<skill>-<company>.<YYYYMMDD-HHMMSS>` — `--skill` is the launcher skill
@@ -48,12 +50,22 @@ the version is minted as `generated+<sha256[:12]>`. A run pins one recipe; a sec
 `--recipe` naming a different one is refused. `run_state.py approve-plan` copies name
 and version into `run.json.plan`.
 
-A run is minted in verbose mode (RUN_CONTRACT.md § Verbose mode): `preview.py` surfaces
-every artifact as it lands, and the plan waits for the user's confirmation.
-`--no-verbose` mints it result-only instead - the relay passes it when
-`get_countz_config` returned `settings.verbose: false` - and `preview.py` then shows only
-the engagement preview, the plan, the workbook and the report deck. Either flag on a
-later fold changes a running run's mode, as `run_state.py verbose [--off]` does.
+`--recipe-result <file>` pins the recipe from the connector's own answer, saved to a file
+by the host when the tool result was too large to show in full: the file holds the
+`get_recipe_for_countz_analysis` result as JSON, or a list of content blocks whose text
+is that JSON. Its `recipe_markdown` is pinned exactly as `--recipe` pins a file, at its
+`recipe_version` (unless `--recipe-version` is given), the sha check included. The relay
+then never writes the body out itself. A file that carries no `recipe_markdown` is
+refused, and the relay falls back to writing the body to a file.
+
+`--scope <picks>` records which of the pinned recipe's families the run executes
+(PLAYBOOK_RECIPES.md § Ask what to run): `all`, or the row numbers and family ids the user
+picked from `recipe_scope.py ask`. It needs a pinned recipe, in the same call or an
+earlier one, and is refused once the plan is approved. The picks are resolved with every
+family they read from (`recipe_scope.py resolve`) into `run.json.inputs.scope` —
+`{picked, families, added}`, family ids in recipe order — and the `SCOPE:` and `SAY:`
+lines are printed; `all`, or picks whose closure is every family, removes it. A
+`run.json` without `inputs.scope` runs every family.
 
 Minting (no `<run_dir>` argument): creates the run directory and its subdirs, seeds
 `run.json` per RUN_CONTRACT.md, appends `run_created` to `events.jsonl`; creating needs
@@ -82,6 +94,10 @@ import re
 import sys
 import unicodedata
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import recipe_format  # noqa: E402  sibling: the recipe's families and their reads
+import recipe_scope  # noqa: E402  sibling: the picks resolved into the run's scope
+
 RUN_SCHEMA = "countz-accounting/run@1"
 SUBDIRS = ("steps", "dispatch", "checks", "workpapers", "sources", "recipes", "out")
 RECIPES_DIR = "recipes"
@@ -91,15 +107,6 @@ SKILLS_DIR = pathlib.Path(__file__).resolve().parent.parent / "skills"
 WALK_DEPTH = 3                # directory levels shown below each folder source's root
 WALK_DIR_CAP = 200            # directory rows per source; the cut is stated
 
-# The lines run_state.py prints as VERBOSE_ON and VERBOSE_OFF; the two scripts import
-# nothing from each other.
-VERBOSE_ON = ("VERBOSE: on - the preview shows every working paper and the review "
-              "findings as they land, not only the engagement preview, the plan, the "
-              "workbook and the deck, and the plan waits for the user's confirmation "
-              "before anything runs. Tell the user once.")
-VERBOSE_OFF = ("VERBOSE: off - from here the preview shows only the engagement preview, "
-               "the plan, the workbook and the deck, and a drafted plan is approved as "
-               "it lands. Tell the user once.")
 
 
 def _now() -> str:
@@ -267,6 +274,42 @@ def recipe_name(text: str) -> str | None:
     return None
 
 
+def recipe_from_result(path: pathlib.Path) -> tuple[str, str | None] | str:
+    """(recipe_markdown, recipe_version) from a saved `get_recipe_for_countz_analysis`
+    result, or the refusal. The result may be the tool's JSON object, a list of content
+    blocks whose `text` is that JSON, or either nested once more."""
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return f"--recipe-result: cannot read {path}: {exc}"
+
+    def find(node, depth=0):
+        if depth > 6:
+            return None
+        if isinstance(node, str):
+            try:
+                node = json.loads(node)
+            except ValueError:
+                return None
+        if isinstance(node, dict):
+            if isinstance(node.get("recipe_markdown"), str):
+                return node
+            for v in node.values():
+                if (hit := find(v, depth + 1)) is not None:
+                    return hit
+        if isinstance(node, list):
+            for v in node:
+                if (hit := find(v, depth + 1)) is not None:
+                    return hit
+        return None
+    hit = find(raw)
+    if hit is None:
+        return (f"--recipe-result: {path} carries no `recipe_markdown` - write the body "
+                f"to a file and pass --recipe instead")
+    version = hit.get("recipe_version")
+    return hit["recipe_markdown"], version if isinstance(version, str) and version else None
+
+
 def pin_recipe(run_dir: pathlib.Path, run: dict, src: pathlib.Path,
                version: str | None) -> dict | str:
     """Copy `src` to <run_dir>/recipes/<name>.md unchanged and return the record for
@@ -349,6 +392,31 @@ def pin_arr_policy(run_dir: pathlib.Path, run: dict, src: pathlib.Path) -> dict 
     return {"path": str(dest), "source": str(src), "sha256": digest}
 
 
+def set_scope(run_dir: pathlib.Path, run: dict, picks: str) -> tuple[bool, list[str]] | str:
+    """Resolve `picks` against the pinned recipe into `run.json.inputs.scope`:
+    (changed, the lines to print), or the refusal."""
+    if (run.get("plan") or {}).get("approved_at"):
+        return ("--scope: the plan is approved - the run's scope is set before the plan "
+                "is drafted; change it with a revised plan")
+    pinned = (run.get("inputs") or {}).get("recipe") or {}
+    path = pathlib.Path(pinned.get("path") or "")
+    if not pinned or not path.is_file():
+        return "--scope needs the run's recipe pinned - pass --recipe in this call or before it"
+    try:
+        fams = recipe_scope.load(path)
+        scope = recipe_scope.resolve(fams, picks)
+    except recipe_scope.Refuse as exc:
+        return f"--scope: {exc}"
+    inputs = run.setdefault("inputs", {})
+    changed = inputs.get("scope") != scope
+    if scope is None:
+        inputs.pop("scope", None)
+    else:
+        inputs["scope"] = scope
+    return changed, [f"SCOPE:\t{','.join(scope['families']) if scope else 'all'}",
+                     f"SAY:\t{recipe_scope.say(fams, scope)}"]
+
+
 def _kb(n: int) -> str:
     return f"{max(1, round(n / 1024)):,}" if n else "0"
 
@@ -393,6 +461,31 @@ def _walk_dirs(root: pathlib.Path) -> tuple[list[tuple[str, int, int]], int]:
     return rows, deeper
 
 
+def scope_lines(inputs: dict) -> list[str]:
+    """The run's scope for the engagement preview: every step of the pinned recipe, ticked
+    where the run executes it (recipe_scope.py)."""
+    scope = inputs.get("scope")
+    path = pathlib.Path(((inputs.get("recipe") or {}).get("path")) or "")
+    if not path.is_file():
+        return ["The recipe is not pinned yet."]
+    try:
+        fams = recipe_scope.load(path)
+    except recipe_scope.Refuse:
+        return ["Every step of the recipe." if not scope
+                else f"{len(scope.get('families') or [])} of the recipe's steps."]
+    runs = set(scope["families"]) if scope else {f["id"] for f in fams}
+    picked = set(scope["picked"]) if scope else set()
+    rows = ["| | # | Step | Why it runs |", "|:-:|--:|---|---|"] if scope else \
+        ["| | # | Step |", "|:-:|--:|---|"]
+    for n, f in enumerate(fams, 1):
+        row = f"| {'☑' if f['id'] in runs else '☐'} | {n} | {recipe_format.plain_title(f['title'])} |"
+        if scope:
+            row += " " + ("" if f["id"] not in runs else "Picked" if f["id"] in picked
+                          else "Needed by a step you picked") + " |"
+        rows.append(row)
+    return rows
+
+
 def write_preview(run_dir: pathlib.Path, run: dict) -> None:
     inputs = run.get("inputs", {})
     params = inputs.get("params") or {}
@@ -406,6 +499,7 @@ def write_preview(run_dir: pathlib.Path, run: dict) -> None:
         lines += [f"| {_cell(k)} | {_cell(v)} |" for k, v in params.items()]
     else:
         lines.append("None collected.")
+    lines += ["", "## What runs", ""] + scope_lines(inputs)
     lines += ["", "## Data room"]
     for s in run.get("sources", []):
         path = pathlib.Path(s["path"])
@@ -503,19 +597,32 @@ def main() -> int:
     ap.add_argument("--sources", required=True)
     ap.add_argument("--params", default=None,
                     help="run-level parameters collected from the user, one JSON object")
-    ap.add_argument("--verbose", action=argparse.BooleanOptionalAction, default=None,
-                    help="the user's settings.verbose (RUN_CONTRACT.md § Verbose mode); "
-                         "a new run is verbose unless --no-verbose")
     ap.add_argument("--recipe", type=pathlib.Path, default=None,
                     help="the recipe document to pin: copied unchanged to "
                          "<run_dir>/recipes/<name>.md")
+    ap.add_argument("--recipe-result", type=pathlib.Path, default=None,
+                    help="the saved get_recipe_for_countz_analysis result: its "
+                         "recipe_markdown is pinned at its recipe_version")
     ap.add_argument("--recipe-version", default=None,
                     help="the recipe_version the connector served with the body; its "
                          "sha must match the file")
     ap.add_argument("--arr-policy", type=pathlib.Path, default=None,
                     help="an approved ARR policy to pin: copied unchanged to "
                          "<run_dir>/arr_policy.yaml (reference/ARR_POLICY.md)")
+    ap.add_argument("--scope", default=None,
+                    help="the families the run executes: `all`, or the row numbers and "
+                         "family ids picked from recipe_scope.py ask")
     a = ap.parse_args()
+    if a.recipe_result is not None:
+        if a.recipe is not None:
+            return fail("give --recipe or --recipe-result, not both")
+        got = recipe_from_result(a.recipe_result)
+        if isinstance(got, str):
+            return fail(got)
+        import tempfile
+        tmp = pathlib.Path(tempfile.mkdtemp(prefix="countz-recipe-")) / "recipe.md"
+        tmp.write_bytes(got[0].encode("utf-8"))
+        a.recipe, a.recipe_version = tmp, a.recipe_version or got[1]
     if a.recipe_version and not a.recipe:
         return fail("--recipe-version needs --recipe")
 
@@ -556,9 +663,6 @@ def main() -> int:
             if val is not None and val != held:
                 print(f"{key} stays {held!r} - the run already carries it")
         joined = touch_session(run, a.session, ts)
-        verbose_set = a.verbose is not None and a.verbose != run.get("inputs", {}).get("verbose", True)
-        if verbose_set:
-            run.setdefault("inputs", {})["verbose"] = a.verbose
         params = run.setdefault("inputs", {}).setdefault("params", {})
         params_changed = [k for k, v in incoming_params.items() if params.get(k) != v]
         params.update(incoming_params)
@@ -575,8 +679,18 @@ def main() -> int:
                 return fail(policy)
             run["inputs"]["arr_policy"] = policy
             params["arr_policy"] = policy["path"]
+        scoped = None
+        if a.scope is not None:
+            scoped = set_scope(run_dir, run, a.scope)
+            if isinstance(scoped, str):
+                return fail(scoped)
         run["updated_at"] = ts
         _write_json(run_path, run)
+        if scoped:
+            if scoped[0]:
+                _append_event(run_dir, "scope_set",
+                              families=(run["inputs"].get("scope") or {}).get("families", "all"))
+            print("\n".join(scoped[1]))
         if policy:
             _append_event(run_dir, "arr_policy_pinned", sha256=policy["sha256"])
             print(f"ARR policy pinned at {policy['path']} (sha256 {policy['sha256']})")
@@ -590,10 +704,6 @@ def main() -> int:
         if joined:
             _append_event(run_dir, "session_joined", session_id=a.session)
             print(f"session {a.session} joined the run")
-        if verbose_set:
-            _append_event(run_dir, "verbose_enabled" if a.verbose else "verbose_disabled",
-                          by="setup_run")
-            print(VERBOSE_ON if a.verbose else VERBOSE_OFF)
         for s in added:
             print(f"registered {s['id']} -> {s['path']} ({s['kind']})")
         print(f"{len(added)} source(s) folded into {run_path}"
@@ -641,7 +751,6 @@ def main() -> int:
                    "run_dir": str(run_dir),
                    "skill": a.skill,
                    "company": a.company,
-                   "verbose": a.verbose is not False,
                    "params": incoming_params,
                    "sessions": []},
         "sources": [_entry(s) for s in incoming],
@@ -666,6 +775,11 @@ def main() -> int:
             return fail(policy)
         run["inputs"]["arr_policy"] = policy
         run["inputs"]["params"]["arr_policy"] = policy["path"]
+    scoped = None
+    if a.scope is not None:
+        scoped = set_scope(run_dir, run, a.scope)
+        if isinstance(scoped, str):
+            return fail(scoped)
     _write_json(run_path, run)
     if policy:
         _append_event(run_dir, "arr_policy_pinned", sha256=policy["sha256"])
@@ -676,11 +790,10 @@ def main() -> int:
     if pinned:
         _append_event(run_dir, "recipe_pinned", name=pinned["name"], version=pinned["version"])
         print(f"recipe {pinned['name']} ({pinned['version']}) pinned at {pinned['path']}")
-    if run["inputs"]["verbose"]:
-        print(VERBOSE_ON)
-    else:
-        _append_event(run_dir, "verbose_disabled", by="setup_run")
-        print(VERBOSE_OFF)
+    if scoped:
+        if run["inputs"].get("scope"):
+            _append_event(run_dir, "scope_set", families=run["inputs"]["scope"]["families"])
+        print("\n".join(scoped[1]))
     for s in run["sources"]:
         print(f"registered {s['id']} -> {s['path']} ({s['kind']})")
     print(f"run.json seeded at {run_path}")

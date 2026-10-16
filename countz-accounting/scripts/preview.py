@@ -14,22 +14,15 @@ then, when any `working` line printed, the caption for the one card those files 
     BUNDLE:\t<caption>
 
 The tier decides how the relay sends (RUN_CONTRACT.md § Every wave). `deliverable` is
-what the user rules on or takes away - the plan, the review findings, the sealed
-workbook and the report deck, the two deliverables among the final documents - and goes
-out as one rendered card each. `working` is everything else - the engagement preview, the source inventory,
-the source profiles, the check records, the check schedules, the deck's source
-(report.yaml), the run summary - and goes out as ONE attach card per wave carrying every working file the wave
+what the user reads or takes away - the plan, each family's summary and its workbook,
+the review findings, the sealed workbook and the report deck - and goes out as one card
+each, a family's workbook printed right after its summary. `working` is everything else -
+the engagement preview, the source inventory, the source profiles, the check records,
+the check schedules, the deck's source (report.yaml), the run summary - and goes out as
+ONE attach card per wave carrying every working file the wave
 produced, captioned by the BUNDLE line: a run of many checks then costs the conversation
 one card per wave, not one per file, and the files stay where they live in the run
 directory, which the caption names.
-
-Which entries print depends on the run's verbose mode (`run.json.inputs.verbose`,
-RUN_CONTRACT.md § Verbose mode). On - the default, and what a run.json without the key
-reads as - every entry prints as it lands. Off, only the engagement preview, the plan,
-the sealed workbook and the report deck reach the user (USER_ROSTER); every other entry
-is still rendered into the run directory, so the synced copy carries it, but is neither
-printed nor recorded as shown - turning verbose on mid-run surfaces the working papers
-accumulated so far.
 
 The lines come out in pipeline order, so the last SHOW line printed - the freshest
 artifact - is the one left on the user's screen when the relay sends the bundle first and
@@ -37,6 +30,10 @@ the deliverables after it, in order. An artifact is printed once per content ver
 what was surfaced is recorded in out/preview/.shown.json keyed by a hash of its sources,
 so an unchanged file is never re-named and a rewritten one (a fix round moved a tab or a
 check record) is named again. Delete .shown.json to re-surface everything.
+
+On a plan-driven run (a check in run.json carries `params.family`) the steps the user
+sees are the recipe's families, so the check records and check schedules are not named:
+each family's summary and workbook carry them.
 
 Files that read well as they are - the source profiles, the check records, the tabs, the
 deck's source, the workbook, the deck - are shown from where they live. Machine records are rendered into
@@ -59,10 +56,6 @@ ROOM_FILE_CAP = 120           # rows in the inventory table; the cut is stated
 
 DELIVERABLE = "deliverable"   # one rendered card each
 WORKING = "working"           # one attach card per wave, captioned by the BUNDLE line
-
-# The entry kinds that print while the run's verbose mode is off: what the user rules on
-# or takes away. Verbose mode prints every kind.
-USER_ROSTER = ("engagement", "plan", "workbook", "report")
 
 # The working tier by entry-key prefix: (singular, plural or None for a one-off, where it
 # lives under the run directory). The BUNDLE caption counts each kind present, in
@@ -221,16 +214,38 @@ def collect(run_dir: pathlib.Path) -> list[tuple]:
         entries.append(("plan", _file_hash(plan), lambda: plan,
                         "The check plan — bindings and the check roster", DELIVERABLE))
 
+    # a plan-driven run shows its steps as families: the per-check files stay in the
+    # run directory, and out/families/ carries what they say
+    try:
+        by_family = any((c.get("params") or {}).get("family")
+                        for c in _load_json(run_dir / "run.json").get("checks") or [])
+    except Exception:
+        by_family = False
     checks_dir = run_dir / "checks"
-    for rec in sorted(checks_dir.glob("*.md")) if checks_dir.is_dir() else []:
+    for rec in sorted(checks_dir.glob("*.md")) if checks_dir.is_dir() and not by_family else []:
+        if rec.stem.endswith("-summary"):
+            continue                    # a step's summary reaches the user in its family's
         entries.append((f"check:{rec.stem}", _file_hash(rec), lambda r=rec: r,
                         f"Check record — {rec.stem}: what was agreed, what differed, "
                         f"and how it resolved", WORKING))
 
     tabs_dir = run_dir / "out" / "tabs"
-    for tab in sorted(tabs_dir.glob("*.xlsx")) if tabs_dir.is_dir() else []:
+    for tab in sorted(tabs_dir.glob("*.xlsx")) if tabs_dir.is_dir() and not by_family else []:
         entries.append((f"tab:{tab.stem}", _file_hash(tab), lambda t=tab: t,
                         f"Check schedule — {tab.stem}", WORKING))
+
+    fam_dir = run_dir / "out" / "families"
+    for md in sorted(fam_dir.glob("*.md")) if fam_dir.is_dir() else []:
+        head = md.read_text(encoding="utf-8").splitlines()[:3]
+        title = head[0].lstrip("# ").strip() if head else md.stem
+        status = next((ln.split("**Status:**", 1)[1].strip() for ln in head
+                       if "**Status:**" in ln), "")
+        entries.append((f"family:{md.stem}", _file_hash(md), lambda m=md: m,
+                        f"{title} — {status}" if status else title, DELIVERABLE))
+        book = md.with_suffix(".xlsx")
+        if book.is_file():
+            entries.append((f"family_book:{md.stem}", _file_hash(book), lambda b=book: b,
+                            f"Workbook — {title}", DELIVERABLE))
 
     rv = _latest_record(run_dir, r"\d+-review\.json")
     if rv is not None:
@@ -298,15 +313,6 @@ def main() -> int:
         print(f"preview: {run_dir} carries no run.json - nothing to surface",
               file=sys.stderr)
         return 0
-    try:
-        run = _load_json(run_dir / "run.json")
-    except Exception as exc:
-        print(f"preview: run.json unreadable ({exc}) - verbose mode read as on",
-              file=sys.stderr)
-        run = {}
-    verbose = bool(((run.get("inputs") if isinstance(run, dict) else None) or {})
-                   .get("verbose", True))
-
     state_path = run_dir / "out" / "preview" / ".shown.json"
     try:
         state = _load_json(state_path)
@@ -323,8 +329,6 @@ def main() -> int:
         except Exception as exc:
             print(f"preview: {key} skipped ({exc})", file=sys.stderr)
             continue
-        if not verbose and key.split(":", 1)[0] not in USER_ROSTER:
-            continue          # rendered for the run directory; not surfaced, not recorded
         print(f"SHOW:\t{path}\t{caption}\t{tier}")
         if tier == WORKING:
             working.append(key)

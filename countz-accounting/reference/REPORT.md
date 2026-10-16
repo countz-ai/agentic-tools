@@ -64,7 +64,9 @@ and actions, so its full bridge is support at the back. The parts, in this order
    what it shows, the measure the report exists to state: the recipe's `## Report`
    declares it as `metrics.title` (`Adjusted EBITDA` for a quality of earnings review,
    `Days sales outstanding` for a revenue leak). Stat tiles, a chart or a short table per
-   period; the recipe's prose says which figures.
+   period; the recipe's prose says which figures. Where no check ran the recipe's
+   `headline` family, as on a scoped run that left it out, the deck carries no key-metrics
+   page: that family states its measure.
 3. **Matters for your attention**, where the run raised an integrity pattern: a party tied
    to an employee or officer, a payment with no book entry, a statement to a lender or a
    board the records contradict, a person approving or posting their own entries, tax
@@ -134,6 +136,14 @@ than the records states this once, on that page.
 
 A run with no recipe has no schedules; its opening is the executive summary alone, and
 the gate holds that page the same way.
+
+**A partial run.** A scoped run executes the families the user picked and the ones they
+read from (`run.json.plan.scope`). The deck carries the schedules of the families that
+ran, in the recipe's places, and none from a family that did not. Where the headline
+family did not run, the opening leads with what the families in scope established, and
+its message says which steps the run left out. The deck never states a figure only a
+left-out family establishes. A family the plan dropped as not runnable is treated the
+same way.
 
 Three rules:
 
@@ -486,8 +496,8 @@ write the message yourself and reference the figures.
 - **The message.** Every title is a headline (at most 80 characters, no full stop), every
   `message` and `text` a complete sentence, and the deck has at least one page beyond the
   cover.
-- **The schedules.** On a run whose recipe declares `## Report`, each schedule is on the
-  deck as a table from its family's tab, carrying every declared column and period, at the
+- **The schedules.** On a run whose recipe declares `## Report`, each schedule from a
+  family a check ran is on the deck as a table from its family's tab, carrying every declared column and period, at the
   population its `where` and `through` leave, less the rows nil in every period column
   shown: up to 25 rows, every row's identity is on the deck and none is trimmed; past
   25, a list shows its largest rows and states the rest, and a walk reaches its closing
@@ -498,8 +508,9 @@ write the message yourself and reference the figures.
   same in every column shown is refused: the reader cannot tell them apart, so the
   owning check names each row distinctly.
 - **The structure.** The first page after the cover is headed `Executive summary`,
-  carries a `message` and at least one stat tile, table or chart. On a recipe run the
-  second page is headed as the recipe's `metrics.title` and carries a figure block; the
+  carries a `message` and at least one stat tile, table or chart. On a recipe run whose
+  checks ran the `headline` family, the second page is headed as the recipe's
+  `metrics.title` and carries a figure block; the
   first `lead` schedule sits at most one page after it, and no narrative page stands
   between two `lead` schedules. Every page carrying an `appendix` schedule has the kicker
   `Appendix`, and every page after the first `Appendix` page has it too. Where the recipe

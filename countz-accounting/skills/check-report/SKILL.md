@@ -41,7 +41,10 @@ rules in `WORKBOOK.md` § 6. Lead with what that section says to lead with, and 
 beside it every item it names — a book error, an integrity pattern, a balance the
 ledger does not carry — with its amount. The headline check is the one in
 `run.json.checks` whose `params.family` matches the recipe's `headline`: the check that
-rolls the results up, and the tab most of the figures are copied from. Which of its
+rolls the results up, and the tab most of the figures are copied from. A scoped run
+(`run.json.plan.scope`) may have none: lead with what the families in scope established,
+state that the run covers only the steps the user picked, and name the steps left out
+(REPORT.md § 1, *A partial run*). Which of its
 tables the story shows, if any, is the recipe's `## Exec summary` to say. A run with no
 recipe tells the story its objective and results support. Read `${CLAUDE_PLUGIN_ROOT}/reference/DOCTRINE.md`
 § Voice again before writing its sentences
@@ -106,10 +109,11 @@ Every sentence the plan and the pages carry — a `title`, `message`, `text`, `b
      every item the recipe's `## Exec summary` says to state beside the headline, and
      the yardstick, the split by nature, the order and the meaning of "adjusted"
      REPORT.md § 1 requires; then the key-metrics page, headed as the recipe's `metrics.title` and
-     showing the figures its prose names; then `Matters for your attention` where the
+     showing the figures its prose names, where a check ran the recipe's `headline` family; then `Matters for your attention` where the
      run raised an integrity pattern, otherwise at most one page carrying the story to
      the first `lead` schedule;
-  2. the schedules the recipe places `lead`, in the recipe's order;
+  2. the schedules the recipe places `lead`, in the recipe's order — on a scoped run,
+     those from families a check ran, and the same for the appendix below;
   3. the narrative — under the recipe's `narrative` sections, in that order, where it
      declares them;
   4. the schedules the recipe places `appendix`, in the recipe's order, in a section
@@ -271,9 +275,11 @@ the schedule must not come away with different open items.
 
 ## 4. What the run did not do
 
-Every check that did not run or ended blocked or failed, every check that could not
-establish what it set out to establish, and every step that ran degraded, is listed on
-Basis of Preparation and stated in the deck. Where one limits the
+Every family left out of a scoped run's scope (`run.json.plan.scope`), every check that
+did not run or ended blocked or failed, every check that could not establish what it set
+out to establish, and every step that ran degraded, is listed on Basis of Preparation and
+stated in the deck. A left-out family is named by its title, with the reason *Not in this
+run's scope*. Where one limits the
 answer, the Exec Summary and the deck say so.
 
 ## 5. The run summary — `out/RUN_SUMMARY.md`

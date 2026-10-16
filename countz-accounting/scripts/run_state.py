@@ -21,11 +21,13 @@ Subcommands:
         slot is printed as DROPPED and not registered — the engine skips it.
 
     approve-plan <run_dir> --definition <run_dir>/plan/<name>.json [--recipe <abs>]
-        Record the approval of a drafted plan - the user's confirmation in verbose mode,
-        at once otherwise (RUN_CONTRACT.md § Verbose mode): validate the definition, record
+        Record the user's approval of a drafted plan: validate the definition, record
         run.json.plan (record, recipe, playbook, approved_at) and run.json.playbook
         (slots are the run's own source ids, so the binding is identity), register the
-        steps as checks, append the `plan_approved` event.
+        steps as checks, append the `plan_approved` event. On a scoped run
+        (run.json.inputs.scope) it refuses a step outside the scope that no step in it
+        reads, and records run.json.plan.scope: {picked, families} - the families picked
+        and every family the approved steps run, in recipe order.
 
     dispatch <run_dir> --checks id1,id2 [--mode fresh|fix] [--extra '<one-line JSON>']
     dispatch <run_dir> --step plan|recipe|arr_policy|review|report --args '<one-line JSON>'
@@ -40,6 +42,8 @@ Subcommands:
         playbook_next.py (or the engine agent) already wrote. Every --checks and --step
         dispatch also prints one SAY: line first — the progress line the relay puts to
         the user as plain chat (RUN_CONTRACT.md § Every wave): what runs, and how many.
+        A plan dispatch on a scoped run (run.json.inputs.scope) carries `families`, the
+        scope's family ids, unless --args already names them: the plan's to-do list.
 
     record <run_dir>
         Close a wave: classify every outstanding dispatch from its step record —
@@ -51,22 +55,16 @@ Subcommands:
         first failure or death mints one re-dispatch (same args, new seq, its own
         brief, `attempt_of` set, a `retry` event) printed as a RETRY: line with a THEN:
         to run record again — RETRY lines carry brief= only when two or more are
-        minted at once; a second is terminal — the check is marked failed and the
-        FAILED: line is for the relay to put to the user. A minted retry wave opens
-        with its own SAY: line.
+        minted at once; a second mints a repair, the same args plus `prior_errors`
+        (what stopped each earlier attempt, verbatim); a third is terminal — the
+        check is marked failed and the FAILED: line is for the relay to tell the user
+        before it goes on. A minted retry wave opens with its own SAY: line.
 
     record-scrub <run_dir> --json '<one-line JSON>' | @<file>
         Record the scrubbed pre-run ask (reference/SCRUB.md): {"send", "rounds"}.
         Refuses no rounds, more than three, or a last round that is not `clean`.
         Writes <run_dir>/scrub.json, deletes an @<file> draft inside <run_dir>, appends
         `ask_scrubbed`, and prints `SEND:<TAB><text>`: the bytes the relay sends.
-
-    verbose <run_dir> [--off]
-        Turn the run's verbose mode on or off: the relay runs it when the user changes
-        `settings.verbose` with `update_countz_config` mid-run (RUN_CONTRACT.md
-        § Verbose mode). While it is on, preview.py surfaces every artifact rather than
-        only the engagement preview, the plan, the workbook and the report deck, and the
-        plan waits for the user's confirmation.
 
 Exit 0 on success; exit 2 on anything refused, with the reason on stderr.
 """
@@ -81,6 +79,7 @@ import shlex
 import sys
 
 import check_playbook  # sibling: the one home of KINDS, SLUG and definition validation
+import recipe_format  # sibling: a family's title as the user reads it
 
 PLUGIN_ROOT = pathlib.Path(__file__).resolve().parent.parent
 RUN_SCHEMA = "countz-accounting/run@1"
@@ -135,17 +134,6 @@ LAUNCH = ("LAUNCH: in ONE message, one general-purpose sub-agent per NEXT line, 
           "entire instruction. - nothing more. Without an Agent tool, run each NEXT "
           "line as its Skill call, one at a time.")
 
-# Verbose mode (RUN_CONTRACT.md § Verbose mode): the user's `settings.verbose` from
-# `get_countz_config`, held as run.json.inputs.verbose; absent reads as on. setup_run.py
-# prints the same lines when it registers a run.
-VERBOSE_ON = ("VERBOSE: on - the preview shows every working paper and the review "
-              "findings as they land, not only the engagement preview, the plan, the "
-              "workbook and the deck, and the plan waits for the user's confirmation "
-              "before anything runs. Tell the user once.")
-VERBOSE_OFF = ("VERBOSE: off - from here the preview shows only the engagement preview, "
-               "the plan, the workbook and the deck, and a drafted plan is approved as "
-               "it lands. Tell the user once.")
-
 # The SAY: line - one per wave, printed before the launch imperatives by this script and
 # playbook_next.py. The relay puts its text to the user as one line of plain chat
 # (RUN_CONTRACT.md § Every wave); it never names a file, so nothing about it reaches the
@@ -180,18 +168,32 @@ def recipe_families(run: dict) -> dict[str, str]:
     return {fid.lower(): title for fid, title in FAMILY_HEADER.findall(text)}
 
 
+def recipe_order(run: dict, recipe, ids: set[str]) -> list[str]:
+    """`ids` in the order the recipe declares its families; an id the recipe does not
+    carry goes last."""
+    try:
+        text = pathlib.Path(str(recipe)).read_text(encoding="utf-8")
+    except OSError:
+        text = ""
+    order = [fid.lower() for fid, _ in FAMILY_HEADER.findall(text)]
+    return [f for f in order if f in ids] + sorted(i for i in ids if i and i not in order)
+
+
 def describe_members(members: list[tuple[str, str | None, dict | None]],
                      families: dict[str, str]) -> str:
     """What a wave runs, for its SAY line. `members` are (name, kind, params) in wave
-    order. A member whose params.family the recipe titles is counted under
-    `<ID> <title>`; any other is `<name> (<kind word>)`, or the name alone for a step
-    dispatch (plan / review / report), which has no kind."""
+    order. A member whose params.family the recipe titles is counted under that title,
+    as the user read it in the steps table (`recipe_format.plain_title`); any other is
+    `<name> (<kind word>)`, or the name alone for a step dispatch (plan / review /
+    report), which has no kind."""
     order: list[str] = []
     counts: dict[str, int] = {}
     for name, kind, params in members:
         fam = str((params or {}).get("family") or "").lower()
         if fam in families:
-            key = f"{fam.upper()} {families[fam]}"
+            key = recipe_format.plain_title(families[fam])
+        elif kind == check_playbook.EXTRACT and families:
+            key = "reading the data room's files for the steps that follow"
         elif kind:
             key = f"{name} ({KIND_WORDS.get(kind, kind)})"
         else:
@@ -205,7 +207,9 @@ def describe_members(members: list[tuple[str, str | None, dict | None]],
 def step_say(step: str, args: dict) -> str:
     """The SAY text for a plan / recipe / review / report dispatch."""
     if step == "plan":
-        return ("Redrafting the check plan on your instruction." if args.get("revise")
+        if args.get("revise"):
+            return "Redrafting the check plan on your instruction."
+        return ("Drafting the check plan for the steps you picked." if args.get("families")
                 else "Drafting the check plan from the data room.")
     if step == "recipe":
         return ("Writing the recipe from your answers." if args.get("answers")
@@ -221,11 +225,15 @@ def step_say(step: str, args: dict) -> str:
     return "Assembling the workbook and the report deck from the check records."
 
 
-# In verbose mode a SAY line opens with the run's position (RUN_CONTRACT.md § Every
-# wave). Example: `Step 3 of 10: <text>`. The run's steps are its checks in
-# first-dispatch order, then the review and the report. Once the review is dispatched, a
-# check with no dispatch will not run and drops out of the total. A step dispatched
-# before the plan registers any check carries no position.
+# A SAY line opens with the run's position (RUN_CONTRACT.md § Every wave). Example:
+# `Step 3 of 6: <text>`. On a plan-driven run the steps are the recipe families the run
+# executes, in recipe order - the unit of the steps table the user picked from, and only
+# the ones this run carries - and a wave's position is that of the families its checks
+# perform; an extract step, the review and the report perform none and carry no position.
+# On any other run the steps are its checks in first-dispatch order, then the review and
+# the report; once the review is dispatched, a check with no dispatch will not run and
+# drops out of the total. A step dispatched before the plan registers any check carries
+# no position.
 def check_order(run: dict) -> list[str]:
     """Check ids in first-dispatch order: a check's step number is its index + 1."""
     order: list[str] = []
@@ -249,9 +257,33 @@ def tail_position(run: dict, step: str) -> list[int]:
     return {"review": [n + 1], "report": [n + 2]}.get(step, []) if n else []
 
 
-def at_step(run: dict, text: str, positions: list[int], checks_n: int) -> str:
-    """`text` behind the run's position when verbose mode is on, else `text` alone."""
-    if not ((run.get("inputs") or {}).get("verbose", True) and positions and checks_n):
+def run_families(run: dict) -> list[str]:
+    """The recipe families the run's checks perform, in recipe order; empty on a run
+    with no recipe or no family-carrying check."""
+    recipe = (run.get("plan") or {}).get("recipe")
+    fams = {str((c.get("params") or {}).get("family") or "").lower()
+            for c in run.get("checks") or []} - {""}
+    return recipe_order(run, recipe, fams) if recipe and fams else []
+
+
+def say_position(run: dict, members: list[tuple[str | None, str | None, dict | None]]
+                 ) -> tuple[list[int], int]:
+    """(positions, total) for a wave's SAY line. `members` are (check id or None, step,
+    params) per member."""
+    fams = run_families(run)
+    if fams:
+        pos = {fams.index(f) + 1 for _, _, params in members
+               if (f := str((params or {}).get("family") or "").lower()) in fams}
+        return sorted(pos), len(fams)
+    order, n = check_order(run), checks_counted(run)
+    pos = [p for cid, step, _ in members for p in
+           ([order.index(cid) + 1] if cid and cid in order else tail_position(run, step or ""))]
+    return pos, (n + 2 if n else 0)
+
+
+def at_step(run: dict, text: str, positions: list[int], total: int) -> str:
+    """`text` behind the run's position, or `text` alone where it has none."""
+    if not (positions and total):
         return text
     ps = sorted(set(positions))
     if len(ps) == 1:
@@ -260,7 +292,7 @@ def at_step(run: dict, text: str, positions: list[int], checks_n: int) -> str:
         where = f"Steps {ps[0]}–{ps[-1]}"
     else:
         where = f"Steps {', '.join(map(str, ps))}"
-    return f"{where} of {checks_n + 2}: {text}"
+    return f"{where} of {total}: {text}"
 
 
 def _now() -> str:
@@ -454,9 +486,12 @@ def _args_text(args: dict) -> str:
 
 def next_line(run_dir: pathlib.Path, row: dict, brief: pathlib.Path | None,
               label: str = "NEXT") -> str:
+    # plugin_root: the plugin's folder, for a forked skill whose host left its
+    # `${CLAUDE_PLUGIN_ROOT}` paths unresolved
     line = (f"{label}: Skill {row['skill']} run_dir={_q(run_dir)} seq={row['seq']}"
             + (f" check={row['check_id']}" if row.get("check_id") else "")
-            + (f" {t}" if (t := _args_text(row.get("args") or {})) else ""))
+            + (f" {t}" if (t := _args_text(row.get("args") or {})) else "")
+            + f" plugin_root={_q(PLUGIN_ROOT)}")
     return line + (f" brief={_q(brief)}" if brief else "")
 
 
@@ -601,6 +636,15 @@ def cmd_approve_plan(a) -> int:
     recipe = a.recipe or (row.get("args") or {}).get("recipe")
     if not recipe:
         raise Refuse("the plan dispatch args carry no recipe - use --recipe")
+    # A scoped run executes the families the user picked and what they read
+    # (PLAYBOOK_RECIPES.md § Ask what to run); a step past that is the plan's to drop.
+    scope = scope_of(run)
+    if scope:
+        extra = out_of_scope(definition, scope)
+        if extra:
+            raise Refuse(f"step(s) {', '.join(extra)} run a family outside the run's scope "
+                         f"({', '.join(scope['families'])}) and no step in it reads them - "
+                         f"re-draft the plan without them")
     bound = {sl: sl for sl in (s["slot"] for s in definition["sources"])}
     sources = {s["id"] for s in run.get("sources", [])}
     for sl in bound:
@@ -618,16 +662,47 @@ def cmd_approve_plan(a) -> int:
     run["plan"] = {"record": row.get("record"), "recipe": str(recipe),
                    "recipe_name": pinned.get("name"), "recipe_version": pinned.get("version"),
                    "playbook": rel, "approved_at": _now()}
+    if scope:
+        # what the deliverable is held to: the families picked, and every family a step
+        # of the approved plan runs (the picks' reads included)
+        ran = {str((st.get("params") or {}).get("family") or "").lower()
+               for st in definition["steps"]}
+        run["plan"]["scope"] = {"picked": scope["picked"],
+                                "families": recipe_order(run, recipe, ran)}
     run["playbook"] = {"name": definition["name"], "path": str(def_path), "bound": bound}
     added, dropped = steps_as_checks(run, definition, bound)
     save_run(run_dir, run)
     _append_event(run_dir, "plan_approved", seq=row.get("seq"),
-                  playbook=definition["name"],
-                  by="user" if (run.get("inputs") or {}).get("verbose", True) else "auto")
+                  playbook=definition["name"])
     print(f"plan {definition['name']} approved; {len(added)} step(s) registered as checks")
     for line in dropped:
         print(line)
     return 0
+
+
+def scope_of(run: dict) -> dict | None:
+    """The families the user picked for this run and their reads
+    (`run.json.inputs.scope`, set by `setup_run.py --scope`); None for a run over every
+    family."""
+    scope = (run.get("inputs") or {}).get("scope")
+    return scope if isinstance(scope, dict) and scope.get("families") else None
+
+
+def out_of_scope(definition: dict, scope: dict) -> list[str]:
+    """The steps of `definition` a scoped run does not execute: a step runs when its
+    family is in the scope, or when a step that runs reads it (`after`, which the
+    definition derives from the step's `_from` params) - an `extract` step, or a read the
+    recipe's text did not name."""
+    steps = {st["id"]: st for st in definition["steps"]}
+    keep = {sid for sid, st in steps.items()
+            if str((st.get("params") or {}).get("family") or "").lower() in scope["families"]}
+    todo = list(keep)
+    while todo:
+        for dep in steps[todo.pop()].get("after") or []:
+            if dep in steps and dep not in keep:
+                keep.add(dep)
+                todo.append(dep)
+    return [sid for sid in steps if sid not in keep]
 
 
 def _alloc(run: dict) -> int:
@@ -683,10 +758,9 @@ def cmd_dispatch(a) -> int:
                                 recipe_families(run))
         verb = ("Re-running", " on the review's findings") if a.mode == "fix" \
             else ("Running", "")
-        order = check_order(run)
         print(say_line(at_step(
             run, f"{verb[0]} {checks_phrase(len(members))}{verb[1]}: {what}.",
-            [order.index(c["id"]) + 1 for c in members], checks_counted(run))))
+            *say_position(run, [(c["id"], None, c.get("params")) for c in members]))))
         if len(members) > 1:
             print(LAUNCH)
         for row, brief in rows:
@@ -698,12 +772,15 @@ def cmd_dispatch(a) -> int:
         args = json.loads(a.args) if a.args else {}
         if not isinstance(args, dict):
             raise Refuse("--args must be a JSON object")
+        # the plan's to-do list: on a scoped run the planner drafts these families only
+        if a.step == "plan" and (scope := scope_of(run)) and "families" not in args:
+            args["families"] = scope["families"]
         seq = _alloc(run)
         row = _append_dispatch(run, seq, a.step, STEP_SKILLS[a.step], args, None)
         write_row_brief(run_dir, row)
         save_run(run_dir, run)
-        print(say_line(at_step(run, step_say(a.step, args), tail_position(run, a.step),
-                               checks_counted(run))))
+        print(say_line(at_step(run, step_say(a.step, args),
+                               *say_position(run, [(None, a.step, None)]))))
         print(next_line(run_dir, row, None))
 
     else:
@@ -781,10 +858,12 @@ def classify_record(run_dir: pathlib.Path, row: dict) -> tuple[str, dict | None,
     return "died", rec, f"outcome {outcome!r} outside the vocabulary"
 
 
-def _retry(run_dir: pathlib.Path, run: dict, row: dict) -> dict:
-    """Mint the one re-dispatch: same args, new seq, its own brief, attempt_of set."""
+def _retry(run_dir: pathlib.Path, run: dict, row: dict, args: dict | None = None) -> dict:
+    """Mint a re-dispatch: `args` (the row's own by default), new seq, its own brief,
+    attempt_of set."""
     seq = _alloc(run)
-    new = _append_dispatch(run, seq, row["step"], row["skill"], row.get("args") or {},
+    new = _append_dispatch(run, seq, row["step"], row["skill"],
+                           args if args is not None else (row.get("args") or {}),
                            row.get("check_id"), attempt_of=row["seq"])
     write_row_brief(run_dir, new)
     if row.get("check_id"):
@@ -792,6 +871,14 @@ def _retry(run_dir: pathlib.Path, run: dict, row: dict) -> dict:
         if c is not None:
             c["seq"], c["status"] = seq, "pending"
     return new
+
+
+def _attempt_error(run_dir: pathlib.Path, row: dict) -> str:
+    """What stopped an earlier attempt: its record's `error`, or why it counted as died."""
+    if not row:
+        return "(no record)"
+    cls, rec, why = classify_record(run_dir, row)
+    return str((rec or {}).get("error") or why or cls)
 
 
 def cmd_record(a) -> int:
@@ -820,13 +907,24 @@ def cmd_record(a) -> int:
             lines.append(f"{head}: seq={row['seq']} {who}"
                          + (f" blockers={nb}" if cls == "blocked" else "")
                          + f" — {row['conclusion'] or '(no conclusion)'}")
-        elif row.get("attempt_of") is not None:  # the retry itself died: terminal
+        elif row.get("attempt_of") is not None and "prior_errors" not in (row.get("args") or {}):
+            # the mechanical retry failed too: one repair, told what stopped both attempts
+            first = next((d for d in run.get("dispatches", []) if d["seq"] == row["attempt_of"]), {})
+            errors = [f"seq {first.get('seq')}: {_attempt_error(run_dir, first)}",
+                      f"seq {row['seq']}: {why}"]
+            new = _retry(run_dir, run, row, {**(row.get("args") or {}), "prior_errors": errors})
+            retries.append({"seq": new["seq"], "attempt_of": row["seq"],
+                            "step": row["step"], "repair": True})
+            lines.append(f"{cls.upper()}: seq={row['seq']} {who} — {why}; repairing")
+            lines.append(new)
+        elif row.get("attempt_of") is not None:  # the repair failed too: terminal
             run["degraded"] = True
             c = check_row(run, row.get("check_id") or "")
             if c is not None:
                 c["status"] = "failed"
-            lines.append(f"FAILED: seq={row['seq']} {who} — {why}; second attempt, not "
-                         f"retried — tell the user what died and what it blocks")
+            lines.append(f"FAILED: seq={row['seq']} {who} — {why}; third attempt, not "
+                         f"retried — tell the user in one line what failed and what it "
+                         f"blocks, and go on")
         else:
             new = _retry(run_dir, run, row)
             retries.append({"seq": new["seq"], "attempt_of": row["seq"],
@@ -846,13 +944,10 @@ def cmd_record(a) -> int:
             [(d.get("check_id") or f"the {d['step']} step", skill_kind.get(d["skill"]),
               (d.get("args") or {}).get("params")) for d in minted],
             recipe_families(run))
-        order = check_order(run)
-        where = [p for d in minted for p in
-                 ([order.index(d["check_id"]) + 1] if d.get("check_id")
-                  else tail_position(run, d["step"]))]
         print(say_line(at_step(
             run, f"Retrying {checks_phrase(len(minted))} that failed: {what}.",
-            where, checks_counted(run))))
+            *say_position(run, [(d.get("check_id"), d["step"], (d.get("args") or {}).get("params"))
+                                for d in minted]))))
     if briefed:
         print(LAUNCH.replace("NEXT line", "RETRY line"))
     for line in lines:
@@ -928,20 +1023,6 @@ def cmd_record_scrub(a) -> int:
     return 0
 
 
-def cmd_verbose(a) -> int:
-    run_dir = a.run_dir.resolve()
-    run = load_run(run_dir)
-    want = not a.off
-    if run.get("inputs", {}).get("verbose", True) == want:
-        print(f"verbose mode is already {'on' if want else 'off'}")
-        return 0
-    run.setdefault("inputs", {})["verbose"] = want
-    save_run(run_dir, run)
-    _append_event(run_dir, "verbose_enabled" if want else "verbose_disabled", by="run_state")
-    print(VERBOSE_ON if want else VERBOSE_OFF)
-    return 0
-
-
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -982,11 +1063,6 @@ def main() -> int:
     p.add_argument("run_dir", type=pathlib.Path)
     p.add_argument("--json", required=True)
     p.set_defaults(fn=cmd_record_scrub)
-
-    p = sub.add_parser("verbose")
-    p.add_argument("run_dir", type=pathlib.Path)
-    p.add_argument("--off", action="store_true", help="turn verbose mode off")
-    p.set_defaults(fn=cmd_verbose)
 
     a = ap.parse_args()
     try:

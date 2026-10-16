@@ -451,6 +451,23 @@ def _computing_gaps() -> list[str]:
         for n in names:
             if f"`{n}`" not in text:
                 bad.append(f"{d['id']}: `{n}` has no rule in ARR_POLICY.md § Computing ARR")
+
+    # `library`: a folder that does not exist holds nothing and is no error; the
+    # company's own policy is its MATCH, every policy a POLICY line
+    import arr_policy
+    with tempfile.TemporaryDirectory() as td:
+        lib = pathlib.Path(td) / "arr-policies"
+        if arr_policy.library(lib, "Acme Inc") != ["NONE"]:
+            bad.append("library: a missing folder must print NONE")
+        lib.mkdir()
+        (lib / "acme-inc.yaml").write_text("company: Acme Inc\nstatus: approved\n")
+        (lib / "other-co.yaml").write_text("company: Other Co\nstatus: draft\n")
+        got = arr_policy.library(lib, "Acme Inc")
+        if got[0] != f"MATCH:\t{lib / 'acme-inc.yaml'}" or len(got) != 3 \
+                or not got[1].endswith("\tAcme Inc\tapproved"):
+            bad.append(f"library: {got}")
+        if any(x.startswith("MATCH:") for x in arr_policy.library(lib, "Nobody Ltd")):
+            bad.append("library: a company with no policy has no MATCH")
     return bad
 
 

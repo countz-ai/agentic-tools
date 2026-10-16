@@ -174,9 +174,9 @@ def selftest() -> int:
         if decide({**pre, "tool_name": drive}):
             bad.append("a session with no list refused a call")
         record({**post, "tool_response": [{"type": "text", "text": json.dumps(
-            {"blocked_tools": [], "settings": {"verbose": True}})}]})
-        if "settings" in json.loads(state_path("s1").read_text()):
-            bad.append("the config result's settings were recorded")
+            {"blocked_tools": [], "catalog_yaml": "analyses: []"})}]})
+        if "catalog_yaml" in json.loads(state_path("s1").read_text()):
+            bad.append("the config result's catalog was recorded")
         if not state_path("s1").is_file():
             bad.append("the config result was not recorded")
         if decide({**pre, "tool_name": drive}) or decide({**pre, "tool_name": recipe}):
@@ -197,11 +197,11 @@ def selftest() -> int:
         if not decide({**pre, "tool_name": recipe}):
             bad.append("`*` let a call through")
         record({"hook_event_name": "PostToolUse", "session_id": "s1",
-                "tool_name": "mcp__claude_ai_countz__update_countz_config",
+                "tool_name": recipe,
                 "tool_response": json.dumps({"blocked_tools": []})})
         st = json.loads(state_path("s1").read_text())
         if st != {"blocked_tools": ["*"]}:
-            bad.append(f"update_countz_config changed the state: {st}")
+            bad.append(f"a recipe result changed the state: {st}")
         if split_wire(cfg) != ("plugin_countz-accounting_countz", "get_countz_config"):
             bad.append("split_wire mis-split a plugin tool name")
         if not listed("claude_ai_countz", "get_recipe_for_countz_analysis",

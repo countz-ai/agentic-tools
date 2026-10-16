@@ -6,8 +6,7 @@ description: >-
   own words runs the analysis it describes, matched to the server's catalog or authored
   from the ask. Invoke when the user asks what countz-accounting can do, which analysis
   fits their question, how to begin, says "use countz to do analysis: ..." followed by
-  what they want analyzed, asks for an analysis no named skill covers, or asks to turn
-  Countz verbose mode on or off.
+  what they want analyzed, or asks for an analysis no named skill covers.
 argument-hint: "[analysis] [what you want analyzed]"
 context: inline
 ---
@@ -16,8 +15,6 @@ What the user typed after `/countz` decides what you do. Invoked without the sla
 command, take the ask from the message that invoked you.
 
 - **Nothing** → § What countz-accounting runs.
-- **`verbose on` or `verbose off`**, or an ask to show or stop showing each step and
-  the working papers → § Change verbose mode.
 - **The first word is an `ask for` in that table** → invoke that skill with the Skill
   tool (`countz-accounting:<ask for>`), the rest of the text verbatim as its arguments.
   That skill takes the rest as the ask and runs the analysis; you do nothing more.
@@ -63,20 +60,7 @@ reachable — showing the built-in analyses."
 
 Close with how to start one: `/countz <ask for> <what you want>`, or `/countz` followed
 by the analysis described in your own words. Every plan-driven run drafts its plan from
-your files first and shows it to you before anything runs; in verbose mode it also waits
-for you to confirm it.
-
-## Change verbose mode
-
-Call `update_countz_config(verbose=<true for on, false for off>)` on the `countz` server.
-The call carries that one boolean and nothing read from the machine. It saves the
-user's Countz setting, which every run they start from now on follows. Tell
-the user the setting it returned in one line: verbose on shows every step's working
-papers as they land and waits for their confirmation of each plan; off shows only the
-engagement preview, the plan, the workbook and the deck, and runs the plan as drafted.
-If a run is in progress in this conversation, also change that run's mode
-(`${CLAUDE_PLUGIN_ROOT}/reference/RUN_CONTRACT.md § Verbose mode`). If the call is not
-available or fails, say so in one line.
+your files first and runs nothing until you confirm it.
 
 ## Run the analysis the ask describes
 
@@ -102,22 +86,25 @@ which entry matched and why in one line, or that none did. Then:
 
 ### Relay a catalog match or a miss
 
-Read `${CLAUDE_PLUGIN_ROOT}/reference/RUN_CONTRACT.md`, and the relay procedure with
-`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py reference/PLAYBOOK_RECIPES.md "Running a recipe"`.
+```
+R=; for d in "${CLAUDE_PLUGIN_ROOT}" "${CLAUDE_SKILL_DIR}/../.." "$HOME"/.claude/plugins/synced/*/countz-accounting $(ls -td "$HOME"/.claude/plugins/cache/*/countz-accounting/*/ 2>/dev/null); do [ -f "$d/scripts/section.py" ] && R=$(cd "$d" && pwd) && break; done; [ -n "$R" ] || { f=$(find "$HOME/.claude/plugins" -maxdepth 7 -path "*/countz-accounting/scripts/section.py" 2>/dev/null | head -1); [ -n "$f" ] && R=${f%/scripts/section.py}; }; [ -n "$R" ] || { f=$(find / \( -path /proc -o -path /sys -o -path /dev \) -prune -o -path "*/countz-accounting/scripts/section.py" -print 2>/dev/null | head -1); [ -n "$f" ] && R=${f%/scripts/section.py}; }; if [ -z "$R" ]; then echo "NOT INSTALLED: this plugin's files are not in the session. Tell the user so in one line, and stop."; else echo "CLAUDE_PLUGIN_ROOT=$R"; cat "$R/reference/RUN_CONTRACT.md"; python3 "$R/scripts/section.py" PLAYBOOK_RECIPES.md "Running a recipe"; fi
+```
 
 You are the relay for a plan-driven run whose recipe is not fixed in advance. You do no
 analysis and you open no client file. Your `--skill` is `countz`: the run directory is
 `<output_root>/countz-<company>.<YYYYMMDD-HHMMSS>`.
 
-The relay procedure's § 1 collects the ask in the user's words as `instructions`. What
+The relay procedure's § 2 collects the ask in the user's words as `instructions`. On a
+match, its § 1 shows the matched recipe's steps first, as for a named shim. What
 differs from a named shim is `PLAYBOOK_RECIPES.md § Fetch the recipe and register`,
 which for this skill runs as:
 
 1. **On a match**, run `scripts/bundled_recipe.py <the entry's name>` first and pin the
    bundled copy when it prints one (`PLAYBOOK_RECIPES.md § Fetch the recipe and register`).
    Otherwise call `get_recipe_for_countz_analysis(recipe=<the entry's name>)` and
-   continue as a named shim does: write `recipe_markdown` to a file and register with
-   `--recipe <that file> --recipe-version <recipe_version>`
+   continue as a named shim does: register with `--recipe-result <the saved result>`
+   where the host saved the result to a file, else write `recipe_markdown` to a file and
+   register with `--recipe <that file> --recipe-version <recipe_version>`
    (`PLAYBOOK_RECIPES.md § Fetch the recipe and register`).
 2. **On a miss**, scrub the ask before anything crosses, under
    `${CLAUDE_PLUGIN_ROOT}/reference/SCRUB.md` (read it whole). Register the run first
@@ -179,6 +166,11 @@ on `revise=`.
 
    Show the recipe to the user (`preview.py` names it) before the plan step. A generated
    recipe belongs to this run: a later run over the same analysis generates again.
+4. **What to run.** Put the generated recipe's steps to the user as
+   `PLAYBOOK_RECIPES.md § Ask what to run` does, over the pinned file, and register the
+   picks with `setup_run.py <run_dir> --session ${CLAUDE_SESSION_ID} --sources '[]'
+   --scope <picks>` (`PLAYBOOK_RECIPES.md § Fetch the recipe and register`, *The
+   scope*).
 
 Where the pinned recipe declares `arr_policy`, served or generated, settle it first
 (`PLAYBOOK_RECIPES.md § Fetch the recipe and register`, *The ARR policy*). Then

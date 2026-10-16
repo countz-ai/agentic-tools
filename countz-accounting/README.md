@@ -60,9 +60,8 @@ Layout:
   file), `check_playbook.py` (playbook validation + listing; the kind-to-skill
   map's one home), `playbook_next.py` (the mechanical wave decision — the relay runs it
   first; exit 3 `ESCALATE:` hands the one case to the agent), `preview.py` (names each new
-  artifact with its tier — with verbose mode off only the engagement preview, the plan, the
-  workbook and the report deck; on, the findings as a rendered card too and everything
-  else as one working-papers bundle per wave), `peek.py` (the bounded first look at any
+  artifact with its tier — the plan, the findings, each family's summary and the
+  deliverables as rendered cards, everything else as one working-papers bundle per wave), `peek.py` (the bounded first look at any
   client file — index facts, sheet names and extents, the first rows, lines or page
   text; the planner's walk and every agent's first read go through it, and its row and
   line ceilings cannot be lifted), `check_workbook.py` + `check_prose.py` +

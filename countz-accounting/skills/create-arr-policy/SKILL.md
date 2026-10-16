@@ -32,9 +32,10 @@ data room), `company`. Invoked by the user, you have neither.
 ## 1. What the company already has
 
 The library path is `$HOME/.countz-accounting/arr-policies/<company-slug>.yaml`, the
-slug lowercase with hyphens.
+slug lowercase with hyphens. Look it up with `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/arr_policy.py library --company "<the company>"`, never by listing the folder: its
+`MATCH:` line is the company's policy, and `NONE` means the library holds nothing.
 
-1. **An approved policy in the library.** If the file exists and `arr_policy.py check`
+1. **An approved policy in the library.** If it prints `MATCH:` and `arr_policy.py check`
    exits 0, show `arr_policy.py render <file>` and ask one question: use it as it
    stands, or change it. Use it: go to § 5. Change it: resolve it as a stated input
    (step 3) with the user's changes.

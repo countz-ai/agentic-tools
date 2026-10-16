@@ -18,8 +18,8 @@ pinned copy under `<run_dir>/recipes/`), `name` (kebab-case; names the drafted
 playbook), `objective` (the run's goal, verbatim), `instructions` (the user's ask in
 their own words, verbatim — see below), and optionally `period_end` (the as-of date the
 user declared), `period` (the period under review in the user's words, where they gave
-one), `declared` (the options the recipe declares, as the user stated them) and, on a
-re-draft, `revise` (the user's instruction — produce a fresh draft that honors it, on
+one), `declared` (the options the recipe declares, as the user stated them), `families`
+(on a scoped run: the family ids the run executes — § Scope) and, on a re-draft, `revise` (the user's instruction — produce a fresh draft that honors it, on
 your new seq).
 
 The recipe is read as written: a served or generated recipe is the fixed document, and
@@ -38,6 +38,19 @@ licenses dropping a required section, lowering a family's standing, or narrowing
 population the recipe draws. A line such as *"skip the population walk"* is a scope
 request: the plan surfaces it under the family's decision with the recipe's rule and
 the user rules on it at the plan gate; the planner does not obey it.
+
+## Scope
+
+`families` is the run's to-do list: the families the user picked and every family they
+read from (`run.json.inputs.scope`). Plan those and no others. § 1 judges each file
+against the questions of the listed families, § 2 reads what they need, and § 3 walks
+them and drafts their steps. A family outside the list is out of scope: `plan.md` names
+it in one line as left out at the user's choice, with no `D.` request and no open item. Where a listed family reads one the list does not carry,
+plan that one too, and say in `plan.md` which listed family needs it: `approve-plan`
+accepts a step outside the list only when a step in it reads that step. Without
+`families`, every family runs.
+
+## Read first
 
 Read `${CLAUDE_PLUGIN_ROOT}/reference/EVIDENCE.md` § 1 and § 2, then the recipe, then
 `run.json` — its registered sources are the data room, and you read them directly, under
@@ -174,7 +187,8 @@ the rule reaches, with its stated balance and a provisional ruling from the reci
 list. An account the rule could cover that no step and no open item names is a plan
 defect.
 
-Walk the recipe's families in order. For each, decide from the coverage: **runnable** —
+Walk the recipe's families in order — on a scoped run, the ones in scope (§ Scope). For
+each, decide from the coverage: **runnable** —
 the family runs over every entity it covers, at the finest grain the recipe's granularity
 rule allows for this data, with the recorded fact that sets that grain cited in the
 plan; **degraded** — runnable coarser, with the limitation stated; **not runnable** —
@@ -274,7 +288,9 @@ outside `after`, and a `reads` id the extract step does not parse.
 
 ## 4. Write
 
-- `<run_dir>/plan.md` — for the user: the data room as indexed (what was set aside, with
+- `<run_dir>/plan.md` — for the user: on a scoped run, the scope first (the steps the
+  user picked, those added because a pick reads them, and those left out, each by its
+  title), then the data room as indexed (what was set aside, with
   why), the sources classified, the population as drawn (each account with its balance
   and provisional ruling), the entity-by-period coverage table, each family's
   decision (what runs, at what grain, why — or why not, and what data would change

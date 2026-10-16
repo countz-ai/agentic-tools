@@ -25,19 +25,18 @@ absolute path also works. Open a file whole only where the citation names no sec
 ## Sign in first
 
 Every skill that opens a run makes `get_countz_config` on the `countz` server — the
-Countz connector, declared in the plugin's `.mcp.json` — its first tool call: before any
-file is opened, any directory listed, any parameter collected. (The `countz` index skill
-calls it too, and lists the built-in checks when that fails.) Name the tool by its short
-name on that server. If the tool is not available, or the call fails, the whole reply is
+Countz connector, declared in the plugin's `.mcp.json` — its first tool call after the
+skill's opening command, where it has one: before any client file is opened, any
+directory listed, any parameter collected. (The `countz` index skill calls it too, and
+lists the built-in checks when that fails.) Name the tool by its short name on that
+server. If the tool is not available, or the call fails, the whole reply is
 the message below, written as it stands, as markdown (the fence is not part of the
 reply):
 
 ```markdown
 **Add Countz connector to run this analysis**
 
-Countz Connector supplies the procedure recipe for this analysis, in its most recently tuned version.
-
-No financial data ever goes to Countz. The connector sends recipes to you; it receives no file, no figure and no company name.
+Countz Connector supplies the procedure recipe for this analysis, in its most recently tuned version. No financial data ever goes to Countz.
 
 **To connect**
 1. Open **Settings → Plugins**.
@@ -60,9 +59,6 @@ carries:
 - `catalog_yaml` — the server's catalog of analyses, one entry per recipe with `name`,
   `skill`, `description` and `aliases` — with its `catalog_version`. Keep it: a skill
   that matches an ask against the catalog reads this copy and calls nothing again.
-- `settings` — the user's Countz settings, held on the Countz server for their account.
-  `settings.verbose` sets the run's verbose mode
-  (§ Verbose mode).
 - `blocked_tools` — the MCP tools this session must not call, set for the tenant; the
   user cannot change it, and it is empty unless the tenant sets it. An entry is
   `<server>/<tool>`, `<server>/*`, or `*`. From this call to the end of the session, the
@@ -73,40 +69,12 @@ carries:
   the tool is not allowed for their account, and continue without it.
 
 Every signed-in account, the testing tenant included, fetches its recipe body from the
-server (`get_recipe_for_countz_analysis`) and runs everything else locally. The server's
-other two tools: `create_countz_playbook_recipe` takes the scrubbed ask on a catalog
-miss (`skills/countz/SKILL.md`), and `update_countz_config` takes one boolean, `verbose`,
-and changes that one Countz setting (§ Verbose mode).
+server (`get_recipe_for_countz_analysis`) and runs everything else locally.
 
 `get_countz_config` takes no arguments. Nothing from a run — no path, no figure,
 no file name — goes to the server; the one text that may cross is the scrubbed pre-run
 ask, on a catalog miss only, scrubbed by an agent under [SCRUB.md](SCRUB.md)
 ([OBSERVABILITY.md](OBSERVABILITY.md) § 4).
-
-## Verbose mode
-
-`get_countz_config` returns `settings.verbose`, the user's Countz setting; it holds for every
-run they start, and it is `true` until they turn it off. A run is registered verbose;
-pass `setup_run.py --no-verbose` when the setting is `false`, which makes the run
-result-only. `run.json.inputs.verbose` then carries the mode for the run; a `run.json`
-without it reads as verbose.
-
-| | verbose off (result-only) | verbose on (the default) |
-|---|---|---|
-| progress | the `SAY:` line of every wave | the `SAY:` line of every wave, opening with the run's position (§ Every wave) |
-| what the preview shows | the engagement preview, `plan.md`, the workbook and the report deck | every artifact as its wave lands: the source inventory and profiles, each check's record and schedules, the review findings, the deck's plan and source, the run summary |
-| the drafted plan | shown, then approved at once: the run continues without waiting | shown and put to the user: nothing runs until they confirm it |
-
-Whatever the preview withholds is still written to the run directory, and the sync
-carries it. Turning verbose on mid-run shows what was withheld so far.
-
-When the user asks to change it — "turn on verbose mode", "show me each step", "stop
-showing the working papers" — call `update_countz_config(verbose=<true|false>)` on the
-`countz` server. The call carries that one boolean and nothing read from the machine. It
-saves the setting for their later runs too. On a run in progress,
-then run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/run_state.py verbose <run_dir>` (with
-`--off` to turn it off) and tell the user the line it prints. If the call fails, say so
-in one line, and still change this run's mode.
 
 ## The files, and who writes each
 
@@ -121,6 +89,8 @@ in one line, and still change this run's mode.
 | `<run_dir>/plan.md` + `<run_dir>/plan/<name>.json` | the plan step, once per draft; a revised draft rewrites both | the user (via preview), the relay, the playbook engine (the definition it executes) |
 | `<run_dir>/steps/<NNNN>-<step>.json` | the step that produced it, once, at its end | the relay (`run_state.py record`), the playbook engine, the review step |
 | `<run_dir>/checks/<check>.md` (and `<check>-*.csv`) | the check step that owns that check id | the review and report steps |
+| `<run_dir>/checks/<check>-summary.md` | a plan-driven check step: whether its procedure worked and where it stands, in an accountant's words (`agents/worker.md` § Files) | `scripts/family_artifacts.py` |
+| `<run_dir>/out/families/<NN>-<title>.md` + `.xlsx` | `scripts/family_artifacts.py`, after every wave, for each family whose checks are all terminal: the family's summary and its workbook, its check tabs in one file | the user, via preview |
 | `<run_dir>/workpapers/*.yaml` | the step named in the file's suffix | the review and report steps, `scripts/check_prose.py` |
 | `<run_dir>/dispatch/<NNNN>-<step>.md` | `run_state.py dispatch` and `record`, one per dispatch row (a wave of one, a `--step` and a retry included), or `scripts/playbook_next.py`; on escalation, the playbook-engine agent, rendering `run_state.py`'s `BRIEF` template verbatim | that dispatch's sub-agent, as its entire launch instruction. On a plain Skill call nobody reads it at launch; it is the archive of what the fork was told |
 | `<run_dir>/out/` | each step stages into `out/.staging/` and renames into place | the user, `scripts/preview.py` |
@@ -148,10 +118,14 @@ inputs:
   run_dir: "<abs path>"             # redundant on purpose: the file self-locates if copied
   skill: "qoe"                      # the launcher skill the run was minted for
   company: "Demo ZS"                # whose books, in the user's words; the directory carries its slug
-  verbose: true                     # verbose mode (§ Verbose mode), from settings.verbose
   params: {}                        # run-level parameters collected at registration,
                                     # verbatim: period end, declared options, materiality.
                                     # Unset options take § Parameters' standing answers
+  scope: {picked, families, added}  # optional: the recipe families the user picked, and
+                                    # with the ones they read from, in recipe order
+                                    # (setup_run.py --scope;
+                                    # PLAYBOOK_RECIPES.md § Ask what to run).
+                                    # Absent: every family runs
   sessions:                         # every session that has touched this run
     - {session_id: "...", first_seen: "...", last_seen: "..."}
 sources:                            # registered through scripts/setup_run.py
@@ -169,7 +143,10 @@ playbook: null                      # a playbook run sets {name, path, bound: {s
 plan: null                          # a plan-driven run sets {record, recipe, recipe_name,
                                     #  recipe_version, playbook, approved_at}; `recipe` is
                                     #  <run_dir>/recipes/<recipe_name>.md, the served or
-                                    #  generated bytes the run pins to
+                                    #  generated bytes the run pins to. A scoped run adds
+                                    #  scope: {picked, families}, the families the
+                                    #  approved steps run: what review and report hold
+                                    #  the deliverable to
 dispatches: []                      # ORDERED, append-only; one entry per dispatch:
                                     # {seq, step, check_id?, skill, args, brief,
                                     #  state, record, conclusion, attempt_of?}
@@ -218,11 +195,11 @@ around.
   records a saved playbook run: the binding, plus every fully-bound step
   registered as a check. A step fed by an unbound slot prints as `DROPPED:` and the
   engine skips it.
-- `approve-plan <run_dir> --definition <run_dir>/plan/<name>.json` records the approval
-  of a drafted plan, the user's confirmation in verbose mode and at once otherwise
-  (§ Verbose mode): `run.json.plan` and `run.json.playbook` (a planned
+- `approve-plan <run_dir> --definition <run_dir>/plan/<name>.json` records the user's
+  confirmation of a drafted plan: `run.json.plan` and `run.json.playbook` (a planned
   definition's slots are the run's own source ids), the steps as checks, the
-  `plan_approved` event.
+  `plan_approved` event. On a scoped run it refuses a step outside `inputs.scope` that
+  no step inside it reads, and records `plan.scope`.
 - `dispatch <run_dir> --checks id1,id2 [--mode fresh|fix] [--extra '<one-line JSON>']` |
   `--step plan|recipe|review|report --args '<one-line JSON>'` | `--briefs <file> ...` opens a
   wave: it allocates seqs, appends dispatch rows, writes one brief per row (every
@@ -238,8 +215,6 @@ around.
   conclusions into the checks, sets `degraded`, and mints retries, each with
   its own brief. `RETRY:` lines carry `brief=` only when two or more are minted at once. A
   minted retry wave opens with its `SAY:` line.
-- `verbose <run_dir> [--off]` turns the run's verbose mode on or off after registration
-  (§ Verbose mode). `setup_run.py --no-verbose` registers a run with it off.
 
 **The brief's argument block.** After the line `Your arguments:`, one line per argument,
 `    key=value` (four spaces), the key `[A-Za-z0-9_]+`. A value holding a line break,
@@ -312,11 +287,30 @@ gate's output in `blockers` and `error` null. Never put gate output in `error`.
 Ok and blocked fold into the check row. Blocked also sets `degraded`; the run continues.
 
 A first failure or death is retried once, mechanically: same args, new seq, its own
-brief, `attempt_of` set. It prints as a `RETRY:` line to launch and a `THEN:` line to run
-`record` again. A second failure is terminal: the check is marked `failed`, and the relay
-tells the user what died and what it blocks. Review and report run over what exists, and
-the deliverable states what is missing. The user decides whether to try again; the relay
-never retries on its own.
+brief, `attempt_of` set. A second is retried once more as a repair: the same args plus
+`prior_errors`, what stopped each earlier attempt, verbatim, so the step reads why it
+failed and takes another route (`agents/worker.md` § Your procedure). Each prints as a
+`RETRY:` line to launch and a `THEN:` line to run `record` again. A third failure is
+terminal: the check is marked `failed`, and the relay tells the user in one line what
+failed and what it blocks, and goes on. Review and report run over what exists, and the
+deliverable states what is missing.
+
+## Running to completion
+
+The user approves the plan. From then the run goes on to the deliverable without
+waiting for a ruling: the relay launches every wave, every retry and every fix round the
+scripts and this document call for, and tells the user what happened in the `SAY:` lines
+and the previews. A defect the run can repair, it repairs: a step that failed is
+retried (§ Classification and retries), a cache table found wrong is re-extracted, and
+a review finding is fixed (§ Review and report).
+
+The run stops to ask only about the data room: a question about the company's records
+that the user can answer and the files cannot, where the answer decides a figure a later
+step stands on, and the run would otherwise guess (examples: which of two disagreeing
+schedules is the one management closed on; whether an account missing from the trial
+balance was closed or left out of the export). Put every such question in one message,
+each in a sentence with what its answer changes, and wait. A question nothing turns on
+is not asked: it is carried to the open items.
 
 ## Every wave
 
@@ -326,41 +320,50 @@ or fails. Execute the printed lines in their order (`SAY:`, `RECORD:`, `LAUNCH:`
 `NEXT:`, `RETRY:`, `THEN:`) and put every `FAILED:` line to the user. A `NEXT:` line
 without `brief=` is a plain Skill call; it runs as the skill's fork and starts clean.
 
-`SAY:` is the run's progress line, one per wave in either verbose mode: the wave's number,
+`SAY:` is the run's progress line, one per wave: the wave's number,
 how many checks run, and what they are (the recipe's family titles on a plan-driven run;
 id and kind otherwise). The plan, review and report steps and a retry each say what they
-are doing. In verbose mode the line opens with the run's position.
-Example: `Step 3 of 10:`, or `Steps 4–6 of 10:` for a wave of three. The run's steps are its checks in
-first-dispatch order, then the review and the report. A retry or a fix carries the number
-its check first took. The total drops a check that will not run: a skipped playbook
-step, or a check with no dispatch when the review is dispatched. The plan, recipe and
-ARR-policy steps carry no position: they run before the plan registers any check. Put its text to the
+are doing. The line opens with the run's position.
+Example: `Step 3 of 6:`, or `Steps 2–4 of 6:` for a wave of three. On a plan-driven run
+the steps are the recipe families the run performs, in recipe order: the unit of the
+steps table the user picked from (`PLAYBOOK_RECIPES.md` § Ask what to run), counting only
+the families this run carries, so a step left out, at either end or in the middle, is
+not counted. A wave's position is that of the families its checks perform, and a family
+run as several checks is one step; the line names each by its title. The extract step,
+the review and the report perform no family and carry no position. On any other run the
+steps are its checks in first-dispatch order, then the review and the report; the total
+drops a check that will not run: a skipped playbook step, or a check with no dispatch
+when the review is dispatched. A retry or a fix carries the number its check first took.
+The plan, recipe and ARR-policy steps carry no position: they run before the plan
+registers any check. Put its text to the
 user as one line of plain chat, verbatim, before the launch. Never as a file and never
 through SendUserFile.
 
 After every wave, in this order:
 
-1. `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/preview.py <run_dir>`. Send what it prints and
+1. `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/family_artifacts.py <run_dir>`,
+   silently: it writes each finished family's summary and workbook under
+   `out/families/`, and leaves the rest as it was. If it fails, say so once and keep
+   going.
+2. `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/preview.py <run_dir>`. Send what it prints and
    only that. It prints nothing when nothing changed, and re-names a file whose content
-   moved. With verbose mode off it names only the engagement preview, `plan.md`,
-   `out/workbook.xlsx` and `out/report.pptx`; with it on, every artifact as it lands
-   (§ Verbose mode). What it withholds is still rendered into
-   the run directory, and the sync carries it. Each `SHOW:` line is `path`, `caption`,
+   moved. It names every artifact as it lands. Each `SHOW:` line is `path`, `caption`,
    `tier`. The tier decides the send:
    - `working` (the engagement preview, the source inventory, the source profiles, the
-     check records, the check schedules, the deck's plan, the deck's source, the run
-     summary): one SendUserFile call for the whole wave, every working path in its
+     check records and check schedules of a run without families, the deck's plan, the
+     deck's source, the run summary): one SendUserFile call for the whole wave, every working path in its
      `files`, `display: attach`, the printed `BUNDLE:` line as its caption. One card per
      wave, never one per file.
-   - `deliverable` (`plan.md`, the review findings, `out/workbook.xlsx`,
-     `out/report.pptx`): one SendUserFile call per file, `display: render`, the printed
+   - `deliverable` (`plan.md`, each family's summary and then its workbook, the review findings,
+     `out/workbook.xlsx`, `out/report.pptx`): one SendUserFile call per file, `display: render`, the printed
      caption. Of the final documents, the workbook and the report deck are deliverable;
      the summary and the deck's source (`out/report.yaml`) travel in the bundle.
 
-   Send the bundle first, then the deliverables in printed order. Where SendUserFile does
+   Send the bundle first, then the deliverables in printed order, one call at a time:
+   each call waits for the one before it, never several in one turn. Where SendUserFile does
    not exist, one line per deliverable with its path and caption, and one line for the
    bundle listing its paths.
-2. `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/sync_run.py <run_dir>`, silently. Hand
+3. `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/sync_run.py <run_dir>`, silently. Hand
    `out/run_sync.tar.gz` to the user after a report wave lands, and whenever they ask for
    the run (§ Bringing the run home). If the refresh fails, say so once and keep going.
 
@@ -375,25 +378,33 @@ found the defect computed from the source and needs no re-run.
 
 Dispatch `check-review` (`dispatch --step review`) over the checks not yet reviewed at
 their current seq. An `extract` step is not a check under review: it computes no
-figure, and its record is the cache manifest every consumer's citations re-state. Put each actionable finding to the user from the review record
-(severity, target, observation); with verbose mode off the preview does not show them. The
-user rules on each:
+figure, and its record is the cache manifest every consumer's citations re-state. Act on
+every finding in the review record by its `fix_kind`, without waiting for a ruling
+(§ Running to completion), and tell the user in one line what the fix round re-runs:
 
-- **fix**: re-dispatch the named checks with `--mode fix`. Each fix snapshots its
-  check first and verifies its own change by diff (`${CLAUDE_PLUGIN_ROOT}/scripts/rework.py`); that closes the finding and ends the round. No re-review follows a fix.
-- **proceed**: the findings are carried into the deliverable as stated limitations.
+- **`rerun_check`**: re-dispatch the named checks with `--mode fix`. Each fix snapshots
+  its check first and verifies its own change by diff
+  (`${CLAUDE_PLUGIN_ROOT}/scripts/rework.py`); that closes the finding and ends the
+  round. No re-review follows a fix.
+- **`withhold`**: the figure is withheld, and the deliverable says so.
+- **`review_call`**: carried into the deliverable as a stated limitation.
+- **`data_request`** and **`management_question`**: the data room cannot settle them. Where
+  the answer decides a figure, put them to the user as § Running to completion says; an
+  answer re-dispatches the named check with `--mode fix`, the answer verbatim in
+  `fix_input`. Otherwise, and on no answer, they are carried to the open items.
 
 A further round, when the user directs one, is a fresh `check-review` with `carry_from`
-pointing at the prior record. A defect it re-finds standing after its fix round is put to
-the user as `fix_attempted`, never fixed again. A blocking finding that stands is never
-proceeded past silently: the affected figure is withheld and the deliverable says so.
+pointing at the prior record. A defect it re-finds standing after its fix round is
+`fix_attempted`, never fixed again, and carried as a stated limitation. A blocking
+finding that stands is never proceeded past silently: the affected figure is withheld
+and the deliverable says so.
 
 Then `check-report` (`dispatch --step report`). Re-dispatch it whenever later checks or
 fixes land after a seal; the report step reassembles from all current records.
 
 The relay relays. It does not open client files, compute figures, or summarize a step's
-output. The preview puts the deliverables in front of the user; the review's findings
-are put to them from its record.
+output. The preview puts the deliverables and the review's findings in front of the
+user.
 
 ## Bringing the run home
 

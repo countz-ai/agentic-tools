@@ -72,13 +72,17 @@ THEN: python3 ${CLAUDE_PLUGIN_ROOT}/scripts/playbook_next.py <abs run_dir> <abs 
 The `SAY:` line is the relay's progress line to the user (`RUN_CONTRACT.md` § Every
 wave); a wave of one reads `running 1 check:`. `<what runs>` is
 `describe_members` in `${CLAUDE_PLUGIN_ROOT}/scripts/run_state.py`, rendered the same:
-each recipe family the members cover as `<ID> <title>` from its `###` header
-(`run.json.plan.recipe`), counted `<n> × ` where more than one; a member with no recipe
-family as `<id> (<kind word>)` from `KIND_WORDS`. The `Steps <a>–<b> of <m>:` opening
-is `at_step` in the same script, and only in verbose mode (`run.json.inputs.verbose`,
-absent reads as on): `<a>` is one more than the steps already dispatched, `<b>` is
-`<a> + <k> - 1`, and `<m>` is the definition's steps less those skipped, plus 2 for
-the review and the report. A wave of one reads `Step <a> of <m>:`.
+each recipe family the members cover by its title from its `###` header
+(`run.json.plan.recipe`), with no family code, counted `<n> × ` where more than one; a
+member with no recipe family as `<id> (<kind word>)` from `KIND_WORDS`, and an extract
+step on a plan-driven run as reading the data room's files. The `Steps <a>–<b> of <m>:`
+opening is `at_step` in the same script, positioned by `say_position`. On a plan-driven
+run `<m>` is the number of recipe families the run's checks perform and each member's
+position is its family's place among them, in recipe order; an extract-only wave
+carries no position (`RUN_CONTRACT.md` § Every wave). On a saved playbook run `<a>` is
+one more than the steps already dispatched, `<b>` is `<a> + <k> - 1`, and `<m>` is the
+definition's steps less those skipped, plus 2 for the review and the report. A wave of
+one reads `Step <a> of <m>:`.
 
 One `NEXT:` line per wave member; a step this decision skips is a `SKIPPED: <step> —
 <reason>` line; the `THEN:` lines close the wave and send the relay back to the script
