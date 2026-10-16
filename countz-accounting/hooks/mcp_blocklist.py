@@ -10,7 +10,8 @@ blocked). This one script serves two hook events (hooks/hooks.json):
         `${CLAUDE_PLUGIN_DATA}/sessions/<session_id>.json` (falls back to
         `~/.countz-accounting/sessions/`).
     PreToolUse on every MCP tool (`mcp__*`): refuses a call the recorded list names,
-        a `get_countz_config` call with any argument, and a
+        a `get_countz_config` call with any argument, any other `countz` call whose
+        arguments are not a JSON object, and a
         `get_recipe_for_countz_analysis` call whose arguments are anything but `recipe`
         set to a name of 1 to 32 characters, each with the reason Claude reads, and lets
         everything else through. The argument checks need no recorded state.
@@ -127,9 +128,12 @@ def record(event: dict) -> None:
 def args_reason(tool: str, args) -> str | None:
     """The refusal reason for a `countz` call whose arguments the server would not
     accept; None lets it through."""
-    args = args if isinstance(args, dict) else {}
-    if tool == CONFIG_TOOL and args:
-        return f"Not sent: `{CONFIG_TOOL}` takes no arguments. Call it again with none."
+    if tool == CONFIG_TOOL:
+        if args:
+            return f"Not sent: `{CONFIG_TOOL}` takes no arguments. Call it again with none."
+        return None
+    if not isinstance(args, dict):
+        return f"Not sent: the arguments of `{tool}` are not a JSON object."
     if tool == RECIPE_TOOL:
         recipe = args.get("recipe")
         if (set(args) != {"recipe"} or not isinstance(recipe, str) or not recipe
@@ -201,9 +205,18 @@ def selftest() -> int:
             bad.append("a session with no list refused a call")
         if decide({**pre, "tool_name": cfg, "tool_input": {}}):
             bad.append("get_countz_config with no arguments was refused")
+        for args in (None, [], "", "recipe=debt", ["debt"]):
+            if not decide({**pre, "tool_name": recipe, "tool_input": args}):
+                bad.append(f"a recipe call with tool input {args!r} passed")
+        for args in (None, [], ""):
+            if decide({**pre, "tool_name": cfg, "tool_input": args}):
+                bad.append(f"get_countz_config with empty tool input {args!r} was refused")
+        for args in ("recipe=debt", ["debt"]):
+            if not decide({**pre, "tool_name": cfg, "tool_input": args}):
+                bad.append(f"get_countz_config with tool input {args!r} passed")
         if not decide({**pre, "tool_name": cfg, "tool_input": {"tenant": "t1"}}):
             bad.append("get_countz_config with an argument passed")
-        for args, what in (({}, "no arguments"), (None, "no tool input"),
+        for args, what in (({}, "no arguments"),
                            ({"recipe": ""}, "an empty name"),
                            ({"recipe": 7}, "a name that is not text"),
                            ({"recipe": "x" * 33}, "a 33-character name"),
@@ -233,7 +246,7 @@ def selftest() -> int:
         if decide({**pre, "tool_name": "Bash"}):
             bad.append("a built-in tool was refused")
         record({**post, "tool_response": {"blocked_tools": ["*"]}})
-        if decide({**pre, "tool_name": cfg}):
+        if decide({**pre, "tool_name": cfg, "tool_input": {}}):
             bad.append("get_countz_config was refused")
         if not decide({**pre, "tool_name": recipe, "tool_input": ok}):
             bad.append("`*` let a call through")
