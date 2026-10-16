@@ -1018,8 +1018,10 @@ def check(root: pathlib.Path) -> list[str]:
     #     is the single BUNDLE: line, so a run of many checks costs the conversation one
     #     card per wave rather than one per file. Every kind prints as it lands. A
     #     family's summary (out/families/*.md) is a deliverable card captioned with its
-    #     status, and a step's own summary (checks/<check>-summary.md) reaches the user
-    #     only through its family's.
+    #     status, its workbook the deliverable printed right after it, and a step's own
+    #     summary (checks/<check>-summary.md) reaches the user only through its family's.
+    #     On a plan-driven run (a check carries params.family) the check records and
+    #     tabs are not named at all: the family files carry them.
     pv = root / "scripts" / "preview.py"
     if pv.is_file():
         import subprocess
@@ -1128,6 +1130,26 @@ def check(root: pathlib.Path) -> list[str]:
                     if any("c1_books-summary.md" in x for x in shows4):
                         bad.append(f"{rel(pv)}: a step's summary reaches the user through its "
                                    f"family's, never as a check record of its own")
+                    # a plan-driven run: its check records and tabs stay in the run
+                    # directory, and each family's workbook follows its summary as a
+                    # deliverable, so the user reads 01 md, 01 xlsx, 02 md, 02 xlsx
+                    (rd / "run.json").write_text(json.dumps({"inputs": {}, "checks": [
+                        {"id": "c1_books", "params": {"family": "c1"}}]}))
+                    (rd / "checks" / "c1_books.md").write_text("# record\n")
+                    (rd / "out" / "tabs" / "c1_books.xlsx").write_bytes(b"c1 tab")
+                    (fam / "01-the-books-agree.xlsx").write_bytes(b"c1 tab")
+                    (fam / "02-the-walk.md").write_text("# 2. The walk\n\n**Status:** Complete\n")
+                    (fam / "02-the-walk.xlsx").write_bytes(b"walk tab")
+                    r5, shows5 = run_pv()
+                    got5 = [(pathlib.Path(x.split("\t")[1]).name, x.split("\t")[3]) for x in shows5]
+                    want5 = [("01-the-books-agree.xlsx", "deliverable"),
+                             ("02-the-walk.md", "deliverable"),
+                             ("02-the-walk.xlsx", "deliverable")]
+                    if r5.returncode != 0 or got5 != want5 or bundles(r5):
+                        bad.append(f"{rel(pv)}: on a plan-driven run the check records and "
+                                   f"tabs are not named, and each family's workbook follows "
+                                   f"its summary as a deliverable: want {want5}, got {got5}"
+                                   f"{' and a BUNDLE line' if bundles(r5) else ''}")
 
     # 8i. Playbook declarations are executed by an agent reading them, so a broken one
     #     fails at its next run, in front of the user. Where a plugin ships the validator

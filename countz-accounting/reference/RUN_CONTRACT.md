@@ -349,16 +349,17 @@ After every wave, in this order:
    moved. It names every artifact as it lands. Each `SHOW:` line is `path`, `caption`,
    `tier`. The tier decides the send:
    - `working` (the engagement preview, the source inventory, the source profiles, the
-     check records, the check schedules, the family workbooks, the deck's plan, the
+     check records and check schedules of a run without families, the deck's plan, the
      deck's source, the run summary): one SendUserFile call for the whole wave, every working path in its
      `files`, `display: attach`, the printed `BUNDLE:` line as its caption. One card per
      wave, never one per file.
-   - `deliverable` (`plan.md`, each family's summary, the review findings,
+   - `deliverable` (`plan.md`, each family's summary and then its workbook, the review findings,
      `out/workbook.xlsx`, `out/report.pptx`): one SendUserFile call per file, `display: render`, the printed
      caption. Of the final documents, the workbook and the report deck are deliverable;
      the summary and the deck's source (`out/report.yaml`) travel in the bundle.
 
-   Send the bundle first, then the deliverables in printed order. Where SendUserFile does
+   Send the bundle first, then the deliverables in printed order, one call at a time:
+   each call waits for the one before it, never several in one turn. Where SendUserFile does
    not exist, one line per deliverable with its path and caption, and one line for the
    bundle listing its paths.
 3. `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/sync_run.py <run_dir>`, silently. Hand

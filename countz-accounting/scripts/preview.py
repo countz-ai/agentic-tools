@@ -14,11 +14,12 @@ then, when any `working` line printed, the caption for the one card those files 
     BUNDLE:\t<caption>
 
 The tier decides how the relay sends (RUN_CONTRACT.md § Every wave). `deliverable` is
-what the user reads or takes away - the plan, each family's summary, the review
-findings, the sealed workbook and the report deck - and goes out as one rendered card
-each. `working` is everything else - the engagement preview, the source inventory, the
-source profiles, the check records, the check schedules, each family's workbook, the
-deck's source (report.yaml), the run summary - and goes out as ONE attach card per wave carrying every working file the wave
+what the user reads or takes away - the plan, each family's summary and its workbook,
+the review findings, the sealed workbook and the report deck - and goes out as one card
+each, a family's workbook printed right after its summary. `working` is everything else -
+the engagement preview, the source inventory, the source profiles, the check records,
+the check schedules, the deck's source (report.yaml), the run summary - and goes out as
+ONE attach card per wave carrying every working file the wave
 produced, captioned by the BUNDLE line: a run of many checks then costs the conversation
 one card per wave, not one per file, and the files stay where they live in the run
 directory, which the caption names.
@@ -29,6 +30,10 @@ the deliverables after it, in order. An artifact is printed once per content ver
 what was surfaced is recorded in out/preview/.shown.json keyed by a hash of its sources,
 so an unchanged file is never re-named and a rewritten one (a fix round moved a tab or a
 check record) is named again. Delete .shown.json to re-surface everything.
+
+On a plan-driven run (a check in run.json carries `params.family`) the steps the user
+sees are the recipe's families, so the check records and check schedules are not named:
+each family's summary and workbook carry them.
 
 Files that read well as they are - the source profiles, the check records, the tabs, the
 deck's source, the workbook, the deck - are shown from where they live. Machine records are rendered into
@@ -61,7 +66,6 @@ WORKING_KINDS = {
     "source": ("source profile", "source profiles", "sources/"),
     "check": ("check record", "check records", "checks/"),
     "tab": ("check schedule", "check schedules", "out/tabs/"),
-    "family_book": ("family workbook", "family workbooks", "out/families/"),
     "report_plan": ("the deck's plan (report-plan.md)", None, "out/"),
     "report_source": ("the deck's source (report.yaml)", None, "out/"),
     "run_summary": ("the run summary", None, "out/"),
@@ -210,8 +214,15 @@ def collect(run_dir: pathlib.Path) -> list[tuple]:
         entries.append(("plan", _file_hash(plan), lambda: plan,
                         "The check plan — bindings and the check roster", DELIVERABLE))
 
+    # a plan-driven run shows its steps as families: the per-check files stay in the
+    # run directory, and out/families/ carries what they say
+    try:
+        by_family = any((c.get("params") or {}).get("family")
+                        for c in _load_json(run_dir / "run.json").get("checks") or [])
+    except Exception:
+        by_family = False
     checks_dir = run_dir / "checks"
-    for rec in sorted(checks_dir.glob("*.md")) if checks_dir.is_dir() else []:
+    for rec in sorted(checks_dir.glob("*.md")) if checks_dir.is_dir() and not by_family else []:
         if rec.stem.endswith("-summary"):
             continue                    # a step's summary reaches the user in its family's
         entries.append((f"check:{rec.stem}", _file_hash(rec), lambda r=rec: r,
@@ -219,7 +230,7 @@ def collect(run_dir: pathlib.Path) -> list[tuple]:
                         f"and how it resolved", WORKING))
 
     tabs_dir = run_dir / "out" / "tabs"
-    for tab in sorted(tabs_dir.glob("*.xlsx")) if tabs_dir.is_dir() else []:
+    for tab in sorted(tabs_dir.glob("*.xlsx")) if tabs_dir.is_dir() and not by_family else []:
         entries.append((f"tab:{tab.stem}", _file_hash(tab), lambda t=tab: t,
                         f"Check schedule — {tab.stem}", WORKING))
 
@@ -234,7 +245,7 @@ def collect(run_dir: pathlib.Path) -> list[tuple]:
         book = md.with_suffix(".xlsx")
         if book.is_file():
             entries.append((f"family_book:{md.stem}", _file_hash(book), lambda b=book: b,
-                            f"Family workbook — {title}", WORKING))
+                            f"Workbook — {title}", DELIVERABLE))
 
     rv = _latest_record(run_dir, r"\d+-review\.json")
     if rv is not None:
