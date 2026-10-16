@@ -92,10 +92,7 @@ Layout:
   distils the per-dispatch timeline, the offloaded tool results and the instruction
   snapshot — `reference/OBSERVABILITY.md` § 3)
 
-Two hooks. `hooks/plugin_root.py`, at session start, names the plugin's folder in the
-session's context and exports it as `COUNTZ_PLUGIN_ROOT` for later commands, so a skill
-whose host left `${CLAUDE_PLUGIN_ROOT}` unresolved never searches for it.
-`hooks/mcp_blocklist.py` records the `blocked_tools` that `get_countz_config`
+One hook, `hooks/mcp_blocklist.py`: it records the `blocked_tools` that `get_countz_config`
 returns and refuses the MCP calls they name for the rest of the session, subagents and
 forked skills included (`reference/RUN_CONTRACT.md` § Sign in first). There is no unattended pipeline loop
 to re-enter — the user's session drives every wave in-band.
