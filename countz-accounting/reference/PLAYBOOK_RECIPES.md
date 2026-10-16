@@ -155,7 +155,8 @@ Once the user has picked what to run (§ 1), ask the rest in one message:
   Where they do not choose, take the answer its line carries (`RUN_CONTRACT.md`
   § Parameters). `arr_policy` is the exception: it is a file, not a one-line choice. Ask
   whether the company has an approved ARR policy (`ARR_POLICY.md` § Where a policy
-  lives). A policy in the library for this company is offered by name. The rest is
+  lives). A policy in the library for this company (`arr_policy.py library`, its
+  `MATCH:` line) is offered by name. The rest is
   settled after registration (§ 3).
 - **The company** whose books the run is over, in the user's words. It names the run
   folder.
@@ -174,7 +175,7 @@ First look for a bundled copy:
 `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/bundled_recipe.py <your recipe's name>`. When it
 prints `RECIPE:` and `VERSION:`, the package was built with that recipe in it: say so to
 the user in one line, register with `--recipe <the RECIPE path> --recipe-version <the
-VERSION>`, and call no recipe tool. `NONE` (exit 1) means nothing is bundled: fetch.
+VERSION>`, and call no recipe tool. `NONE` means nothing is bundled: fetch.
 
 Call `get_recipe_for_countz_analysis(recipe="<your recipe's name>")` on the `countz`
 server — a named shim knows its name; `countz`, given an ask, matches the catalog first

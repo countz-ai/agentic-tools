@@ -154,7 +154,9 @@ resets monthly is annualized at twelve times the tier.
 
 - **The library:** `$HOME/.countz-accounting/arr-policies/<company-slug>.yaml`, one
   approved policy per company, the file a later run reuses. The user may name another
-  path.
+  path. Look it up with `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/arr_policy.py library --company "<the company>"`, never by listing the folder: it prints `MATCH:` for the
+  company's own policy and `POLICY:` for every other, or `NONE`, which a machine with no
+  library yet also prints.
 - **In a run:** pinned at `<run_dir>/arr_policy.yaml` by
   `setup_run.py <run_dir> --arr-policy <file>`, which refuses a policy `arr_policy.py
   check` does not clear (complete, approved, unchanged since approval) and records its
