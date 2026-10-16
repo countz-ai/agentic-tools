@@ -198,11 +198,17 @@ def emit_wave(run_dir, pb_path, definition, decision, state, bound, run) -> None
     what = run_state.describe_members(
         [(st["id"], st["check"], st.get("params")) for st in members],
         run_state.recipe_families(run))
-    # The run's position: a skipped step leaves the total.
-    done = sum(state[st["id"]] is not None for st in definition["steps"])
+    # The run's position. A plan-driven run counts the recipe families it performs
+    # (run_state.say_position); a saved playbook counts its steps, a skipped one
+    # leaving the total, plus the review and the report.
+    if run_state.run_families(run):
+        where = run_state.say_position(run, [(None, None, st.get("params")) for st in members])
+    else:
+        done = sum(state[st["id"]] is not None for st in definition["steps"])
+        where = (list(range(done + 1, done + k + 1)),
+                 len(definition["steps"]) - len(skipped) + 2)
     print(run_state.say_line(run_state.at_step(
-        run, f"Wave {wave} — running {run_state.checks_phrase(k)}: {what}.",
-        list(range(done + 1, done + k + 1)), len(definition["steps"]) - len(skipped))))
+        run, f"Wave {wave} — running {run_state.checks_phrase(k)}: {what}.", *where)))
     print(f"RECORD: python3 {_q(run_state_py)} dispatch {_q(run_dir)} --briefs "
           + " ".join(_q(b) for b in briefs))
     print(run_state.LAUNCH)

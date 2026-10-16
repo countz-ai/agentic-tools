@@ -79,6 +79,7 @@ import shlex
 import sys
 
 import check_playbook  # sibling: the one home of KINDS, SLUG and definition validation
+import recipe_format  # sibling: a family's title as the user reads it
 
 PLUGIN_ROOT = pathlib.Path(__file__).resolve().parent.parent
 RUN_SCHEMA = "countz-accounting/run@1"
@@ -181,15 +182,18 @@ def recipe_order(run: dict, recipe, ids: set[str]) -> list[str]:
 def describe_members(members: list[tuple[str, str | None, dict | None]],
                      families: dict[str, str]) -> str:
     """What a wave runs, for its SAY line. `members` are (name, kind, params) in wave
-    order. A member whose params.family the recipe titles is counted under
-    `<ID> <title>`; any other is `<name> (<kind word>)`, or the name alone for a step
-    dispatch (plan / review / report), which has no kind."""
+    order. A member whose params.family the recipe titles is counted under that title,
+    as the user read it in the steps table (`recipe_format.plain_title`); any other is
+    `<name> (<kind word>)`, or the name alone for a step dispatch (plan / review /
+    report), which has no kind."""
     order: list[str] = []
     counts: dict[str, int] = {}
     for name, kind, params in members:
         fam = str((params or {}).get("family") or "").lower()
         if fam in families:
-            key = f"{fam.upper()} {families[fam]}"
+            key = recipe_format.plain_title(families[fam])
+        elif kind == check_playbook.EXTRACT and families:
+            key = "reading the data room's files for the steps that follow"
         elif kind:
             key = f"{name} ({KIND_WORDS.get(kind, kind)})"
         else:
@@ -221,11 +225,15 @@ def step_say(step: str, args: dict) -> str:
     return "Assembling the workbook and the report deck from the check records."
 
 
-# A SAY line opens with the run's position (RUN_CONTRACT.md § Every
-# wave). Example: `Step 3 of 10: <text>`. The run's steps are its checks in
-# first-dispatch order, then the review and the report. Once the review is dispatched, a
-# check with no dispatch will not run and drops out of the total. A step dispatched
-# before the plan registers any check carries no position.
+# A SAY line opens with the run's position (RUN_CONTRACT.md § Every wave). Example:
+# `Step 3 of 6: <text>`. On a plan-driven run the steps are the recipe families the run
+# executes, in recipe order - the unit of the steps table the user picked from, and only
+# the ones this run carries - and a wave's position is that of the families its checks
+# perform; an extract step, the review and the report perform none and carry no position.
+# On any other run the steps are its checks in first-dispatch order, then the review and
+# the report; once the review is dispatched, a check with no dispatch will not run and
+# drops out of the total. A step dispatched before the plan registers any check carries
+# no position.
 def check_order(run: dict) -> list[str]:
     """Check ids in first-dispatch order: a check's step number is its index + 1."""
     order: list[str] = []
@@ -249,10 +257,33 @@ def tail_position(run: dict, step: str) -> list[int]:
     return {"review": [n + 1], "report": [n + 2]}.get(step, []) if n else []
 
 
-def at_step(run: dict, text: str, positions: list[int], checks_n: int) -> str:
-    """`text` behind the run's position, or `text` alone before the plan registers a
-    check."""
-    if not (positions and checks_n):
+def run_families(run: dict) -> list[str]:
+    """The recipe families the run's checks perform, in recipe order; empty on a run
+    with no recipe or no family-carrying check."""
+    recipe = (run.get("plan") or {}).get("recipe")
+    fams = {str((c.get("params") or {}).get("family") or "").lower()
+            for c in run.get("checks") or []} - {""}
+    return recipe_order(run, recipe, fams) if recipe and fams else []
+
+
+def say_position(run: dict, members: list[tuple[str | None, str | None, dict | None]]
+                 ) -> tuple[list[int], int]:
+    """(positions, total) for a wave's SAY line. `members` are (check id or None, step,
+    params) per member."""
+    fams = run_families(run)
+    if fams:
+        pos = {fams.index(f) + 1 for _, _, params in members
+               if (f := str((params or {}).get("family") or "").lower()) in fams}
+        return sorted(pos), len(fams)
+    order, n = check_order(run), checks_counted(run)
+    pos = [p for cid, step, _ in members for p in
+           ([order.index(cid) + 1] if cid and cid in order else tail_position(run, step or ""))]
+    return pos, (n + 2 if n else 0)
+
+
+def at_step(run: dict, text: str, positions: list[int], total: int) -> str:
+    """`text` behind the run's position, or `text` alone where it has none."""
+    if not (positions and total):
         return text
     ps = sorted(set(positions))
     if len(ps) == 1:
@@ -261,7 +292,7 @@ def at_step(run: dict, text: str, positions: list[int], checks_n: int) -> str:
         where = f"Steps {ps[0]}–{ps[-1]}"
     else:
         where = f"Steps {', '.join(map(str, ps))}"
-    return f"{where} of {checks_n + 2}: {text}"
+    return f"{where} of {total}: {text}"
 
 
 def _now() -> str:
@@ -727,10 +758,9 @@ def cmd_dispatch(a) -> int:
                                 recipe_families(run))
         verb = ("Re-running", " on the review's findings") if a.mode == "fix" \
             else ("Running", "")
-        order = check_order(run)
         print(say_line(at_step(
             run, f"{verb[0]} {checks_phrase(len(members))}{verb[1]}: {what}.",
-            [order.index(c["id"]) + 1 for c in members], checks_counted(run))))
+            *say_position(run, [(c["id"], None, c.get("params")) for c in members]))))
         if len(members) > 1:
             print(LAUNCH)
         for row, brief in rows:
@@ -749,8 +779,8 @@ def cmd_dispatch(a) -> int:
         row = _append_dispatch(run, seq, a.step, STEP_SKILLS[a.step], args, None)
         write_row_brief(run_dir, row)
         save_run(run_dir, run)
-        print(say_line(at_step(run, step_say(a.step, args), tail_position(run, a.step),
-                               checks_counted(run))))
+        print(say_line(at_step(run, step_say(a.step, args),
+                               *say_position(run, [(None, a.step, None)]))))
         print(next_line(run_dir, row, None))
 
     else:
@@ -914,13 +944,10 @@ def cmd_record(a) -> int:
             [(d.get("check_id") or f"the {d['step']} step", skill_kind.get(d["skill"]),
               (d.get("args") or {}).get("params")) for d in minted],
             recipe_families(run))
-        order = check_order(run)
-        where = [p for d in minted for p in
-                 ([order.index(d["check_id"]) + 1] if d.get("check_id")
-                  else tail_position(run, d["step"]))]
         print(say_line(at_step(
             run, f"Retrying {checks_phrase(len(minted))} that failed: {what}.",
-            where, checks_counted(run))))
+            *say_position(run, [(d.get("check_id"), d["step"], (d.get("args") or {}).get("params"))
+                                for d in minted]))))
     if briefed:
         print(LAUNCH.replace("NEXT line", "RETRY line"))
     for line in lines:

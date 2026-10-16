@@ -1305,14 +1305,14 @@ def check(root: pathlib.Path) -> list[str]:
             else:
                 # Every wave opens with ONE SAY: line ahead of RECORD: - the progress line
                 # the relay puts in chat - naming the wave, the count and, where the
-                # step carries a recipe family, that family's title.
+                # step carries a recipe family, that family's title, with no family code.
                 out = r.stdout.splitlines()
                 say = [l for l in out if l.startswith("SAY:")]
                 rec_at = next((i for i, l in enumerate(out) if l.startswith("RECORD:")),
                               len(out))
                 if len(say) != 1 or "Wave 1" not in say[0] \
                         or "running 1 check:" not in say[0] \
-                        or "C1 the books agree internally" not in say[0] \
+                        or "The books agree internally" not in say[0] or "C1" in say[0] \
                         or out.index(say[0]) > rec_at:
                     bad.append(f"{rel(pn)}: a wave must open with one SAY: line before "
                                f"RECORD:, naming the wave, the count and the recipe "

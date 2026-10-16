@@ -323,11 +323,18 @@ without `brief=` is a plain Skill call; it runs as the skill's fork and starts c
 how many checks run, and what they are (the recipe's family titles on a plan-driven run;
 id and kind otherwise). The plan, review and report steps and a retry each say what they
 are doing. The line opens with the run's position.
-Example: `Step 3 of 10:`, or `Steps 4–6 of 10:` for a wave of three. The run's steps are its checks in
-first-dispatch order, then the review and the report. A retry or a fix carries the number
-its check first took. The total drops a check that will not run: a skipped playbook
-step, or a check with no dispatch when the review is dispatched. The plan, recipe and
-ARR-policy steps carry no position: they run before the plan registers any check. Put its text to the
+Example: `Step 3 of 6:`, or `Steps 2–4 of 6:` for a wave of three. On a plan-driven run
+the steps are the recipe families the run performs, in recipe order: the unit of the
+steps table the user picked from (`PLAYBOOK_RECIPES.md` § Ask what to run), counting only
+the families this run carries, so a step left out, at either end or in the middle, is
+not counted. A wave's position is that of the families its checks perform, and a family
+run as several checks is one step; the line names each by its title. The extract step,
+the review and the report perform no family and carry no position. On any other run the
+steps are its checks in first-dispatch order, then the review and the report; the total
+drops a check that will not run: a skipped playbook step, or a check with no dispatch
+when the review is dispatched. A retry or a fix carries the number its check first took.
+The plan, recipe and ARR-policy steps carry no position: they run before the plan
+registers any check. Put its text to the
 user as one line of plain chat, verbatim, before the launch. Never as a file and never
 through SendUserFile.
 

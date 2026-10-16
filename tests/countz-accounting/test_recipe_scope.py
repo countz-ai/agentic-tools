@@ -132,6 +132,27 @@ def main() -> int:
     sc, m = check_report.in_run(full, fm, schedules, {"title": "Demo as substantiated"})
     expect(len(sc) == 2 and m, "a full run is held to every schedule and the metrics page")
 
+    # progress counts the recipe steps the run performs, a middle one left out included
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        rp = pathlib.Path(td) / "demo.md"
+        rp.write_text(RECIPE)
+        run = {"plan": {"recipe": str(rp)}, "dispatches": [], "inputs": {}, "checks": [
+            {"id": "extract_gl", "kind": "extract", "params": {}},
+            {"id": "d0_population", "kind": "analysis", "params": {"family": "d0"}},
+            {"id": "d2_large", "kind": "recon", "params": {"family": "d2"}},
+            {"id": "d2_rest", "kind": "recon", "params": {"family": "d2"}}]}
+        pos = run_state.say_position(run, [("d2_large", None, {"family": "d2"}),
+                                           ("d2_rest", None, {"family": "d2"})])
+        expect(pos == ([2], 2), f"a split family is one step, d1 left out of the count: {pos}")
+        line = run_state.at_step(run, "x", *run_state.say_position(run, [("extract_gl", None, {})]))
+        expect(line == "x", f"the extract step carries no position: {line}")
+        line = run_state.at_step(run, "x", *run_state.say_position(run, [(None, "review", None)]))
+        expect(line == "x", f"the review carries no position: {line}")
+        what = run_state.describe_members([("d2_large", "recon", {"family": "d2"})],
+                                          run_state.recipe_families(run))
+        expect(what == "The cash ledger reconciled to the bank", f"a family by its title: {what}")
+
     for b in bad:
         print(f"FAIL: {b}")
     print(f"test_recipe_scope: {'ok' if not bad else f'{len(bad)} failure(s)'}")
