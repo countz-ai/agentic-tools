@@ -216,6 +216,59 @@ def _report_defects(text: str, fams: dict[str, str]) -> list[tuple[str, str]]:
     return bad
 
 
+# A family's header, with its title captured: the scope table shows the title alone.
+FAMILY_TITLED = re.compile(r"^### ([A-Z])(\d) — (.+?) \(kind `([a-z]+)`, (.+)\)\s*$", re.M)
+READS = re.compile(r"^\*\*Reads:\*\*(.*?)(?:\n\s*\n|\Z)", re.S | re.M)
+FAMILY_TOKEN = re.compile(r"\b([A-Z]\d)\b")
+
+
+def families(text: str) -> list[dict]:
+    """The recipe's families in document order: `{"id": "c4", "title", "kind",
+    "cardinality", "reads": [...]}`. `reads` is the families this one reads from — the
+    ids its `**Reads:**` paragraph names, or, where the family carries none, the ids named
+    in its sentences that carry a `_from` param. A read the text does not name this way is
+    the plan's to add (check-plan SKILL.md § Scope)."""
+    heads = list(FAMILY_TITLED.finditer(text))
+    ids = {f"{m.group(1)}{m.group(2)}" for m in heads}
+    out = []
+    for i, m in enumerate(heads):
+        body = text[m.end():heads[i + 1].start() if i + 1 < len(heads) else len(text)]
+        if (stop := re.search(r"^## ", body, re.M)):
+            body = body[:stop.start()]
+        own = f"{m.group(1)}{m.group(2)}"
+        reads = READS.search(body)
+        where = reads.group(1) if reads else " ".join(
+            s for s in re.split(r"(?<=[.;:])\s+|\n\s*\n", body) if "_from" in s)
+        deps: list[str] = []
+        for tok in FAMILY_TOKEN.findall(where):
+            if tok in ids and tok != own and tok.lower() not in deps:
+                deps.append(tok.lower())
+        out.append({"id": own.lower(), "title": m.group(3), "kind": m.group(4),
+                    "cardinality": m.group(5), "reads": deps})
+    return out
+
+
+def plain_title(title: str) -> str:
+    """A family title as the user reads it: no code markup, no underscores, a capital
+    first letter."""
+    t = re.sub(r"\s+", " ", title.replace("`", "").replace("_", " ")).strip()
+    return t[:1].upper() + t[1:]
+
+
+def scope_closure(fams: list[dict], picked: list[str]) -> list[str]:
+    """The family ids a run over `picked` executes: each picked family and every family it
+    reads from, transitively, in the recipe's order."""
+    reads = {f["id"]: f["reads"] for f in fams}
+    want, todo = set(), [p.lower() for p in picked]
+    while todo:
+        fid = todo.pop()
+        if fid in want or fid not in reads:
+            continue
+        want.add(fid)
+        todo.extend(reads[fid])
+    return [f["id"] for f in fams if f["id"] in want]
+
+
 def _lead(fm: dict[str, str]) -> list[str]:
     return [v.strip().strip("'\"") for v in fm.get("lead", "").strip().strip("[]").split(",")
             if v.strip()]

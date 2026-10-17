@@ -952,15 +952,21 @@ def fm_list(value: str | None) -> list[str]:
 
 def lead_families(run: dict) -> list[str] | None:
     """The families whose tabs lead the workbook: the recipe's `lead`, else its
-    `headline` alone, else none. None when the run names a recipe this machine cannot
-    read — the map is then held on the shape alone."""
+    `headline` alone, else none — of those, the families a check of the run executes (a
+    partial run's scope, or a family the plan dropped, has no tab to lead with). None
+    when the run names a recipe this machine cannot read — the map is then held on the
+    shape alone."""
     recipe = (run.get("plan") or {}).get("recipe")
     if not recipe:
         return []
     fm = recipe_frontmatter(pathlib.Path(recipe))
     if not fm:
         return None
-    return fm_list(fm.get("lead")) or fm_list(fm.get("headline"))
+    ran = {str((c.get("params") or {}).get("family") or "").lower()
+           for c in run.get("checks") or []} - {""}
+    def kept(fams: list[str]) -> list[str]:
+        return [f for f in fams if not ran or f.lower() in ran]
+    return kept(fm_list(fm.get("lead"))) or kept(fm_list(fm.get("headline")))
 
 
 def tab_owners(checks: list[dict], tabs: list[str]) -> tuple[dict[str, str], list[str]]:

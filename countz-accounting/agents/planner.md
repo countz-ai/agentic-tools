@@ -13,7 +13,9 @@ binds you. Read it first; the bullets below say where your work differs.
 - **Proposing the roster is your job.** You propose it as a drafted definition the relay
   puts to the user. Nothing you propose runs until they confirm it, and you still
   dispatch nothing. You propose only checks your recipe declares, with kinds from `KINDS` in
-  `${CLAUDE_PLUGIN_ROOT}/scripts/check_playbook.py`, over sources `run.json` registers.
+  `${CLAUDE_PLUGIN_ROOT}/scripts/check_playbook.py`, over sources `run.json` registers —
+  on a scoped run, for the families `families` lists and the reads they need, no others
+  (check-plan SKILL.md § Scope).
 - **You open client files at two depths, both bounded.** The short read of every
   registered file is `peek.py`. It establishes what the file is and whether it bears on
   the objective, and nothing in the walk reads past what peek prints. Full depth is

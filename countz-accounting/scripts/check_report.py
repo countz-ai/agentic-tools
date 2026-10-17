@@ -38,14 +38,17 @@ schedules (RECIPE_FORMAT.md § Report), each is on the deck as a table from its 
 tab carrying every declared column and period, at the full population its `where` and
 `through` leave: every row's identity is on the deck, none is trimmed. A check whose
 declared periods scripts/periods.py refuses fails this gate by name. A run with no
-recipe, or a recipe with no `## Report`, is not held to it. On every deck, a table whose
+recipe, or a recipe with no `## Report`, is not held to it, and neither is a schedule
+from a family no check of the run executes (a partial run's scope, a family the plan
+dropped). On every deck, a table whose
 rows read the same in every column shown is refused: the reader cannot tell them apart.
 
 GATE 6 — the structure (REPORT.md § 1). The recipe decides it; this gate holds the deck
 to what the recipe declares. The first page after the cover is the executive summary —
 headed `Executive summary`, its message a sentence, at least one stat tile, table or
 chart on it. On a recipe run the second page is the key-metrics page, headed as the
-recipe's `metrics.title`, carrying a figure block; the first schedule placed `lead` sits
+recipe's `metrics.title`, carrying a figure block — unless no check of the run executes
+the recipe's `headline` family, whose measure that page states; the first schedule placed `lead` sits
 at most one page after it and no other page stands between two `lead` schedules; every
 page carrying a schedule placed `appendix` has the kicker `Appendix`, as does every page
 after the first `Appendix` page; and where the recipe declares `narrative`, every
@@ -77,7 +80,8 @@ import zipfile
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from check_prose import admitted_values  # noqa: E402
 from check_workbook import sheet_cells, sheet_numbers, sheet_order, shared_strings  # noqa: E402
-from recipe_format import APPENDIX, report_metrics, report_narrative, report_schedules  # noqa: E402
+from recipe_format import (APPENDIX, frontmatter, report_metrics, report_narrative,  # noqa: E402
+                           report_schedules)
 import style  # noqa: E402
 
 TITLE_MAX = 80                          # build_report.TITLE_MAX — a headline, not a sentence
@@ -552,6 +556,30 @@ def carries(s: dict, sc: dict, tabs: list[str]) -> bool:
         for n, rows in s["tables"])
 
 
+def families_run(run: dict) -> set[str]:
+    """The recipe families the run's checks execute (`params.family`, lower-case)."""
+    return {str((c.get("params") or {}).get("family") or "").lower()
+            for c in run.get("checks") or []} - {""}
+
+
+def in_run(run: dict, fm: dict[str, str], schedules: list[dict] | None,
+           metrics: dict | None) -> tuple[list[dict] | None, dict | None]:
+    """The recipe's schedules and key-metrics page as far as the run's checks reach. A
+    family no check executes — left out of the run's scope (`run.json.plan.scope`), or
+    dropped by the plan as not runnable — has no tab: its schedules are not held to the
+    deck, and when it is the `headline` family neither is the key-metrics page, whose
+    measure that family states. The deck says what was not run (REPORT.md § 1)."""
+    ran = families_run(run)
+    if not ran:
+        return schedules, metrics
+    if schedules:
+        schedules = [sc for sc in schedules if str(sc.get("from", "")).lower() in ran]
+    headline = str(fm.get("headline") or "").strip().strip("'\"").lower()
+    if headline and headline not in ran:
+        metrics = None
+    return schedules, metrics
+
+
 def structure_gate(metrics: dict | None, schedules: list[dict] | None, narrative: list[str] | None,
                    tabs: list[str], slides: list[dict]) -> list[str]:
     """GATE 6 — the structure (REPORT.md § 1), as the recipe declares it. The first page
@@ -974,6 +1002,7 @@ def audit(deck: pathlib.Path, workbook: pathlib.Path, run_dir: pathlib.Path | No
                 rtext = pathlib.Path(rpath).read_text(encoding="utf-8")
                 schedules, metrics = report_schedules(rtext), report_metrics(rtext)
                 narrative = report_narrative(rtext)
+                schedules, metrics = in_run(run, frontmatter(rtext), schedules, metrics)
         except (OSError, ValueError):
             schedules = metrics = narrative = None
     if schedules:

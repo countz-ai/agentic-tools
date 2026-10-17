@@ -22,6 +22,24 @@ the events, and your return value.
   workbook once. Never read or write a same-wave step's files; they are
   mid-write. The exception is a dependency your dispatch declares (a `_from` key in your
   params, `worker.md` § Your procedure): that step is terminal before you start.
+- On a plan-driven step, also write `checks/<check>-summary.md` before your record: the
+  page a controller or a partner reads to learn whether the procedure worked and where it
+  stands, before they open your tab. The run builds the family's summary from it
+  (`scripts/family_artifacts.py`). In plain paragraphs, under no heading of your own, in
+  this order:
+  1. What we set out to establish, over which entities, as of what date or for what
+     period: one sentence.
+  2. The result: whether we performed the procedure in full, and what it showed — the
+     figures agreed, or the differences and exceptions with their count and gross
+     amount, the largest named.
+  3. What remains open: each open item or data request in a sentence, with its amount
+     and what would close it.
+  4. What we did not do, and why, where any part was not performed or ran degraded.
+
+  At most 200 words, in `DOCTRINE.md` § Voice and in the words an accountant uses: no
+  ids (`X.`, `F.`, a check or family code), no file paths or column names, no
+  working-paper terms. Amounts follow `DOCTRINE.md` § Number conventions, and each one
+  is on your tab. No tables: the detail is the tab's.
 
 ## Your procedure
 

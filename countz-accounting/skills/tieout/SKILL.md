@@ -54,11 +54,6 @@ parameters and the data room's directory shape; run `scripts/preview.py <run_dir
 what it prints per `RUN_CONTRACT.md § Every wave` right after registering, before
 anything dispatches.
 
-**Verbose mode.** Add `--no-verbose` when `get_countz_config` returned
-`settings.verbose: false`, and tell the user the `VERBOSE:` line the script prints. The mode
-decides what the preview shows (`${CLAUDE_PLUGIN_ROOT}/reference/RUN_CONTRACT.md`
-§ Verbose mode, which also covers a change mid-run).
-
 ## 3. Register the checks
 
 Register one check — `kind: tieout`, the sources, the goal verbatim, `params` for any
@@ -80,7 +75,7 @@ check per pair, so they run in parallel.
    returned: `run_state.py record <run_dir>` — launch any `RETRY:` line and follow its
    `THEN:`; a `FAILED:` line goes to the user.
 2. **review and report** — per `RUN_CONTRACT.md § Review and report`: `check-review`
-   over the new checks, the user's ruling on its findings, then `check-report`.
+   over the new checks, its findings acted on without a ruling, then `check-report`.
 
 After every wave, preview and refresh the archive per `RUN_CONTRACT.md § Every wave`. Do
 not summarize a step's output or re-derive its conclusions: the preview puts the

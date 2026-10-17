@@ -154,7 +154,9 @@ resets monthly is annualized at twelve times the tier.
 
 - **The library:** `$HOME/.countz-accounting/arr-policies/<company-slug>.yaml`, one
   approved policy per company, the file a later run reuses. The user may name another
-  path.
+  path. Look it up with `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/arr_policy.py library --company "<the company>"`, never by listing the folder: it prints `MATCH:` for the
+  company's own policy and `POLICY:` for every other, or `NONE`, which a machine with no
+  library yet also prints.
 - **In a run:** pinned at `<run_dir>/arr_policy.yaml` by
   `setup_run.py <run_dir> --arr-policy <file>`, which refuses a policy `arr_policy.py
   check` does not clear (complete, approved, unchanged since approval) and records its
@@ -168,7 +170,7 @@ resets monthly is annualized at twelve times the tier.
 A recipe that computes ARR, recurring revenue, retention, churn or an ARR bridge declares
 `arr_policy` in its frontmatter (`RECIPE_FORMAT.md` § The document). The relay settles
 it through the `create-arr-policy` skill and pins it before the plan is drafted
-(`PLAYBOOK_RECIPES.md` § 2), and the plan writes its path into the `params.arr_policy`
+(`PLAYBOOK_RECIPES.md` § 3), and the plan writes its path into the `params.arr_policy`
 of every step the recipe names. From there, § Applying the policy governs, and
 § Computing ARR says how each value becomes a figure.
 

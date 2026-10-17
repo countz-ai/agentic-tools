@@ -10,7 +10,11 @@ blocked). This one script serves two hook events (hooks/hooks.json):
         `${CLAUDE_PLUGIN_DATA}/sessions/<session_id>.json` (falls back to
         `~/.countz-accounting/sessions/`).
     PreToolUse on every MCP tool (`mcp__*`): refuses a call the recorded list names,
-        with the reason Claude reads, and lets everything else through.
+        a `get_countz_config` call with any argument, any other `countz` call whose
+        arguments are not a JSON object, and a
+        `get_recipe_for_countz_analysis` call whose arguments are anything but `recipe`
+        set to a name of 1 to 32 characters, each with the reason Claude reads, and lets
+        everything else through. The argument checks need no recorded state.
 
 An entry is `<server>/<tool>`, `<server>/*`, or `*` alone. `<server>` is the
 server's short name (`countz`); the host prefixes it (`mcp__plugin_countz-accounting_countz__…`,
@@ -40,6 +44,8 @@ import sys
 
 SERVER = "countz"
 CONFIG_TOOL = "get_countz_config"
+RECIPE_TOOL = "get_recipe_for_countz_analysis"
+RECIPE_NAME_MAX = 32     # the catalog's longest name, stock-based-compensation, is 24
 _WIRE = re.compile(r"^mcp__(.+)__([^_].*)$")
 
 
@@ -119,14 +125,36 @@ def record(event: dict) -> None:
     tmp.replace(path)
 
 
+def args_reason(tool: str, args) -> str | None:
+    """The refusal reason for a `countz` call whose arguments the server would not
+    accept; None lets it through."""
+    if tool == CONFIG_TOOL:
+        if args:
+            return f"Not sent: `{CONFIG_TOOL}` takes no arguments. Call it again with none."
+        return None
+    if not isinstance(args, dict):
+        return f"Not sent: the arguments of `{tool}` are not a JSON object."
+    if tool == RECIPE_TOOL:
+        recipe = args.get("recipe")
+        if (set(args) != {"recipe"} or not isinstance(recipe, str) or not recipe
+                or len(recipe) > RECIPE_NAME_MAX):
+            return (f"Not sent: `{RECIPE_TOOL}` takes one argument, `recipe`, set to a "
+                    f"catalog `name` from `{CONFIG_TOOL}`. When no catalog entry matches "
+                    f"the ask, call `create_countz_playbook_recipe` instead.")
+    return None
+
+
 def decide(event: dict) -> str | None:
-    """The refusal reason for a call the blocked list names; None lets it through."""
+    """The refusal reason for a call the blocked list names or a `countz` call with
+    arguments the server would not accept; None lets it through."""
     split = split_wire(event.get("tool_name", ""))
     if not split:
         return None
     server, tool = split
-    if server_is(server, SERVER) and tool == CONFIG_TOOL:
-        return None
+    if server_is(server, SERVER):
+        reason = args_reason(tool, event.get("tool_input"))
+        if reason or tool == CONFIG_TOOL:
+            return reason
     sid = event.get("session_id")
     path = state_path(sid) if sid else None
     if path is None or not path.is_file():
@@ -171,20 +199,46 @@ def selftest() -> int:
         drive = "mcp__claude_ai_Google_Drive__search_files"
         pre = {"hook_event_name": "PreToolUse", "session_id": "s1"}
         post = {"hook_event_name": "PostToolUse", "session_id": "s1", "tool_name": cfg}
-        if decide({**pre, "tool_name": drive}):
+        ok = {"recipe": "stock-based-compensation"}
+        if decide({**pre, "tool_name": drive}) or decide({**pre, "tool_name": recipe,
+                                                         "tool_input": ok}):
             bad.append("a session with no list refused a call")
+        if decide({**pre, "tool_name": cfg, "tool_input": {}}):
+            bad.append("get_countz_config with no arguments was refused")
+        for args in (None, [], "", "recipe=debt", ["debt"]):
+            if not decide({**pre, "tool_name": recipe, "tool_input": args}):
+                bad.append(f"a recipe call with tool input {args!r} passed")
+        for args in (None, [], ""):
+            if decide({**pre, "tool_name": cfg, "tool_input": args}):
+                bad.append(f"get_countz_config with empty tool input {args!r} was refused")
+        for args in ("recipe=debt", ["debt"]):
+            if not decide({**pre, "tool_name": cfg, "tool_input": args}):
+                bad.append(f"get_countz_config with tool input {args!r} passed")
+        if not decide({**pre, "tool_name": cfg, "tool_input": {"tenant": "t1"}}):
+            bad.append("get_countz_config with an argument passed")
+        for args, what in (({}, "no arguments"),
+                           ({"recipe": ""}, "an empty name"),
+                           ({"recipe": 7}, "a name that is not text"),
+                           ({"recipe": "x" * 33}, "a 33-character name"),
+                           ({**ok, "ask": "prove cash"}, "an extra `ask`"),
+                           ({"ask": "prove cash"}, "`ask` alone")):
+            if not decide({**pre, "tool_name": recipe, "tool_input": args}):
+                bad.append(f"a recipe call with {what} passed")
+        if decide({**pre, "tool_name": recipe, "tool_input": {"recipe": "x" * 32}}):
+            bad.append("a 32-character name was refused")
         record({**post, "tool_response": [{"type": "text", "text": json.dumps(
-            {"blocked_tools": [], "settings": {"verbose": True}})}]})
-        if "settings" in json.loads(state_path("s1").read_text()):
-            bad.append("the config result's settings were recorded")
+            {"blocked_tools": [], "catalog_yaml": "analyses: []"})}]})
+        if "catalog_yaml" in json.loads(state_path("s1").read_text()):
+            bad.append("the config result's catalog was recorded")
         if not state_path("s1").is_file():
             bad.append("the config result was not recorded")
-        if decide({**pre, "tool_name": drive}) or decide({**pre, "tool_name": recipe}):
+        if decide({**pre, "tool_name": drive}) or decide({**pre, "tool_name": recipe,
+                                                         "tool_input": ok}):
             bad.append("an empty list refused a call")
         record({**post, "tool_response": {"blocked_tools": ["Google_Drive/*"]}})
         if not decide({**pre, "tool_name": drive}):
             bad.append("a blocked tool passed")
-        if decide({**pre, "tool_name": recipe}):
+        if decide({**pre, "tool_name": recipe, "tool_input": ok}):
             bad.append("a tool the list does not name was refused")
         if not decide({**pre, "tool_name": drive, "agent_id": "a1",
                        "agent_type": "general-purpose"}):
@@ -192,16 +246,16 @@ def selftest() -> int:
         if decide({**pre, "tool_name": "Bash"}):
             bad.append("a built-in tool was refused")
         record({**post, "tool_response": {"blocked_tools": ["*"]}})
-        if decide({**pre, "tool_name": cfg}):
+        if decide({**pre, "tool_name": cfg, "tool_input": {}}):
             bad.append("get_countz_config was refused")
-        if not decide({**pre, "tool_name": recipe}):
+        if not decide({**pre, "tool_name": recipe, "tool_input": ok}):
             bad.append("`*` let a call through")
         record({"hook_event_name": "PostToolUse", "session_id": "s1",
-                "tool_name": "mcp__claude_ai_countz__update_countz_config",
+                "tool_name": recipe,
                 "tool_response": json.dumps({"blocked_tools": []})})
         st = json.loads(state_path("s1").read_text())
         if st != {"blocked_tools": ["*"]}:
-            bad.append(f"update_countz_config changed the state: {st}")
+            bad.append(f"a recipe result changed the state: {st}")
         if split_wire(cfg) != ("plugin_countz-accounting_countz", "get_countz_config"):
             bad.append("split_wire mis-split a plugin tool name")
         if not listed("claude_ai_countz", "get_recipe_for_countz_analysis",

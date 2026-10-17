@@ -17,7 +17,8 @@ what goes where.
 ### Tab order
 - Exec Summary
 - The lead tabs — the recipe's `lead:` list (`RECIPE_FORMAT.md` § The document);
-  absent, the headline family's tab alone
+  absent, the headline family's tab alone. A family no check ran — left out of a scoped
+  run, or dropped by the plan — has no tab and is skipped
 - Basis of Preparation
 - every other check tab in roster order
 - Coverage, Open Items, Sources, Evidence
@@ -257,11 +258,13 @@ Tables, not paragraphs, in this order:
 2. Per check: populations; tolerances with any loosening
    and its reason; elections with their bases and rejected sides.
 3. On a plan-driven run: the recipe, the plan's approval, and each family the plan
-   dropped or degraded with its reason.
+   dropped or degraded with its reason. On a scoped run (`run.json.plan.scope`), also
+   the steps the user picked and each family left out, by its title, with *Not in this
+   run's scope* as its reason.
    Then the sign-off block: `Prepared by` (Countz, with the run's date), `Reviewed by`
    and `Date reviewed`, the last two left blank for the firm's reviewer to complete.
-4. **Procedures not performed** — one line per row: every check that did not run or
-   ended blocked or failed, every check that could not establish what it set out to
+4. **Procedures not performed** — one line per row: every family left out of the run's
+   scope, every check that did not run or ended blocked or failed, every check that could not establish what it set out to
    establish, and every step that ran degraded, with its reason.
 5. **How to read this workbook** — the prefix table from `EVIDENCE.md` § 0, one row per
    prefix the workbook uses; then one line each for the dispositions (`measured` /

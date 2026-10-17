@@ -11,6 +11,9 @@ approves and checks a company's `arr_policy.yaml` (reference/ARR_POLICY.md).
     arr_policy.py amend <file> --gaps <gaps-*.yaml>... [--answers <answers.yaml>] --out <draft>
                                                       # add the instructions a run's steps found
     arr_policy.py same-core <a> <b>                   # exit 0 when b only adds instructions to a
+    arr_policy.py library [--company "<name>"] [--dir <folder>]
+                                                      # what the policy library holds; exit 0,
+                                                      # NONE when it holds nothing
 
 An ARR policy settles every one of the 31 decisions (ARR_POLICY.md § The decisions) from
 four top-level policy positions, a set of conventions, seven fixed rules, and the
@@ -1120,6 +1123,31 @@ def amend(doc: dict, args) -> int:
     return 0 if not asks else 2
 
 
+LIBRARY = pathlib.Path.home() / ".countz-accounting" / "arr-policies"
+
+
+def library(folder: pathlib.Path, company: str | None) -> list[str]:
+    """The lines `library` prints: `MATCH:` for the company's own policy, then one
+    `POLICY:\t<path>\t<company>\t<status>` per policy in the folder, or `NONE`. A
+    folder that does not exist holds nothing; it is not an error."""
+    files = sorted(folder.glob("*.yaml")) if folder.is_dir() else []
+    out: list[str] = []
+    if company:
+        sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+        from setup_run import slug  # sibling: the company slug the library names files by
+        own = folder / f"{slug(company)}.yaml"
+        if own.is_file():
+            out.append(f"MATCH:\t{own}")
+    for f in files:
+        try:
+            doc = _load(f)
+            doc = doc if isinstance(doc, dict) else {}
+        except Exception:  # noqa: BLE001 - a file that will not parse is listed as such
+            doc = {"status": "unreadable"}
+        out.append(f"POLICY:\t{f}\t{doc.get('company') or '?'}\t{doc.get('status') or '?'}")
+    return out or ["NONE"]
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -1152,7 +1180,14 @@ def main() -> int:
     sc = sub.add_parser("same-core")
     sc.add_argument("a", type=pathlib.Path)
     sc.add_argument("file", type=pathlib.Path)
+    lb = sub.add_parser("library")
+    lb.add_argument("--company", default=None)
+    lb.add_argument("--dir", type=pathlib.Path, default=LIBRARY)
     args = ap.parse_args()
+
+    if args.cmd == "library":
+        print("\n".join(library(args.dir, args.company)))
+        return 0
 
     if args.cmd == "catalog":
         print(json.dumps(catalog_json(), indent=2, default=str) if args.json else catalog_md(), end="")

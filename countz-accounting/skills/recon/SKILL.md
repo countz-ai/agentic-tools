@@ -43,11 +43,6 @@ as `RUN_DIR:` — that path is `<run_dir>` below; never compose it yourself. It 
 folds into an existing run named by its path, or refuses a path that is not one; it
 reads no client file; each check binds its own sources.
 
-**Verbose mode.** Add `--no-verbose` when `get_countz_config` returned
-`settings.verbose: false`, and tell the user the `VERBOSE:` line the script prints. The mode
-decides what the preview shows (`${CLAUDE_PLUGIN_ROOT}/reference/RUN_CONTRACT.md`
-§ Verbose mode, which also covers a change mid-run).
-
 ## 3. Register the checks
 
 Register one check per reconciliation with `scripts/run_state.py add-checks` — `kind:
