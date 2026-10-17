@@ -37,8 +37,9 @@ KIT = {
               "total", "status", "fit_rows", "finish", "save"],
 }
 
-HEAD = """
-## What your inputs already hold
+HEADING = "## What your inputs already hold"
+HEAD = f"""
+{HEADING}
 
 Written by `scripts/handoff.py` from the run directory when this brief was written, and
 limited to what your params name. Rely on it to know what exists and how to call it: open
@@ -236,8 +237,39 @@ def kit_block() -> list[str]:
     return out + [""]
 
 
-def render(run_dir, params) -> str:
-    """The handoff block for a brief whose params are `params`; '' when it names nothing."""
+def held_out(params, held_checks=(), held_reads=()) -> dict:
+    """`params` less what an agent already holds in context: the `_from` checks it ran and
+    the cache tables those read. A holder lane's next brief hands over only the rest
+    (scripts/lanes.py)."""
+    if not isinstance(params, dict):
+        return {}
+    held_checks, held_reads = set(held_checks), set(held_reads)
+    out = {}
+    for k, v in params.items():
+        if k.endswith("_from") and k != "cache_from":
+            vs = [c for c in ([v] if isinstance(v, str) else v if isinstance(v, list) else [])
+                  if c not in held_checks]
+            if vs:
+                out[k] = vs
+        elif k == "reads":
+            rs = [r for r in v or [] if isinstance(r, str) and r not in held_reads]
+            if rs:
+                out[k] = rs
+    return out
+
+
+def replace(path, block: str) -> None:
+    """Swap a brief's handoff block (from HEADING to the end of the file) for `block`."""
+    path = pathlib.Path(path)
+    t = path.read_text(encoding="utf-8")
+    i = t.find("\n" + HEADING)
+    body = (t[:i] if i >= 0 else t).rstrip() + "\n"
+    path.write_text(body + block, encoding="utf-8")
+
+
+def render(run_dir, params, kit: bool = True) -> str:
+    """The handoff block for a brief whose params are `params`; '' when it names nothing.
+    `kit=False` leaves out the kit calls, for an agent that already has them in context."""
     run_dir = pathlib.Path(run_dir)
     if not isinstance(params, dict):
         return ""
@@ -246,7 +278,7 @@ def render(run_dir, params) -> str:
     if not reads and not froms:
         return ""
     parts = cache_block(run_dir, reads) + checks_block(run_dir, froms) \
-        + scripts_block(run_dir, froms) + kit_block()
+        + scripts_block(run_dir, froms) + (kit_block() if kit else [])
     return HEAD + "\n" + "\n".join(parts).rstrip() + "\n"
 
 

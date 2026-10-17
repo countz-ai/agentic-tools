@@ -243,6 +243,10 @@ outcome=complete  produced=out/tabs/tie_gl_tb.xlsx
 
 Never return your analysis, a table, or a summary of your reasoning.
 
+A dispatch whose arguments carry `prior_errors` is a repair: it holds what stopped the
+earlier attempts of the same step, verbatim. Read it first and take a route that avoids
+its cause (RUN_CONTRACT.md § Classification and retries).
+
 ---
 
 The text from here to the next horizontal rule is `${CLAUDE_PLUGIN_ROOT}/reference/DOCTRINE.md`, in full.

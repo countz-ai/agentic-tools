@@ -373,6 +373,50 @@ After every wave, in this order:
    `out/run_sync.tar.gz` to the user after a report wave lands, and whenever they ask for
    the run (§ Bringing the run home). If the refresh fails, say so once and keep going.
 
+## Holder lanes
+
+A playbook run's steps run in a few holder lanes when you have both the Agent tool and
+SendMessage. A lane is one `countz-accounting:worker` sub-agent that you launch once and
+continue with SendMessage, so each step reads in its context what the lane's earlier steps
+read and wrote; the lanes run in parallel. Without SendMessage, the run moves in waves as
+§ Every wave states and you skip this section.
+
+1. **Assign the lanes once**, after the plan is approved (a saved playbook: after
+   `bind-playbook`) and before the first `playbook_next.py` call:
+   `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py assign <run_dir> <definition path>`.
+   It maps the approved plan's steps (only those, so a partial run's scope is what runs)
+   onto at most three lanes and writes `<run_dir>/lanes.json`. Say nothing about it.
+2. **Run the loop as before**: `playbook_next.py`, then the lines it prints in order. On a
+   lanes run it prints, instead of `LAUNCH:` and `NEXT:`, a `RECORD:` line, one
+   `LANE: lane=<L> holder=<new|agentId> seq=<n> check=<id> brief=<path>` line per step it
+   starts, and an `AWAIT:` line; or `WAIT:` when nothing can start until a lane reports
+   back. Execute `RECORD:` first, then every `LANE:` line of the call in one message:
+   - `holder=new`: launch one sub-agent of subagent_type `countz-accounting:worker`
+     (general-purpose where that type is not available), in the background, prompted
+     exactly: `Read <brief> and do what it says. It is your entire instruction for this
+     step.` Then record its agentId:
+     `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py holder <run_dir> --lane <L> --agent <agentId>`.
+   - `holder=<agentId>`: SendMessage to that agentId, the message exactly: `Next step:
+     read <brief> and do what it says. It is your entire instruction for this step.`
+     If SendMessage refuses or fails, run
+     `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py fallback <run_dir> --lane <L>` and
+     execute the `LANE:` line it prints (a new holder for the same brief).
+3. **When a lane's agent reports back** (its result, or a task notification), run
+   `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py done <run_dir> --agent <its agentId>`.
+   It closes that step alone (`run_state.py record --seqs`), so the steps still running in
+   other lanes stay open; put its `OK:`, `BLOCKED:` and `FAILED:` lines to the user as
+   § Classification and retries states, execute a `LANE:` line it prints (the failed
+   step's retry, in the same lane on a new holder), then the after-wave steps of § Every
+   wave, then its `THEN:` line (`playbook_next.py` again). Handle one report at a time.
+4. **On `DONE:`** the review and report tail runs as § Review and report states, each step
+   as a fresh sub-agent, as on a run without lanes.
+
+`lanes.py` decides which lane runs what and when a holder is replaced; you never choose a
+lane, reuse an agentId the script did not print, or fork a context. A holder whose
+context passes 700,000 tokens is replaced by a new one at its lane's next step, and a
+brief for a holder that ran some of its inputs hands over only the rest
+(`scripts/handoff.py`).
+
 ## Review and report
 
 Before the review: a step record carrying `cache_defects` names a cache table the step
