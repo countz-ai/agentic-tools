@@ -41,8 +41,9 @@ Subcommands:
         dispatch also prints one SAY: line first — the progress line the relay puts to
         the user as plain chat (RUN_CONTRACT.md § Every wave): what runs, and how many.
 
-    record <run_dir>
-        Close a wave: classify every outstanding dispatch from its step record —
+    record <run_dir> [--seqs N,N]
+        Close a wave: classify every outstanding dispatch (with --seqs, those dispatches
+        alone, so briefs still running in parallel stay outstanding) from its step record —
         `error` before `outcome`, except that a record claiming `blocked` with a
         non-empty `blockers` is blocked whatever `error` carries (the step finished and
         named what stopped it; a retry re-runs the same work to the same answer);
@@ -454,8 +455,9 @@ def parse_brief_args(text: str) -> dict[str, str | None]:
     is None; a value written as a JSON string is decoded back to that string; any other
     value is as written, less surrounding whitespace (a comma-joined list and compact
     JSON stay text).
-    Raises ValueError on a brief with no ARGS_HEAD line, a line after it that is not
-    `    <key>=<value>` (a value that spans lines), a key given twice, or a value starting
+    The block ends at the first `## ` heading after it (the handoff section run_state
+    appends). Raises ValueError on a brief with no ARGS_HEAD line, a line in the block that
+    is not `    <key>=<value>` (a value that spans lines), a key given twice, or a value starting
     with `"` that is not one JSON string."""
     lines = text.split("\n")
     if ARGS_HEAD not in lines:
@@ -465,6 +467,8 @@ def parse_brief_args(text: str) -> dict[str, str | None]:
     for n, line in enumerate(lines[at + 1:], at + 2):
         if not line.strip():
             continue
+        if line.startswith("## "):
+            break  # the argument block ends at the next section (the handoff, handoff.py)
         m = ARG_LINE.fullmatch(line.rstrip("\r"))
         if not m:
             raise ValueError(f"line {n} {line[:60]!r} is not `    <key>=<value>` - every "
@@ -908,7 +912,11 @@ def _retry(run_dir: pathlib.Path, run: dict, row: dict) -> dict:
 def cmd_record(a) -> int:
     run_dir = a.run_dir.resolve()
     run = load_run(run_dir)
-    outstanding = [d for d in run.get("dispatches", []) if d.get("state") == "dispatched"]
+    only = {int(x) for x in (a.seqs or "").split(",") if x.strip()}
+    # --seqs closes those dispatches alone: briefs still running elsewhere (another lane)
+    # have no step record yet and must not be classified as died.
+    outstanding = [d for d in run.get("dispatches", []) if d.get("state") == "dispatched"
+                   and (not only or d["seq"] in only)]
     if not outstanding:
         print("nothing outstanding")
         return 0
@@ -1087,6 +1095,7 @@ def main() -> int:
 
     p = sub.add_parser("record")
     p.add_argument("run_dir", type=pathlib.Path)
+    p.add_argument("--seqs", default="", help="close only these dispatches (comma-separated seqs)")
     p.set_defaults(fn=cmd_record)
 
     p = sub.add_parser("record-scrub")
