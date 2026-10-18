@@ -6,6 +6,7 @@
     lanes.py holder <run_dir> --lane L --agent <agentId>
     lanes.py done <run_dir> --agent <agentId> [--context TOKENS]
     lanes.py fallback <run_dir> --lane L
+    lanes.py fix <run_dir> --checks id1,id2 [--mode fix|fresh] [--extra '<one-line JSON>']
 
 A lane is one worker sub-agent the relay launches once and continues with SendMessage, so
 each step reads in context what the lane's earlier steps read and wrote; the lanes run in
@@ -33,7 +34,11 @@ by a new one with the full block. It prints the RECORD: line and one LANE: line 
 launch. `done` closes one lane's brief (`run_state.py record --seqs`), updates what its
 holder holds, launches a retry in the same lane on a new holder, and frees the lane.
 `fallback` is for a SendMessage that failed: the lane's brief gets the full handoff and
-a new holder. State lives in <run_dir>/lanes.json. Standard library only.
+a new holder. `fix` is a fix round after the playbook (RUN_CONTRACT.md § Review and
+report): it dispatches the re-runs through `run_state.py dispatch --checks` and sends each
+to the lane that ran its check, warm on that lane's holder; a lane with several takes them
+one at a time, `done` launching the next, and prints `ROUND DONE:` when the round's last
+re-run is recorded. State lives in <run_dir>/lanes.json. Standard library only.
 """
 from __future__ import annotations
 
@@ -178,6 +183,25 @@ def _spent(st: dict, h: dict) -> bool:
 
 
 # ------------------------------------------------------------------ placing steps on lanes
+def _to_holder(run_dir: pathlib.Path, st: dict, lane: str, brief, params, seq: int, check: str) -> str:
+    """Give one written brief to a lane: its holder when alive and under the reset (the
+    handoff trimmed to what the holder does not hold), else a new holder (the full block
+    as written). Marks the lane busy; returns the LANE: line."""
+    h = st["holders"].setdefault(lane, _new_holder())
+    if h["agent"] and not _spent(st, h):
+        handoff.replace(brief, handoff.render(run_dir, handoff.held_out(params, h["checks"], h["reads"]),
+                                              kit=False))
+        who = h["agent"]
+    else:
+        if h["agent"]:
+            st.setdefault("retired", []).append({"lane": lane, **h})
+        st["holders"][lane] = _new_holder()
+        who = "new"
+    st.setdefault("busy", {})[lane] = {"seq": seq, "check": check, "brief": str(brief)}
+    st.setdefault("ran", {})[check] = lane
+    return f"LANE: lane={lane} holder={who} seq={seq} check={check} brief={_q(brief)}"
+
+
 def place(run_dir: pathlib.Path, definition: dict, ready: list[dict], bound: dict, run: dict) -> list[str]:
     """Start what can start now; return the printed lines ([] when every candidate lane is
     busy). `ready` is in plan order; each placed step gets its brief written."""
@@ -205,19 +229,8 @@ def place(run_dir: pathlib.Path, definition: dict, ready: list[dict], bound: dic
     lines, briefs = [], []
     for i, (lane, s) in enumerate(picks):
         brief = run_state.write_brief(run_dir, seq0 + i, s, bound)
-        h = st["holders"].setdefault(lane, _new_holder())
-        if h["agent"] and not _spent(st, h):
-            handoff.replace(brief, handoff.render(run_dir, handoff.held_out(
-                s.get("params"), h["checks"], h["reads"]), kit=False))
-            who = h["agent"]
-        else:
-            if h["agent"]:
-                st.setdefault("retired", []).append({"lane": lane, **h})
-            st["holders"][lane] = h = _new_holder()
-            who = "new"
-        st.setdefault("busy", {})[lane] = {"seq": seq0 + i, "check": s["id"], "brief": str(brief)}
         briefs.append(brief)
-        lines.append(f"LANE: lane={lane} holder={who} seq={seq0 + i} check={s['id']} brief={_q(brief)}")
+        lines.append(_to_holder(run_dir, st, lane, brief, s.get("params"), seq0 + i, s["id"]))
     save(run_dir, st)
     head = (f"RECORD: python3 {_q(pathlib.Path(run_state.__file__).resolve())} dispatch "
             f"{_q(run_dir)} --briefs " + " ".join(_q(b) for b in briefs))
@@ -306,8 +319,64 @@ def cmd_done(a) -> int:
         st["busy"][lane] = {"seq": retry["seq"], "check": b["check"], "brief": str(run_dir / retry["brief"])}
         print(f"LANE: lane={lane} holder=new seq={retry['seq']} check={b['check']} "
               f"brief={_q(run_dir / retry['brief'])}")
+    elif (nxt := _next_queued(run_dir, st, lane)):
+        print(nxt)  # the lane's next re-run of a fix round
+    if st.get("round"):
+        if any(st["busy"].values()) or any((st.get("queue") or {}).values()):
+            save(run_dir, st)
+            return 0
+        print(f"ROUND DONE: every re-run of the fix round is recorded ({len(st['round'])}); "
+              f"go on with the next step of RUN_CONTRACT.md § Review and report")
+        st["round"] = None
+        save(run_dir, st)
+        return 0
     save(run_dir, st)
     print(f"THEN: python3 {_q(HERE.parent / 'playbook_next.py')} {_q(run_dir)} {_q(st['definition'])}")
+    return 0
+
+
+def _home(st: dict, check: str) -> str:
+    """The lane that ran a check; else its hard lane, its first pool lane, or lane 1."""
+    if check in (st.get("ran") or {}):
+        return st["ran"][check]
+    hard = next((lane for lane, ids in st["lanes"].items() if check in ids), None)
+    return hard or (st["pool"].get(check) or ["1"])[0]
+
+
+def _step_params(st: dict, check: str):
+    definition = json.loads(pathlib.Path(st["definition"]).read_text(encoding="utf-8"))
+    return (next((s for s in definition["steps"] if s["id"] == check), {}) or {}).get("params")
+
+
+def _next_queued(run_dir: pathlib.Path, st: dict, lane: str) -> str | None:
+    q = (st.get("queue") or {}).get(lane) or []
+    if not q or (st.get("busy") or {}).get(lane):
+        return None
+    row = q.pop(0)
+    return _to_holder(run_dir, st, lane, row["brief"], _step_params(st, row["check"]), row["seq"], row["check"])
+
+
+def cmd_fix(a) -> int:
+    run_dir = a.run_dir.resolve()
+    st = load(run_dir)
+    before = {d["seq"] for d in run_state.load_run(run_dir).get("dispatches", [])}
+    cmd = [sys.executable, str(HERE.parent / "run_state.py"), "dispatch", str(run_dir),
+           "--checks", a.checks, "--mode", a.mode] + (["--extra", a.extra] if a.extra else [])
+    p = subprocess.run(cmd, capture_output=True, text=True)
+    if p.returncode:
+        sys.stderr.write(p.stdout + p.stderr)
+        return p.returncode
+    sys.stdout.write("".join(l + "\n" for l in p.stdout.splitlines() if l.startswith("SAY:")))
+    new = [d for d in run_state.load_run(run_dir)["dispatches"] if d["seq"] not in before]
+    for d in new:
+        st.setdefault("queue", {}).setdefault(_home(st, d["check_id"]), []).append(
+            {"seq": d["seq"], "check": d["check_id"], "brief": str(run_dir / d["brief"])})
+    st["round"] = sorted(d["seq"] for d in new)
+    lines = [ln for lane in st["lanes"] if (ln := _next_queued(run_dir, st, lane))]
+    save(run_dir, st)
+    print("\n".join(lines))
+    print(f"AWAIT: when a lane's agent reports back, run python3 {_q(HERE)} done {_q(run_dir)} "
+          f"--agent <its agentId> and execute what it prints")
     return 0
 
 
@@ -356,6 +425,12 @@ def main(argv: list[str]) -> int:
     p.add_argument("--context", type=int, default=None,
                    help="the holder's context in tokens, when the caller measured it")
     p.set_defaults(fn=cmd_done)
+    p = sub.add_parser("fix")
+    p.add_argument("run_dir", type=pathlib.Path)
+    p.add_argument("--checks", required=True)
+    p.add_argument("--mode", default="fix", choices=("fix", "fresh"))
+    p.add_argument("--extra", default=None)
+    p.set_defaults(fn=cmd_fix)
     p = sub.add_parser("fallback")
     p.add_argument("run_dir", type=pathlib.Path)
     p.add_argument("--lane", required=True)

@@ -401,15 +401,18 @@ read and wrote; the lanes run in parallel. Without SendMessage, the run moves in
      If SendMessage refuses or fails, run
      `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py fallback <run_dir> --lane <L>` and
      execute the `LANE:` line it prints (a new holder for the same brief).
-3. **When a lane's agent reports back** (its result, or a task notification), run
+3. **When a lane's agent reports back** — the Agent call's result, a task notification,
+   or the SendMessage call's own result (where SendMessage waits for the worker, as in a
+   cloud session, the reply is in the call's result) — run
    `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py done <run_dir> --agent <its agentId>`.
    It closes that step alone (`run_state.py record --seqs`), so the steps still running in
    other lanes stay open; put its `OK:`, `BLOCKED:` and `FAILED:` lines to the user as
    § Classification and retries states, execute a `LANE:` line it prints (the failed
    step's retry, in the same lane on a new holder), then the after-wave steps of § Every
    wave, then its `THEN:` line (`playbook_next.py` again). Handle one report at a time.
-4. **On `DONE:`** the review and report tail runs as § Review and report states, each step
-   as a fresh sub-agent, as on a run without lanes.
+4. **On `DONE:`** the review and report tail runs as § Review and report states: the
+   review and the report steps as fresh sub-agents, and each fix round in the lanes
+   through `lanes.py fix`, every re-run on the lane that ran its check.
 
 `lanes.py` decides which lane runs what and when a holder is replaced; you never choose a
 lane, reuse an agentId the script did not print, or fork a context. A holder whose
@@ -442,6 +445,15 @@ every finding in the review record by its `fix_kind`, without waiting for a ruli
   the answer decides a figure, put them to the user as § Running to completion says; an
   answer re-dispatches the named check with `--mode fix`, the answer verbatim in
   `fix_input`. Otherwise, and on no answer, they are carried to the open items.
+
+On a holder-lanes run (§ Holder lanes), every re-dispatch this section calls for — a fix
+of a review finding, a re-extract for a cache defect and the re-runs after it, a check
+re-dispatched with an answer — goes through
+`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py fix <run_dir> --checks <ids> --mode fix
+[--extra '<one-line JSON>']` instead of `run_state.py dispatch --checks`, with the same
+checks, mode and extra. It sends each re-run to the lane that ran its check, warm on
+that lane's holder, one at a time per lane. Execute its `LANE:` lines and each report
+back as § Holder lanes states; when `lanes.py done` prints `ROUND DONE:`, go on here.
 
 A further round, when the user directs one, is a fresh `check-review` with `carry_from`
 pointing at the prior record. A defect it re-finds standing after its fix round is
