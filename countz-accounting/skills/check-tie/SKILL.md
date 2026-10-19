@@ -15,10 +15,9 @@ Arguments: `run_dir`, `seq`, `check` (the check id), `sources` (comma-joined sou
 `goal` (the user's stated goal, or `(none)`), `params`, `mode` (`fresh` | `fix`), and on
 `fix`, `findings_from` (the review record whose findings name this check).
 
-Read, in this order: `${CLAUDE_PLUGIN_ROOT}/reference/DOCTRINE.md` (§ Resolving issues,
-§ Voice), `${CLAUDE_PLUGIN_ROOT}/reference/EVIDENCE.md`, then `sources/<id>.md` for each
-of your sources, where it exists — a plan-driven run's planner writes the profiles,
-and they carry the anchors and read-traps. Derive a binding yourself wherever no profile
+Follow `DOCTRINE.md` (§ Resolving issues, § Voice) and `EVIDENCE.md`. Read `sources/<id>.md` for each of your
+sources where it exists. A plan-driven run's planner writes these profiles, and they
+carry the anchors and read-traps. Derive a binding yourself wherever no profile
 answers it.
 
 ## 1. Define the tie-out

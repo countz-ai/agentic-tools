@@ -10,11 +10,12 @@ MAX_FILES := 5000
 MAX_BYTES := 209715200
 
 .DEFAULT_GOAL := help
-.PHONY: help validate check zip clean ci smoke-dso smoke-dso-room smoke-dso-validate
+.PHONY: help validate check agents zip clean ci smoke-dso smoke-dso-room smoke-dso-validate
 
 help:
 	@echo "make validate [PLUGIN=<name>]  claude plugin validate (the manifest)"
 	@echo "make check    [PLUGIN=<name>]  structural checks validate does not make"
+	@echo "make agents   [PLUGIN=<name>]  regenerate agents/*.md from the documents scripts/build_agents.py appends"
 	@echo "make zip      [PLUGIN=<name>]  validate + check, then package into $(DIST)/"
 	@echo "              [RECIPES=\"a.md b.md\"]  also bundle these recipes; the run uses them, not the connector's"
 	@echo "make clean                     remove $(DIST)/"
@@ -34,6 +35,13 @@ validate:
 # run time rather than at package time.
 check:
 	@python3 check-plugin.py $(PLUGIN)
+
+# The part of an agent file below the build marker is generated; `check` fails while it is
+# stale (check-plugin.py 8p2).
+agents:
+	@for p in $(PLUGIN); do \
+		if [ -f $$p/scripts/build_agents.py ]; then python3 $$p/scripts/build_agents.py || exit 1; fi; \
+	done
 
 # `playbook-recipes/` is authored here and served by the Countz connector
 # (docs/arch/AUTH_MCP_OAUTH.md § 6.1); it never ships in the package. check-plugin.py

@@ -94,18 +94,18 @@ call, never a hand-written loop.
   large csv files. On a run whose plan scheduled an `extract` step, a file your step
   reads is already parsed and typed under `<run_dir>/cache/`: read each population with
   one SQL statement through `scripts/evidence.py`'s `select()`, which returns the rows
-  and the citation of the same rows (`reference/EVIDENCE.md` § 1), instead of parsing
+  and the citation of the same rows (`EVIDENCE.md` § 1), instead of parsing
   the source again.
 - **openpyxl** — the workbook: every tab script and the assembler write through it,
-  importing the kit from `scripts/wbkit.py` (`reference/WORKBOOK.md` § 7).
+  importing the kit from `scripts/wbkit.py` (`${CLAUDE_PLUGIN_ROOT}/reference/WORKBOOK.md` § 7).
 - **figures and periods** — every figure ledger is written through `scripts/figures.py`
-  (`reference/EVIDENCE.md` § 3) and every period column through `scripts/periods.py`
-  (`reference/DOCTRINE.md` § Periods).
+  (`EVIDENCE.md` § 3) and every period column through `scripts/periods.py`
+  (`DOCTRINE.md` § Periods).
 - **pypdf** — a PDF's text layer: the extract step's script reads a statement's pages
   through it (`skills/check-extract/SKILL.md`), and `scripts/peek.py` shows the first
   page. A page with no text layer (a scan) is read in the harness, page-ranged.
 - **python-pptx** — the report deck, written only by `scripts/build_report.py` from
-  `report.yaml` (`reference/REPORT.md`); no skill writes slides directly.
+  `report.yaml` (`${CLAUDE_PLUGIN_ROOT}/reference/REPORT.md`); no skill writes slides directly.
 
 ## Events
 

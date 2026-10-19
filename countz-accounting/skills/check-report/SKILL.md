@@ -15,7 +15,7 @@ user-invocable: false
 Arguments: `run_dir`, `seq`, and optionally `title` and `note` (from a playbook's `report`
 block — the note goes on the deck's first page).
 
-Read `${CLAUDE_PLUGIN_ROOT}/reference/DOCTRINE.md` § Voice and § Number conventions,
+Follow `DOCTRINE.md` § Voice and § Number conventions. Read
 `${CLAUDE_PLUGIN_ROOT}/reference/WORKBOOK.md` (where the reader's eye lands on every tab —
 the map, the frozen band, the run-level tabs), `${CLAUDE_PLUGIN_ROOT}/reference/WORKBOOK_STYLE.md` (how a
 cell looks; the kit every tab script starts from) and `${CLAUDE_PLUGIN_ROOT}/reference/REPORT.md`

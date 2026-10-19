@@ -17,10 +17,10 @@ the first is the subject side, the books; the second the counterparty side, the
 statement), `goal` (the user's stated goal, or `(none)`), `mode` (`fresh` | `fix`), and on
 `fix`, `findings_from`.
 
-Read, in this order: `${CLAUDE_PLUGIN_ROOT}/reference/DOCTRINE.md` (§ Resolving issues, § Voice),
-`${CLAUDE_PLUGIN_ROOT}/reference/EVIDENCE.md` (§ 5 for the match table), then
-`sources/<id>.md` for each source, where it exists — a plan-driven run's planner writes
-the profiles; derive your own binding where none answers it.
+Follow `DOCTRINE.md` (§ Resolving issues, § Voice) and `EVIDENCE.md` (§ 5 for the
+match table). Read
+`sources/<id>.md` for each source where it exists. A plan-driven run's planner writes
+these profiles. Where no profile answers a question, derive the binding yourself.
 
 ## 1. Define the reconciliation
 

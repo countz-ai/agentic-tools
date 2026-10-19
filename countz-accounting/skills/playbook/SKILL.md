@@ -90,7 +90,9 @@ listing and lookup.
    loop: run
    `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/playbook_next.py <run_dir> <definition path>`
    and execute the lines it prints in their order — `RECORD:`, `LAUNCH:`, `NEXT:`, then
-   the `THEN:` lines (`record`, launch any `RETRY:`, the script again). If it prints
+   the `THEN:` lines (`record`, launch any `RETRY:`, the script again); with SendMessage
+   available, assign holder lanes first and run the loop as `RUN_CONTRACT.md § Holder
+   lanes` states. If it prints
    `ESCALATE:` (exit code 3), or fails any other way, invoke the `playbook-next` skill
    with the same arguments — it decides that one case and returns the same imperatives;
    execute them, then return to the script. Repeat until either returns `DONE:`. Relay

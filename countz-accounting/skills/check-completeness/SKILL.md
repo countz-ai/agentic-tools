@@ -17,11 +17,11 @@ the first carries the subject roster, the rest the evidencing rosters), `goal` (
 stated goal, or `(none)`), `params`, `mode` (`fresh` | `fix`), and on `fix`,
 `findings_from`.
 
-Read, in this order: `${CLAUDE_PLUGIN_ROOT}/reference/DOCTRINE.md` (§ Voice),
-`${CLAUDE_PLUGIN_ROOT}/reference/EVIDENCE.md` (§ 3 for the population fields, § 5 for
-the table), then `sources/<id>.md` and `sources/<id>.entities.json` for each source,
-where they exist — a plan-driven run's planner writes them; build the rosters from the
-sources themselves where they do not.
+Follow `DOCTRINE.md` (§ Voice) and `EVIDENCE.md` (§ 3 for the population fields, § 5
+for the table). Read
+`sources/<id>.md` and `sources/<id>.entities.json` for each source where they exist. A
+plan-driven run's planner writes them. Where they do not exist, build the rosters from
+the sources themselves.
 
 ## 1. Define the population
 

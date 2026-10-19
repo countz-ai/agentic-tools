@@ -17,10 +17,10 @@ Arguments: `run_dir`, `seq`, `check` (the check id), `sources` (comma-joined sou
 `goal` (the stated goal, or `(none)`), `params`, `mode` (`fresh` | `fix`), and on `fix`,
 `findings_from`.
 
-Read, in this order: `${CLAUDE_PLUGIN_ROOT}/reference/DOCTRINE.md` (§ Working with
-numbers, § Resolving issues, § Voice), `${CLAUDE_PLUGIN_ROOT}/reference/EVIDENCE.md`,
-then `sources/<id>.md` for each of your sources, where it exists — a plan-driven run's
-planner writes the profiles; derive a binding yourself where none answers it.
+Follow `DOCTRINE.md` (§ Working with numbers, § Resolving issues, § Voice) and
+`EVIDENCE.md`. Read
+`sources/<id>.md` for each of your sources where it exists. A plan-driven run's planner
+writes these profiles. Where no profile answers a question, derive the binding yourself.
 
 ## 0. Resolve the procedure
 

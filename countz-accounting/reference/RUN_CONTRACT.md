@@ -92,7 +92,8 @@ ask, on a catalog miss only, scrubbed by an agent under [SCRUB.md](SCRUB.md)
 | `<run_dir>/checks/<check>-summary.md` | a plan-driven check step: whether its procedure worked and where it stands, in an accountant's words (`agents/worker.md` § Files) | `scripts/family_artifacts.py` |
 | `<run_dir>/out/families/<NN>-<title>.md` + `.xlsx` | `scripts/family_artifacts.py`, after every wave, for each family whose checks are all terminal: the family's summary and its workbook, its check tabs in one file | the user, via preview |
 | `<run_dir>/workpapers/*.yaml` | the step named in the file's suffix | the review and report steps, `scripts/check_prose.py` |
-| `<run_dir>/dispatch/<NNNN>-<step>.md` | `run_state.py dispatch` and `record`, one per dispatch row (a wave of one, a `--step` and a retry included), or `scripts/playbook_next.py`; on escalation, the playbook-engine agent, rendering `run_state.py`'s `BRIEF` template verbatim | that dispatch's sub-agent, as its entire launch instruction. On a plain Skill call nobody reads it at launch; it is the archive of what the fork was told |
+| `<run_dir>/dispatch/<NNNN>-<step>.md` | `run_state.py dispatch` and `record`, one per dispatch row (a wave of one, a `--step` and a retry included), or `scripts/playbook_next.py`; on escalation, the playbook-engine agent drafts it from `run_state.py`'s `BRIEF` template and `dispatch --briefs` re-renders it from its argument block. A plan-driven step's brief carries its family section and the schedules the deck takes from its tab | that dispatch's sub-agent, as its entire launch instruction. On a plain Skill call nobody reads it at launch; it is the archive of what the fork was told |
+| `<run_dir>/dispatch/recipe-rules.md` | `run_state.py`, which rewrites it with every plan-driven brief. It holds `PLAYBOOK_RECIPES.md` § What every recipe inherits, then the pinned recipe from its start to `## The families` | every plan-driven step, which reads it once instead of the recipe (`agents/worker.md` § Your procedure) |
 | `<run_dir>/out/` | each step stages into `out/.staging/` and renames into place | the user, `scripts/preview.py` |
 | `<run_dir>/out/run_sync.tar.gz` | the relay, via `scripts/sync_run.py`, refreshed after every wave | the user: the whole-run download (§ Bringing the run home) |
 | `<run_dir>/events.jsonl` | appended by anyone, never rewritten | a human, `scripts/usage_report.py` |
@@ -319,6 +320,11 @@ runs first, always; the `playbook-next` skill (the agent) runs when it prints `E
 or fails. Execute the printed lines in their order (`SAY:`, `RECORD:`, `LAUNCH:`,
 `NEXT:`, `RETRY:`, `THEN:`) and put every `FAILED:` line to the user. A `NEXT:` line
 without `brief=` is a plain Skill call; it runs as the skill's fork and starts clean.
+A `LAUNCH:` wave runs as `countz-accounting:worker` sub-agents, the agent type every
+check skill forks into. Their system prompt is the worker charter followed by
+`CONDUCT.md`, `DOCTRINE.md` and `EVIDENCE.md`, which `scripts/build_agents.py` appends to
+`agents/worker.md`. No step starts by reading those documents, and the whole wave shares
+them as one cached prefix.
 
 `SAY:` is the run's progress line, one per wave: the wave's number,
 how many checks run, and what they are (the recipe's family titles on a plan-driven run;
@@ -367,6 +373,53 @@ After every wave, in this order:
    `out/run_sync.tar.gz` to the user after a report wave lands, and whenever they ask for
    the run (§ Bringing the run home). If the refresh fails, say so once and keep going.
 
+## Holder lanes
+
+A playbook run's steps run in a few holder lanes when you have both the Agent tool and
+SendMessage. A lane is one `countz-accounting:worker` sub-agent that you launch once and
+continue with SendMessage, so each step reads in its context what the lane's earlier steps
+read and wrote; the lanes run in parallel. Without SendMessage, the run moves in waves as
+§ Every wave states and you skip this section.
+
+1. **Assign the lanes once**, after the plan is approved (a saved playbook: after
+   `bind-playbook`) and before the first `playbook_next.py` call:
+   `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py assign <run_dir> <definition path>`.
+   It maps the approved plan's steps (only those, so a partial run's scope is what runs)
+   onto at most three lanes and writes `<run_dir>/lanes.json`. Say nothing about it.
+2. **Run the loop as before**: `playbook_next.py`, then the lines it prints in order. On a
+   lanes run it prints, instead of `LAUNCH:` and `NEXT:`, a `RECORD:` line, one
+   `LANE: lane=<L> holder=<new|agentId> seq=<n> check=<id> brief=<path>` line per step it
+   starts, and an `AWAIT:` line; or `WAIT:` when nothing can start until a lane reports
+   back. Execute `RECORD:` first, then every `LANE:` line of the call in one message:
+   - `holder=new`: launch one sub-agent of subagent_type `countz-accounting:worker`
+     (general-purpose where that type is not available), in the background, prompted
+     exactly: `Read <brief> and do what it says. It is your entire instruction for this
+     step.` Then record its agentId:
+     `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py holder <run_dir> --lane <L> --agent <agentId>`.
+   - `holder=<agentId>`: SendMessage to that agentId, the message exactly: `Next step:
+     read <brief> and do what it says. It is your entire instruction for this step.`
+     If SendMessage refuses or fails, run
+     `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py fallback <run_dir> --lane <L>` and
+     execute the `LANE:` line it prints (a new holder for the same brief).
+3. **When a lane's agent reports back** — the Agent call's result, a task notification,
+   or the SendMessage call's own result (where SendMessage waits for the worker, as in a
+   cloud session, the reply is in the call's result) — run
+   `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py done <run_dir> --agent <its agentId>`.
+   It closes that step alone (`run_state.py record --seqs`), so the steps still running in
+   other lanes stay open; put its `OK:`, `BLOCKED:` and `FAILED:` lines to the user as
+   § Classification and retries states, execute a `LANE:` line it prints (the failed
+   step's retry, in the same lane on a new holder), then the after-wave steps of § Every
+   wave, then its `THEN:` line (`playbook_next.py` again). Handle one report at a time.
+4. **On `DONE:`** the review and report tail runs as § Review and report states: the
+   review and the report steps as fresh sub-agents, and each fix round in the lanes
+   through `lanes.py fix`, every re-run on the lane that ran its check.
+
+`lanes.py` decides which lane runs what and when a holder is replaced; you never choose a
+lane, reuse an agentId the script did not print, or fork a context. A holder whose
+context passes 700,000 tokens is replaced by a new one at its lane's next step, and a
+brief for a holder that ran some of its inputs hands over only the rest
+(`scripts/handoff.py`).
+
 ## Review and report
 
 Before the review: a step record carrying `cache_defects` names a cache table the step
@@ -392,6 +445,15 @@ every finding in the review record by its `fix_kind`, without waiting for a ruli
   the answer decides a figure, put them to the user as § Running to completion says; an
   answer re-dispatches the named check with `--mode fix`, the answer verbatim in
   `fix_input`. Otherwise, and on no answer, they are carried to the open items.
+
+On a holder-lanes run (§ Holder lanes), every re-dispatch this section calls for — a fix
+of a review finding, a re-extract for a cache defect and the re-runs after it, a check
+re-dispatched with an answer — goes through
+`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py fix <run_dir> --checks <ids> --mode fix
+[--extra '<one-line JSON>']` instead of `run_state.py dispatch --checks`, with the same
+checks, mode and extra. It sends each re-run to the lane that ran its check, warm on
+that lane's holder, one at a time per lane. Execute its `LANE:` lines and each report
+back as § Holder lanes states; when `lanes.py done` prints `ROUND DONE:`, go on here.
 
 A further round, when the user directs one, is a fresh `check-review` with `carry_from`
 pointing at the prior record. A defect it re-finds standing after its fix round is

@@ -2460,6 +2460,18 @@ def check(root: pathlib.Path) -> list[str]:
             bad.append(f"{rel(root / 'uv.lock')}: missing - run `uv lock` in the plugin root")
         break
 
+    # 8p2. The part of an agent file below the build marker is generated from the
+    #      documents scripts/build_agents.py names (the worker carries CONDUCT, DOCTRINE
+    #      and EVIDENCE as its system prompt). After an edit to one of those documents, or
+    #      below the marker, a sub-agent would run on text that differs from the reference
+    #      every other reader sees. --check fails the build when that happens.
+    ba = root / "scripts" / "build_agents.py"
+    if ba.is_file():
+        import subprocess
+        r = subprocess.run([sys.executable, str(ba), "--check"], capture_output=True, text=True)
+        if r.returncode:
+            bad.append(f"{rel(ba)}: {(r.stderr or r.stdout).strip()[:200]}")
+
     # 8r. The index skill lists every user-facing skill as a static row — the list the
     #     user sees when the server is not reachable — and calls `get_countz_config` once, so a
     #     recipe added server-side (an entry whose `skill` is not a row) reaches every

@@ -49,7 +49,16 @@ executes what you return.
    `${CLAUDE_PLUGIN_ROOT}/scripts/run_state.py` verbatim — absolute paths, complete
    arguments, the step's `goal` and `params` carried verbatim. Write the argument block
    per `RUN_CONTRACT.md` § The relay's pen, each value as `_arg` writes it; `dispatch
-   --briefs` refuses a brief whose block does not read back.
+   --briefs` refuses a brief whose argument block does not read back. It then re-renders
+   each brief from its argument block and fills in the parts only the script writes: the
+   standing line and the recipe block.
+   **On a holder-lanes run** (`<run_dir>/lanes.json` exists; RUN_CONTRACT.md § Holder
+   lanes) a dispatch still running in a lane (outstanding, its seq in `lanes.json` `busy`)
+   is running, not unrecorded: it is neither terminal nor ready. Write no briefs; run
+   `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py place <run_dir> <playbook> --steps
+   <the ready step ids>`, which writes the briefs of the steps that have a free lane, and
+   return its `RECORD:`, `LANE:` and `AWAIT:` lines (or `WAIT:`). When nothing is ready
+   and some step is running, return `WAIT:`.
 5. Append the `decision` event (`OBSERVABILITY.md`) — `why` states the comparison that
    decided it, which records exist and which dependencies are terminal, not a
    restatement of the rule — then return.

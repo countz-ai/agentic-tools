@@ -29,6 +29,13 @@ vocabulary, a recordless dispatch with no terminal `state` (the relay runs
 `run_state.py record` before deciding, so this means a wave was never recorded), a
 binding that does not match the definition, and any unexpected error.
 
+On a run with holder lanes (`<run_dir>/lanes.json`, written by `lanes.py assign`; RUN_CONTRACT.md
+§ Holder lanes) the run does not move in whole waves: a step still running in a lane is
+`running`, and each call starts what can start now through `lanes.place` — a free lane's
+next ready step, then ready pool steps on free candidate lanes — printing RECORD: and one
+LANE: line per launch; WAIT: when every ready step's lanes are busy or nothing is ready
+yet while lanes run.
+
 Usage:
     playbook_next.py <run_dir> <playbook.json>
 
@@ -45,6 +52,7 @@ import pathlib
 import sys
 
 import check_playbook  # sibling: the one home of KINDS and of definition validation
+import lanes  # sibling: holder lanes (RUN_CONTRACT.md § Holder lanes)
 import run_state  # sibling: the brief template and the dispatch-row vocabulary
 from run_state import _q
 
@@ -56,7 +64,7 @@ class Escalate(Exception):
     pass
 
 
-def classify(run_dir: pathlib.Path, row: dict) -> dict:
+def classify(run_dir: pathlib.Path, row: dict, running: frozenset = frozenset()) -> dict:
     """One dispatch row -> its terminal class. The classification itself — `error`
     before `outcome`, seq/step agreement, the outcome vocabulary — is
     run_state.classify_record, the same function `record` classifies with; this wrapper
@@ -64,6 +72,8 @@ def classify(run_dir: pathlib.Path, row: dict) -> dict:
     to the row's terminal `state` — run_state.py record already classified it (a step
     that died leaves no record); anything else died-shaped escalates."""
     rel = row.get("record") or f"steps/{row.get('seq'):04d}-{row.get('step')}.json"
+    if row.get("state") == "dispatched" and row.get("seq") in running:
+        return {"cls": "running", "record": rel}  # still working in its holder lane
     cls, rec, why = run_state.classify_record(run_dir, row)
     if cls in ("ok", "blocked", "failed"):
         return {"cls": cls, "record": rel}
@@ -79,7 +89,7 @@ def classify(run_dir: pathlib.Path, row: dict) -> dict:
     raise Escalate(f"{rel}: {why}")
 
 
-def fold(run: dict, run_dir: pathlib.Path, definition: dict) -> dict:
+def fold(run: dict, run_dir: pathlib.Path, definition: dict, running: frozenset = frozenset()) -> dict:
     """Per definition step: latest dispatch's terminal class, or None when undispatched."""
     dispatches = run.get("dispatches", [])
     known = {d.get("seq") for d in dispatches}
@@ -90,7 +100,7 @@ def fold(run: dict, run_dir: pathlib.Path, definition: dict) -> dict:
     state: dict[str, dict | None] = {}
     for st in definition["steps"]:
         rows = [d for d in dispatches if d.get("check_id") == st["id"]]
-        state[st["id"]] = classify(run_dir, rows[-1]) if rows else None
+        state[st["id"]] = classify(run_dir, rows[-1], running) if rows else None
     return state
 
 
@@ -147,6 +157,8 @@ def decide(definition: dict, state: dict, bound: dict, sources: dict, run: dict)
 
     if wave:
         return {"kind": "wave", "members": wave, "skipped": skipped}
+    if any((state[st["id"]] or {}).get("cls") == "running" for st in steps):
+        return {"kind": "wait", "skipped": skipped}
     if all(state[st["id"]] is not None or st["id"] in skipped for st in steps):
         return {"kind": "done", "skipped": skipped}
     waiting = [st["id"] for st in steps if state[st["id"]] is None and st["id"] not in skipped]
@@ -223,6 +235,36 @@ def emit_wave(run_dir, pb_path, definition, decision, state, bound, run) -> None
     print(f"THEN: python3 {_q(pathlib.Path(__file__).resolve())} {_q(run_dir)} {_q(pb_path)}")
 
 
+def emit_lanes(run_dir, definition, decision, state, bound, run) -> None:
+    """A holder-lanes run: start what can start now on free lanes (lanes.place)."""
+    members = decision.get("members") or []
+    lines = lanes.place(run_dir, definition, members, bound, run) if members else []
+    running = [sid for sid, v in state.items() if (v or {}).get("cls") == "running"]
+    if not lines:
+        print(f"WAIT: running {', '.join(running) or 'nothing'}; "
+              + ("no ready step has a free lane" if members else "no step is ready")
+              + " — wait for a lane to report back")
+        return
+    placed = [l.split(" check=")[1].split()[0] for l in lines if l.startswith("LANE:")]
+    started = [st for st in members if st["id"] in placed]
+    wave = wave_number(run_dir)
+    append_decision(run_dir, wave, placed, wave_why(started, state))
+    what = run_state.describe_members(
+        [(st["id"], st["check"], st.get("params")) for st in started], run_state.recipe_families(run))
+    if run_state.run_families(run):
+        where = run_state.say_position(run, [(None, None, st.get("params")) for st in started])
+    else:
+        done = sum(v is not None for v in state.values())
+        where = (list(range(done + 1, done + len(started) + 1)),
+                 len(definition["steps"]) - len(decision["skipped"]) + 2)
+    print(f"playbook {definition['name']}  lanes  {len(started)} started, {len(running)} running")
+    print(run_state.say_line(run_state.at_step(
+        run, f"Starting {run_state.checks_phrase(len(started))}: {what}.", *where)))
+    for sid, reason in decision["skipped"].items():
+        print(f"SKIPPED: {sid} — {reason}")
+    print("\n".join(lines))
+
+
 def emit_done(definition, decision, state) -> None:
     skipped = decision["skipped"]
     counts: dict[str, int] = {}
@@ -274,9 +316,13 @@ def main() -> int:
     definition = json.loads(pb_path.read_text(encoding="utf-8"))
     bound = bound_map(run, definition)
     sources = {s["id"]: s for s in run.get("sources", [])}
-    state = fold(run, run_dir, definition)
+    lane_state = lanes.load(run_dir)
+    running = frozenset(lanes.busy_seqs(run_dir, lane_state).values()) if lane_state else frozenset()
+    state = fold(run, run_dir, definition, running)
     decision = decide(definition, state, bound, sources, run)
-    if decision["kind"] == "wave":
+    if lane_state is not None and decision["kind"] in ("wave", "wait"):
+        emit_lanes(run_dir, definition, decision, state, bound, run)
+    elif decision["kind"] == "wave":
         emit_wave(run_dir, pb_path, definition, decision, state, bound, run)
     else:
         emit_done(definition, decision, state)

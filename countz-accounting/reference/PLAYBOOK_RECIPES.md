@@ -282,7 +282,9 @@ execute the lines it prints in order: `RECORD:`, `LAUNCH:`, `NEXT:`, then the `T
 lines (`record`, any `RETRY:`, the script again). On `ESCALATE:` (exit code 3) or any
 other failure, invoke the `playbook-next` skill with the same arguments, execute its
 imperatives, then return to the script. Repeat until `DONE:`. Relay any skipped or failed
-steps it names. Where the recipe declares `arr_policy`, each `record` is followed by
+steps it names. With SendMessage available the steps run in holder lanes instead of waves:
+assign them once after the plan is approved and run the loop as RUN_CONTRACT.md § Holder
+lanes states. Where the recipe declares `arr_policy`, each `record` is followed by
 `ARR_POLICY.md` § Applying the policy, step 6, before the script runs again.
 
 ### 6. Review and report
