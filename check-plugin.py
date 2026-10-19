@@ -2545,10 +2545,10 @@ def check(root: pathlib.Path) -> list[str]:
                 bad.append(f"{rel(ap_script)}: the ARR policy ships without skills/{skill}")
 
     # 8. A shipped hook must be executable, or it fails silently at run time. A hook
-    #     script that carries a selftest must pass it: the MCP blocklist hook
-    #     (hooks/mcp_blocklist.py) refuses a call `blocked_tools` names, in the main
-    #     session and in subagents alike, and passes built-in tools and
-    #     `get_countz_config` itself.
+    #     script that carries a selftest must pass it: the countz-guard hook
+    #     (countz-guard/hooks/countz_guard.py) refuses a `countz` call policy.json
+    #     blocks, in the main session and in subagents alike, and passes other servers'
+    #     tools, built-in tools and `get_countz_config` itself.
     for h in sorted(list(root.glob("hooks/*.sh")) + list(root.glob("hooks/*.py"))):
         if not h.stat().st_mode & 0o111:
             bad.append(f"{rel(h)}: not executable")
@@ -2565,7 +2565,7 @@ def check(root: pathlib.Path) -> list[str]:
             for ev, matchers in json.loads(hj.read_text()).get("hooks", {}).items():
                 for m in matchers:
                     for hook in m.get("hooks", []):
-                        cmd = hook.get("command", "")
+                        cmd = hook.get("command", "").strip('"')
                         target = cmd.replace("${CLAUDE_PLUGIN_ROOT}/", "")
                         if cmd.startswith("${CLAUDE_PLUGIN_ROOT}") and not (root / target).is_file():
                             bad.append(f"{rel(hj)}: {ev} hook points at {target}, which does not exist")

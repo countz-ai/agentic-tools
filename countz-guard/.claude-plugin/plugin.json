@@ -1,0 +1,20 @@
+{
+  "name": "countz-guard",
+  "displayName": "Countz Guard",
+  "version": "0.1.0",
+  "description": "Controls the data a session sends to the Countz connector: a hook on countz MCP calls refuses the tools its policy blocks, and any call whose arguments the policy does not allow.",
+  "license": "Apache-2.0",
+  "homepage": "https://www.countz.ai",
+  "privacyPolicyUrl": "https://www.countz.ai/privacy",
+  "termsOfServiceUrl": "https://www.countz.ai/terms",
+  "author": {
+    "name": "Countz"
+  },
+  "keywords": [
+    "countz",
+    "mcp",
+    "hooks",
+    "data-control",
+    "privacy"
+  ]
+}

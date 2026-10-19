@@ -13,6 +13,11 @@
       "name": "countz-accounting",
       "source": "./countz-accounting",
       "description": "Accounting analyses using Countz Accounting platform: tie out ledgers, sub-ledgers and schedules; reconcile cash to bank and payables to supplier statements; prove out cash ahead of an audit; build a quality-of-earnings EBITDA bridge; test ASC 606 revenue recognition and ASC 842 lease accounting; trace revenue leakage from invoice to cash and many more. You get a workbook and a report deck with every figure traceable to its source file."
+    },
+    {
+      "name": "countz-guard",
+      "source": "./countz-guard",
+      "description": "Controls the data a session sends to the Countz connector: a hook on countz MCP calls refuses the tools its policy blocks, and any call whose arguments the policy does not allow."
     }
   ]
 }

@@ -1,19 +1,11 @@
 {
-  "description": "Refuse the MCP tools the Countz account blocks, for the rest of the session, subagents included (hooks/mcp_blocklist.py).",
+  "description": "Refuse the countz MCP calls policy.json blocks, subagents included (hooks/countz_guard.py).",
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "mcp__.*",
+        "matcher": "mcp__.*countz__.*",
         "hooks": [
-          { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/mcp_blocklist.py" }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "mcp__.*countz__get_countz_config",
-        "hooks": [
-          { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/mcp_blocklist.py" }
+          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/countz_guard.py\"" }
         ]
       }
     ]

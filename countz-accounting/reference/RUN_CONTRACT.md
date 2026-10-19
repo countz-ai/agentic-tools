@@ -61,12 +61,8 @@ carries:
   that matches an ask against the catalog reads this copy and calls nothing again.
 - `blocked_tools` — the MCP tools this session must not call, set for the tenant; the
   user cannot change it, and it is empty unless the tenant sets it. An entry is
-  `<server>/<tool>`, `<server>/*`, or `*`. From this call to the end of the session, the
-  plugin's hook (`hooks/mcp_blocklist.py`) refuses every MCP call the list names: in
-  this conversation, in every subagent and in every forked skill. The `countz` server
-  also refuses its own listed tools on every call, with an error that carries `tool_blocked:`. Either refusal is final: do not
-  retry the call or reach the same result another way. Tell the user in one line that
-  the tool is not allowed for their account, and continue without it.
+  `<server>/<tool>`, `<server>/*`, or `*`. The `countz` server refuses its own listed
+  tools on every call, with an error that carries `tool_blocked:`.
 
 Every signed-in account, the testing tenant included, fetches its recipe body from the
 server (`get_recipe_for_countz_analysis`) and runs everything else locally.
