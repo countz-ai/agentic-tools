@@ -39,6 +39,19 @@ Add this repository as a plugin marketplace, then install the plugin from it:
 /plugin install countz-accounting@countz
 ```
 
+### Countz Guard
+
+The **Countz Guard** plugin (`countz-guard`) controls the data a session sends to the
+Countz connector. Its hook refuses the `countz` calls its policy blocks; as shipped,
+that is `create_countz_playbook_recipe`, and a recipe name longer than 32 characters.
+Install it next to Countz Accounting from the same marketplace:
+
+```
+/plugin install countz-guard@countz
+```
+
+See [countz-guard/README.md](countz-guard/README.md).
+
 ### ChatGPT
 
 In the ChatGPT desktop app, open the **Plugins** tab and choose **Add a marketplace**:

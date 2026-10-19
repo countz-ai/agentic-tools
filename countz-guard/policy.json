@@ -1,0 +1,4 @@
+{
+  "blocked_tools": ["countz/create_countz_playbook_recipe"],
+  "recipe_name_max": 32
+}

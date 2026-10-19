@@ -1,0 +1,13 @@
+{
+  "description": "Refuse the countz MCP calls policy.json blocks, subagents included (hooks/countz_guard.py).",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "mcp__.*countz__.*",
+        "hooks": [
+          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/countz_guard.py\"" }
+        ]
+      }
+    ]
+  }
+}
