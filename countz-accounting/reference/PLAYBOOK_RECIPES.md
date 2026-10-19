@@ -106,11 +106,9 @@ no file written, no folder made, no other question asked.
    invoked the skill: the arguments after its name, or the message that started the
    run. It is **specific** when it names a measure, a cut, an account, a population or
    a question that only some of the families answer (example: *"show me the ARR and
-   retention for various dimensions in my data so I see what may be contributing to my
-   low ARR"*, on the ARR recipe, bears on the customer cube, how ARR moves and what the
-   base keeps, and the lines of inquiry into the revenue base). It is **broad** when it
-   asks for the analysis as a whole, names nothing narrower than the recipe's
-   objective, or is empty. When in doubt, it is broad. On a specific request, take the
+   retention for various dimensions in my data"*, on the ARR recipe, bears on the 
+   customer revenue cube, the ARR roll-forward & retention). It is **broad** when it
+   asks for the analysis as a whole. On a specific request, take the
    families whose headers answer it: the ones it bears on directly, not the ones they
    read from, which registration adds.
 3. Print the choice, with `--suggest <their ids, comma-separated>` on a specific
