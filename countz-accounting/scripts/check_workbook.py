@@ -992,6 +992,15 @@ def tab_owners(checks: list[dict], tabs: list[str]) -> tuple[dict[str, str], lis
             fails.append(f"{tab}: check tab names no check in run.json — the name opens "
                          f"with the roster token, `<token> <Title>` (WORKBOOK.md § 2)")
             continue
+        # `g6 stale arr Stale ARR`: the whole check id is the token and already names the
+        # check, so a title after it that opens with the id's own words repeats it.
+        own = fold(hit)
+        line = own.removeprefix(fold(family[hit]) + "_") if family[hit] else ""
+        rest = f[len(own) + 1:] if f.startswith(own + "_") else ""
+        if line and line != own and (rest == line or rest.startswith(line + "_")):
+            fails.append(f"{tab}: the title repeats the check id the token already "
+                         f"spells — name the tab `{hit.replace('_', ' ')}` alone "
+                         f"(WORKBOOK.md § 2)")
         owner[tab] = hit
     return owner, fails
 

@@ -32,10 +32,11 @@ tabs its story rests on.
 
 ### Tab names
 `<token> <Title>` — the check's roster token as the roster spells it, one space, then a
-short Title Case title: `q1 FY2021 statements`, `q6 EBITDA bridge`. Where the family
-holds more than one check, the token is the whole check id, its underscores as spaces:
+short title: `q1 FY2021 statements`, `q6 EBITDA bridge`; for a one-check family, the
+family's title from the recipe. Where the family holds more than one check, the token is
+the whole check id, its underscores as spaces, and no title follows it:
 `a7 Credit balances unapplied` for `a7_credit_balances_unapplied` — `a7 Credit balances`
-names no check. At most 31 characters, no underscores, no slashes. The token leads so a cell that opens with it
+names no check, and `g6 stale arr Stale ARR` repeats it. At most 31 characters, no underscores, no slashes. The token leads so a cell that opens with it
 links to the tab (`link_workbook.py` rule 5) and the gate can pair the tab with its
 check. Run-level tabs keep their fixed names. Tab colors and gridlines:
 `WORKBOOK_STYLE.md` § 4.

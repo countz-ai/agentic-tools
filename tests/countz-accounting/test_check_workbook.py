@@ -43,6 +43,18 @@ def main() -> int:
     whole = "The customer was billed after termination and the balance has since removed the credit."
     if not cut_fails([whole, whole[:60]]):
         bad.append("a sentence cut mid-word beside its whole statement is taken")
+    # a title that repeats the check id the token spells (arr_analysis, 2026-10-16:
+    # `g6 stale arr Stale ARR`); the id alone, or a one-check family's token and title, pass
+    checks = [{"id": "g6_stale_arr", "params": {"family": "g6"}},
+              {"id": "g6_customer_concentration", "params": {"family": "g6"}},
+              {"id": "g4_cube", "params": {"family": "g4"}}]
+    _, fails = check_workbook.tab_owners(checks, ["g6 stale arr Stale ARR"])
+    if not any("repeats the check id" in f for f in fails):
+        bad.append(f"a title repeating the check id is taken: {fails}")
+    _, fails = check_workbook.tab_owners(
+        checks, ["g6 Stale ARR", "g6 Customer concentration", "g4 Customer revenue cube"])
+    if fails:
+        bad.append(f"a tab named by its id, or by its family token and title, is refused: {fails}")
     for b in bad:
         print("FAIL", b)
     print("check_workbook: " + ("FAIL" if bad else "ok"))
