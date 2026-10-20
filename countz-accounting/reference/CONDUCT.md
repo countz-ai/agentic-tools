@@ -80,22 +80,20 @@ Do both of these on every file:
 ### Libraries
 
 Prefer, in order: the plugin's own scripts in `${CLAUDE_PLUGIN_ROOT}/scripts/` where one
-fits; SQL (`scripts/evidence.py`'s `select()`); polars and the other libraries below;
-custom Python last, only for what none of those express. Before writing code for a job,
-list `scripts/` and read the module docstrings: each docstring is its module's API.
-Import a module; never copy or rewrite it. A join, a group-by or a window is a library
-call, never a hand-written loop.
+fits; SQL; polars; custom Python last, only for what none of those express. Read a
+module's docstring before using it, then import it; never copy or rewrite it.
+
+**Use SQL, not code, wherever SQL can do the work.** Compute each figure with one SQL
+statement through `scripts/sql.py` (`Ledger.fig_sql`), and a schedule with one GROUP BY
+(`Ledger.figs_sql`). Never loop over queries where one aggregate does the job.
 
 - **uv** — use `uv` instead of `pip` wherever possible. The preferred packages are
   pinned in the plugin root's `pyproject.toml` / `uv.lock`; run a script with
   `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 <script>`. Never install into the
-  user's environment. numpy and polars are pinned; scipy is not installed.
-- **polars** — use polars for dataframe manipulation and calculation. Use `scan_csv` for
-  large csv files. On a run whose plan scheduled an `extract` step, a file your step
-  reads is already parsed and typed under `<run_dir>/cache/`: read each population with
-  one SQL statement through `scripts/evidence.py`'s `select()`, which returns the rows
-  and the citation of the same rows (`EVIDENCE.md` § 1), instead of parsing
-  the source again.
+  user's environment. duckdb, numpy and polars are pinned; scipy is not installed.
+- **polars** — parse files with polars, and write every parsed table to the cache
+  (`cache.write`, or `evidence.span(frame=..., run_dir=...)`) so SQL reads it there. Use
+  `scan_csv` for large csv files.
 - **openpyxl** — the workbook: every tab script and the assembler write through it,
   importing the kit from `scripts/wbkit.py` (`${CLAUDE_PLUGIN_ROOT}/reference/WORKBOOK.md` § 7).
 - **figures and periods** — every figure ledger is written through `scripts/figures.py`

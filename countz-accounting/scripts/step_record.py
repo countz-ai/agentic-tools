@@ -73,8 +73,9 @@ character UTF-8 cannot carry (a lone surrogate from a file name that is not UTF-
 written as its JSON escape, so it reads back as it was.
 
 **`place_tab`** runs `check_workbook.py` and `check_prose.py` on the staged tab with
-`--run-dir` (WORKBOOK.md § 8) and renames it into `out/tabs/` only when both exit 0;
-otherwise it raises GateRefused carrying their output, verbatim, and the tab stays
+`--run-dir`, and `sql.py verify --check` (WORKBOOK.md § 8). It renames the tab into
+`out/tabs/` only when all three exit 0; otherwise it raises GateRefused carrying their
+output, verbatim, and the tab stays
 staged for the author to fix. It takes the step's seq (an int) or its check id (a str);
 a seq whose brief names no check has no tab and is refused.
 
@@ -292,6 +293,10 @@ def place_tab(run_dir, seq_or_check) -> pathlib.Path:
                             "--run-dir", str(run_dir)], capture_output=True, text=True)
         if r.returncode != 0:
             out.append(f"{gate} exit {r.returncode}:\n{(r.stdout + r.stderr).strip()}")
+    r = subprocess.run([sys.executable, str(SCRIPTS / "sql.py"), "verify", str(run_dir),
+                        "--check", check], capture_output=True, text=True)
+    if r.returncode != 0:
+        out.append(f"sql.py verify exit {r.returncode}:\n{(r.stdout + r.stderr).strip()}")
     if out:
         raise GateRefused("\n".join(out))
     dest = run_dir / "out" / "tabs" / staged.name

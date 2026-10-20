@@ -58,6 +58,8 @@ sha256 when called: parse and write each table with the file unchanged in betwee
 The script is the run's record of how every file was read: a reviewer re-performing a
 citation reads the file as it says, and a fix pass edits it. Write it to be read.
 
+Type each column as what it holds, and write ids with `_`, not `-` (`aging_2025_06_30`).
+
 ## 3. Run and rule
 
 `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 workpapers/extract-<check>.py`, then

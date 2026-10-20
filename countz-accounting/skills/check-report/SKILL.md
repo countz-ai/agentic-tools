@@ -246,7 +246,10 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/check_prose.py <run_dir>/out/.staging/work
     --run-dir <run_dir>
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/check_report.py <run_dir>/out/.staging/report.pptx \
     --run-dir <run_dir>
+uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/sql.py verify <run_dir>
 ```
+
+A `sql.py verify` failure is the owning check's to fix: end the step `blocked` naming it.
 
 `check_workbook.py` gates the workbook: cached values, the id links § 1 wires, and the
 reperformance contract — it refuses an external or broken link, an unwired id cell, a

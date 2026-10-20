@@ -77,22 +77,19 @@ its figures at their recorded values, cited to that check (`file_role: run_artif
 
 `params.cache_from` names the extract step that parsed the files your step reads, and
 `params.reads` the ids. Before relying on an id, `cache.py <run_dir> --verify <id>`
-(exit 3: the source file or the parquet no longer agrees with the manifest). Read each
-population with one SQL statement through `scripts/evidence.py`'s `select(run_dir, sql,
-id=..., control=...)`: it returns the rows, typed as the manifest states, and the span
-that cites the same rows against the source file — one query, so the figure and its
-citation cannot disagree. Aggregate and join in polars over the rows returned; a span is
-one table, and a join across two files is two spans with the arithmetic in the figure's
-`expression`. `cache.read()` / `cache.scan()` serve a read that mints no citation. A
-data-room file read directly — an id the manifest lacks, or a table the cache has wrong
-— is parsed in your own code and cited with `span(frame=<your df>, ...)`, stating its
-coordinates and each column's parse (`EVIDENCE.md` § 1).
+(exit 3: the source file or the parquet no longer agrees with the manifest).
+
+Compute with SQL (`CONDUCT.md` § Libraries). `sql.connect(run_dir)` reads the cache's
+tables by id, item tables as `checks."<check>-<table>"`, and recorded figures as
+`fig('F.x')`. Parse a file the cache lacks, or holds wrong, yourself, and cite it with
+`span(frame=<your df>, run_dir=<run_dir>, ...)`, stating its coordinates and each
+column's parse (`EVIDENCE.md` § 1). The span writes it to the cache.
 
 On any difference your procedure cannot explain, re-perform the read from the source
 file (DOCTRINE.md § Resolving issues, rung 1). A cache table that is wrong is recorded in
 your step record under `cache_defects`, one entry per id, `{id, what, fix}` with `fix` in
-words: what the extract script must do differently. Compute from the source file
-meanwhile, and write nothing under `cache/`. The relay re-runs the extract step with
+words: what the extract script must do differently. Compute from your own parse
+meanwhile; never overwrite an id the extract step wrote. The relay re-runs the extract step with
 your fixes and then every step that read the id (`RUN_CONTRACT.md` § Review and
 report).
 
@@ -194,22 +191,20 @@ Do both of these on every file:
 ### Libraries
 
 Prefer, in order: the plugin's own scripts in `${CLAUDE_PLUGIN_ROOT}/scripts/` where one
-fits; SQL (`scripts/evidence.py`'s `select()`); polars and the other libraries below;
-custom Python last, only for what none of those express. Before writing code for a job,
-list `scripts/` and read the module docstrings: each docstring is its module's API.
-Import a module; never copy or rewrite it. A join, a group-by or a window is a library
-call, never a hand-written loop.
+fits; SQL; polars; custom Python last, only for what none of those express. Read a
+module's docstring before using it, then import it; never copy or rewrite it.
+
+**Use SQL, not code, wherever SQL can do the work.** Compute each figure with one SQL
+statement through `scripts/sql.py` (`Ledger.fig_sql`), and a schedule with one GROUP BY
+(`Ledger.figs_sql`). Never loop over queries where one aggregate does the job.
 
 - **uv** — use `uv` instead of `pip` wherever possible. The preferred packages are
   pinned in the plugin root's `pyproject.toml` / `uv.lock`; run a script with
   `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 <script>`. Never install into the
-  user's environment. numpy and polars are pinned; scipy is not installed.
-- **polars** — use polars for dataframe manipulation and calculation. Use `scan_csv` for
-  large csv files. On a run whose plan scheduled an `extract` step, a file your step
-  reads is already parsed and typed under `<run_dir>/cache/`: read each population with
-  one SQL statement through `scripts/evidence.py`'s `select()`, which returns the rows
-  and the citation of the same rows (`EVIDENCE.md` § 1), instead of parsing
-  the source again.
+  user's environment. duckdb, numpy and polars are pinned; scipy is not installed.
+- **polars** — parse files with polars, and write every parsed table to the cache
+  (`cache.write`, or `evidence.span(frame=..., run_dir=...)`) so SQL reads it there. Use
+  `scan_csv` for large csv files.
 - **openpyxl** — the workbook: every tab script and the assembler write through it,
   importing the kit from `scripts/wbkit.py` (`${CLAUDE_PLUGIN_ROOT}/reference/WORKBOOK.md` § 7).
 - **figures and periods** — every figure ledger is written through `scripts/figures.py`
@@ -507,21 +502,15 @@ A read of a file the run wrote, e.g. another check's item table under `checks/`,
 data-room role. Its basis is the producing check's own citations, and the deliverable
 presents the read as derived.
 
-**A span is measured.** A run whose plan scheduled an `extract` step (`PLAYBOOKS.md`
-§ The file) holds the tables its steps read under `<run_dir>/cache/`, written by the
-extract step's script through `scripts/cache.py` with true file coordinates and each
-column's parse (`RUN_CONTRACT.md`, the file table). A step reads a population with one
-SQL statement through `scripts/evidence.py select`, which returns the rows and their
-span: coordinates and columns from the manifest, `filter` as the WHERE clause verbatim
-in the file's own column names, `row_count` and `control_total` measured over the rows
-returned. A span cites one table; a join across two files is two spans, and the
-figure's `expression` carries the arithmetic. The parquet is named nowhere: a reader
-holding the workbook and the data room opens the file at `header_at`, reads the columns
-as their `parse` says, applies the filter, counts the rows and sums the control column.
-A file the step reads directly is parsed in its own code and cited with
-`span(frame=<the parsed df>, file=, source=, file_role=, sheet=, header_at=, rows=,
-columns={name: {at, parse}}, filter=, control=)`: the step states the coordinates and
-parse, and the count and total are measured over the frame.
+**A span is measured.** Every table a step reads is parsed once into the run's cache
+(`scripts/cache.py`), with its file coordinates and each column's parse. A span takes
+those from the cache and names its `cache_id`. Its `row_count` and `control_total` are
+measured over the rows it cites. `evidence.select` cites rows of a cached table. A table
+the step parsed itself is cited with `span(frame=<df>, run_dir=, file=, source=,
+file_role=, sheet=, header_at=, rows=, columns={name: {at, parse}}, filter=, control=)`,
+which writes it to the cache first. The deliverable never names the parquet: a reader
+opens the file at `header_at`, reads the columns as `parse` says, applies `filter`, counts
+the rows and sums the control column.
 
 **A control total is never taken over a column with an unparsed cell.**
 
@@ -596,12 +585,15 @@ that entry covers the table's cells.
 ```
 
 **Write the ledger through `scripts/figures.py`.** `Ledger(run_dir, check)` holds the
-check's figures, populations and citations. `fig()` checks each field below when it is
-minted. `write()` resolves every input, population, citation and `F.`/`P.`/`E.` id in an
-`expression` against the run's ledgers, and refuses the whole write, naming each dead
-end, when one does not resolve: the one-hop contract is kept at the check, not repaired
-at the seal. `Ledger.tie()` mints a tie's difference figure and classifies it
-(check-tie SKILL § 4). A step never writes its own `fig()`.
+check's figures, populations and citations, and checks each field below as it is minted.
+`write()` refuses the whole write, naming each dead end, when an input, population,
+citation or id in an `expression` does not resolve. `Ledger.tie()` mints a tie's
+difference figure (check-tie SKILL § 4). A step never writes its own `fig()`.
+
+**Compute a figure with SQL.** `Ledger.fig_sql` runs one SELECT through `scripts/sql.py`.
+The statement becomes the figure's `expression`, and the tables and figures it reads its
+`inputs`. `Ledger.figs_sql` mints one figure per row of a GROUP BY. `sql.py verify` re-runs
+every statement and fails a figure whose value has changed.
 
 - **`inputs[]` is never empty, and `role` is required.** `source_type` is one of
   `room_file` (with `citation_id`: a read of a file the user gave us), `figure` (with
@@ -622,8 +614,8 @@ at the seal. `Ledger.tie()` mints a tie's difference figure and classifies it
 
 **Every figure cell in a workbook carries its computed value.** openpyxl writes a formula
 with no cached result, and the cell renders blank in a viewer that does not recalculate.
-A body figure is a value (the arithmetic from the data room lives in its `expression` on
-the Sources tab); a subtotal, a total, a derived line and a copy of another check's figure
+A body figure is a value, and its `expression` on the Sources tab shows how it was
+computed. A subtotal, a total, a derived line and a copy of another check's figure
 are formulas with their results cached — `wbkit.total`, `wbkit.save` and
 `link_workbook.py` write them (WORKBOOK.md § 7). The gate is `scripts/check_workbook.py`. A typed constant that resolves to no figure id is blocking.
 
@@ -639,8 +631,8 @@ tolerance a sentence states is admitted with `--allow`.
 **Every presented figure re-performs in one hop.** The Sources tab carries, beside each
 figure's `expression` and inputs, its **root source** (the citation ids reached by
 collapsing every passthrough and figure-to-figure hop) and a **To reperform** recipe:
-file, sheet, rows, columns, filter, arithmetic, expected value. The Evidence tab carries
-the citation records merged from `workpapers/evidence-*.yaml`. A reader holding only the
+file, sheet, rows, columns, filter, the arithmetic or SQL statement, and the expected
+value. The Evidence tab carries the citation records merged from `workpapers/evidence-*.yaml`. A reader holding only the
 workbook and the data room can re-select the same rows; the run directory is never
 required reading. Layout and assembly: check-report SKILL § 1; the gate is
 `scripts/check_workbook.py`.

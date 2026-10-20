@@ -7,6 +7,7 @@ Every step that mints a figure imports this rather than writing its own `fig()`:
     import sys; sys.path.insert(0, "<${CLAUDE_PLUGIN_ROOT}>/scripts")   # the token expanded
     from evidence import select
     from figures import Ledger, figure, room, check_output, declared, fmt
+    import sql
 
     L = Ledger(RUN, "a5_bridge_retention")      # resumes workpapers/figures-<check>.yaml
     rows, e = select(RUN, "SELECT ... FROM ...", id="E.a5.cube", control="arr")
@@ -19,6 +20,8 @@ Every step that mints a figure imports this rather than writing its own `fig()`:
     L.fig("F.a5.nrr.fy2025", "Net revenue retention FY2025", nrr, "pct",
           "F.a5.nrr_num.fy2025 / F.a5.cohort_arr.fy2025",
           [("numerator", "F.a5.nrr_num.fy2025"), ("denominator", "F.a5.cohort_arr.fy2025")])
+    L.figs_sql(sql.connect(RUN), "F.a5.arr.{month}", "ARR, {month}", "usd",
+               "SELECT month, sum(arr) AS value FROM cube GROUP BY month", key="month")
     t = L.tie("T.a1.revenue.fy2025", "Income statement revenue to TB, FY2025",
               "F.a1.is.revenue.fy2025", "F.a1.tb.revenue.fy2025",
               tolerance=params.get("tolerance"), pct_tolerance=params.get("pct_tolerance"))
@@ -639,6 +642,16 @@ class Ledger:
         else:
             self._pending.pop(fid, None)
         return fid
+
+    def fig_sql(self, db, fid: str, label: str, unit: str, query: str, **kw) -> str:
+        """One figure from one SELECT (`scripts/sql.py`)."""
+        import sql
+        return sql.fig(self, db, fid, label, unit, query, **kw)
+
+    def figs_sql(self, db, fid: str, label: str, unit: str, query: str, *, key, **kw) -> list[str]:
+        """One figure per row of one GROUP BY (`scripts/sql.py`)."""
+        import sql
+        return sql.figs(self, db, fid, label, unit, query, key=key, **kw)
 
     def _input(self, fid: str, i) -> tuple[dict, bool]:
         """One input as its dict, and whether its kind waits for write() (an `E.` id given

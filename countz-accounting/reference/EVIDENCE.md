@@ -96,21 +96,15 @@ A read of a file the run wrote, e.g. another check's item table under `checks/`,
 data-room role. Its basis is the producing check's own citations, and the deliverable
 presents the read as derived.
 
-**A span is measured.** A run whose plan scheduled an `extract` step (`PLAYBOOKS.md`
-§ The file) holds the tables its steps read under `<run_dir>/cache/`, written by the
-extract step's script through `scripts/cache.py` with true file coordinates and each
-column's parse (`RUN_CONTRACT.md`, the file table). A step reads a population with one
-SQL statement through `scripts/evidence.py select`, which returns the rows and their
-span: coordinates and columns from the manifest, `filter` as the WHERE clause verbatim
-in the file's own column names, `row_count` and `control_total` measured over the rows
-returned. A span cites one table; a join across two files is two spans, and the
-figure's `expression` carries the arithmetic. The parquet is named nowhere: a reader
-holding the workbook and the data room opens the file at `header_at`, reads the columns
-as their `parse` says, applies the filter, counts the rows and sums the control column.
-A file the step reads directly is parsed in its own code and cited with
-`span(frame=<the parsed df>, file=, source=, file_role=, sheet=, header_at=, rows=,
-columns={name: {at, parse}}, filter=, control=)`: the step states the coordinates and
-parse, and the count and total are measured over the frame.
+**A span is measured.** Every table a step reads is parsed once into the run's cache
+(`scripts/cache.py`), with its file coordinates and each column's parse. A span takes
+those from the cache and names its `cache_id`. Its `row_count` and `control_total` are
+measured over the rows it cites. `evidence.select` cites rows of a cached table. A table
+the step parsed itself is cited with `span(frame=<df>, run_dir=, file=, source=,
+file_role=, sheet=, header_at=, rows=, columns={name: {at, parse}}, filter=, control=)`,
+which writes it to the cache first. The deliverable never names the parquet: a reader
+opens the file at `header_at`, reads the columns as `parse` says, applies `filter`, counts
+the rows and sums the control column.
 
 **A control total is never taken over a column with an unparsed cell.**
 
@@ -185,12 +179,15 @@ that entry covers the table's cells.
 ```
 
 **Write the ledger through `scripts/figures.py`.** `Ledger(run_dir, check)` holds the
-check's figures, populations and citations. `fig()` checks each field below when it is
-minted. `write()` resolves every input, population, citation and `F.`/`P.`/`E.` id in an
-`expression` against the run's ledgers, and refuses the whole write, naming each dead
-end, when one does not resolve: the one-hop contract is kept at the check, not repaired
-at the seal. `Ledger.tie()` mints a tie's difference figure and classifies it
-(check-tie SKILL § 4). A step never writes its own `fig()`.
+check's figures, populations and citations, and checks each field below as it is minted.
+`write()` refuses the whole write, naming each dead end, when an input, population,
+citation or id in an `expression` does not resolve. `Ledger.tie()` mints a tie's
+difference figure (check-tie SKILL § 4). A step never writes its own `fig()`.
+
+**Compute a figure with SQL.** `Ledger.fig_sql` runs one SELECT through `scripts/sql.py`.
+The statement becomes the figure's `expression`, and the tables and figures it reads its
+`inputs`. `Ledger.figs_sql` mints one figure per row of a GROUP BY. `sql.py verify` re-runs
+every statement and fails a figure whose value has changed.
 
 - **`inputs[]` is never empty, and `role` is required.** `source_type` is one of
   `room_file` (with `citation_id`: a read of a file the user gave us), `figure` (with
@@ -211,8 +208,8 @@ at the seal. `Ledger.tie()` mints a tie's difference figure and classifies it
 
 **Every figure cell in a workbook carries its computed value.** openpyxl writes a formula
 with no cached result, and the cell renders blank in a viewer that does not recalculate.
-A body figure is a value (the arithmetic from the data room lives in its `expression` on
-the Sources tab); a subtotal, a total, a derived line and a copy of another check's figure
+A body figure is a value, and its `expression` on the Sources tab shows how it was
+computed. A subtotal, a total, a derived line and a copy of another check's figure
 are formulas with their results cached — `wbkit.total`, `wbkit.save` and
 `link_workbook.py` write them (WORKBOOK.md § 7). The gate is `scripts/check_workbook.py`. A typed constant that resolves to no figure id is blocking.
 
@@ -228,8 +225,8 @@ tolerance a sentence states is admitted with `--allow`.
 **Every presented figure re-performs in one hop.** The Sources tab carries, beside each
 figure's `expression` and inputs, its **root source** (the citation ids reached by
 collapsing every passthrough and figure-to-figure hop) and a **To reperform** recipe:
-file, sheet, rows, columns, filter, arithmetic, expected value. The Evidence tab carries
-the citation records merged from `workpapers/evidence-*.yaml`. A reader holding only the
+file, sheet, rows, columns, filter, the arithmetic or SQL statement, and the expected
+value. The Evidence tab carries the citation records merged from `workpapers/evidence-*.yaml`. A reader holding only the
 workbook and the data room can re-select the same rows; the run directory is never
 required reading. Layout and assembly: check-report SKILL § 1; the gate is
 `scripts/check_workbook.py`.

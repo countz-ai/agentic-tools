@@ -18,9 +18,7 @@ In a step's code:
 the manifest; `filter` is the WHERE clause verbatim, in the file's own column names;
 `row_count` and `control_total` are measured over the rows returned. The two cannot
 disagree because there is one query. A span cites one table: a JOIN, a GROUP BY, a
-subquery or a computed column is refused — select the source columns, then aggregate
-or join in polars over the rows, and let the figure's `expression` carry that
-arithmetic. A join across two files is two spans. A column is named as the file's header
+subquery or a computed column is refused; compute with `scripts/sql.py`. A column is named as the file's header
 names it: bare (`invoice_amount`, `Débit`) or double-quoted where it carries punctuation
 (`"Amount (USD)"`); a quoted string in the WHERE clause is a value, whatever words it holds.
 The span's `rows` are the manifest's — the block as cut, never recomputed from a count.
@@ -31,7 +29,9 @@ by polars as written (`file_role: run_artifact`, `from_check` from the file name
 given). A data-room file is never parsed here: a step that parses one itself passes the
 frame and the coordinates it read it at — `span(frame=df, file=..., source=...,
 file_role=..., sheet=..., header_at=..., rows=..., columns={name: {"at": ..., "parse":
-...}})` — and the entry is measured over that frame. `filter` is a polars SQL WHERE clause
+...}})` — and the entry is measured over that frame. With `run_dir`, the cited columns
+are first written to the cache under `cache_id` (given, or derived from the file and the
+read), and the entry names it. `filter` is a polars SQL WHERE clause
 or a `pl.Expr`, recorded verbatim. With `reperform`, a cache id is first re-checked by
 `cache.verify` (the source file's sha256 and bytes, the parquet's own sha256
 (`parquet_sha256`) and row count) and a disagreement raises CacheDefect. `header_at`,
@@ -310,7 +310,8 @@ def select(run_dir, sql: str, *, id: str | None = None, control: str | None = No
             value = cache.control_value(ctx.execute(q).collect(), ctl)
         ctl_name = ctl
     entry = {"id": id, "kind": "span", "file": e["file"], "source": e.get("source"),
-             "file_role": role, "sheet": e.get("sheet"), "header_at": header_at(e),
+             "file_role": role, "cache_id": table, "sheet": e.get("sheet"),
+             "header_at": header_at(e),
              "rows": cited_rows(e),
              "columns": [{"name": n, "at": letters[n]["at"], "holds": "values",
                           "parse": letters[n]["parse"]} for n in rows.columns],
@@ -338,7 +339,7 @@ def span(what=None, *, run_dir=None, frame=None, file=None, id: str | None = Non
          header_at: str | None = None, rows: str | None = None, columns=None,
          control: str | None = None, filter=None, note: str | None = None,
          from_check: str | None = None, read_at: str | None = None,
-         reperform: bool = False) -> dict:
+         reperform: bool = False, cache_id: str | None = None) -> dict:
     """One measured span entry. `what` is a cache id (with `run_dir`; `columns` a list of
     the names consumed) or a run artifact under `<run_dir>/checks/`. With `frame`, the
     step parsed a data-room file itself: `file`, `source`, `file_role`, `sheet`,
@@ -360,6 +361,9 @@ def span(what=None, *, run_dir=None, frame=None, file=None, id: str | None = Non
         e, df, cols = _from_frame(frame, run_dir, file, source, file_role, sheet,
                                   header_at, rows, columns)
         names = list(cols)
+        if run_dir is not None:
+            cid = _cache_frame(run_dir, cache_id, df.select(names), e, cols, control, note)
+            e = dict(e, cache_id=cid)
     else:
         art = _artifact(run_dir, what) if what is not None else None
         if art is not None:
@@ -367,6 +371,7 @@ def span(what=None, *, run_dir=None, frame=None, file=None, id: str | None = Non
         elif run_dir is not None and what is not None \
                 and str(what) in {x["id"] for x in cache.manifest(run_dir)["files"]}:
             e, df, cols = _from_cache(run_dir, str(what))
+            e = dict(e, cache_id=str(what))
             if reperform:
                 _reperform(run_dir, str(what))
         elif what is not None and pathlib.Path(str(what)).is_file():
@@ -402,6 +407,8 @@ def span(what=None, *, run_dir=None, frame=None, file=None, id: str | None = Non
     }
     if role == "run_artifact":
         entry["from_check"] = from_check
+    elif e.get("cache_id"):
+        entry["cache_id"] = e["cache_id"]
     entry.update({
         "sheet": e.get("sheet"),
         "header_at": _header_at(e),
@@ -417,6 +424,33 @@ def span(what=None, *, run_dir=None, frame=None, file=None, id: str | None = Non
     if note:
         entry["note"] = note
     return entry
+
+
+def _slug(text: str) -> str:
+    s = re.sub(r"[^a-z0-9]+", "_", str(text).lower()).strip("_")
+    return s or "table"
+
+
+def _cache_frame(run_dir: pathlib.Path, cache_id, frame, e: dict, cols: dict, control,
+                 note) -> str:
+    """Write a table the step parsed itself to the cache; return its id. Without
+    `cache_id`, the id is the file's stem, the sheet and a digest of the read, so the same
+    read reuses its id and a different read gets a new one."""
+    import hashlib
+    if cache_id is None:
+        sig = "|".join([e["file"], str(e.get("sheet")), e["header_at"], e["rows"],
+                        ",".join(cols)])
+        stem = _slug(pathlib.PurePath(e["file"]).stem)
+        if e.get("sheet"):
+            stem += "_" + _slug(e["sheet"])
+        cache_id = f"{stem[:48]}-{hashlib.sha1(sig.encode()).hexdigest()[:6]}"
+    ctl = control if control in cols else None
+    cache.write(run_dir, cache_id, frame, file=e["file"], source=e.get("source"),
+                file_role=e["file_role"], header_at=e["header_at"],
+                rows=None if e["rows"] == cache.NO_ROWS else e["rows"],
+                columns=cols, control=ctl, sheet=e.get("sheet"),
+                what=note or f"parsed by the step that cited it: {e['file']}")
+    return cache_id
 
 
 def write_ledger(path, entries: list[dict], merge: bool = True) -> pathlib.Path:

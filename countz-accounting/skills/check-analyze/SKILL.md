@@ -42,7 +42,8 @@ assumed.
 ## 2. Compute
 
 Per DOCTRINE.md: code computes every figure, at full precision, from the sources and
-the declared dependency reads — you transcribe nothing. One citation per read in
+the declared dependency reads — you transcribe nothing; compute in SQL
+(`CONDUCT.md` § Libraries). One citation per read in
 `workpapers/evidence-<check>.yaml`; every number that may reach the deliverable as a
 figure in `workpapers/figures-<check>.yaml`, populations stated with exclusions named.
 Item-grain work lands as `checks/<check>-<table>.csv` tables with their manifest blocks

@@ -2343,7 +2343,7 @@ def check(root: pathlib.Path) -> list[str]:
     tests = root.parent / "tests" / root.name
     for name in ("style.py", "figures.py", "periods.py", "step_record.py", "check_prose.py",
                  "rework.py", "items.py", "matching.py", "resolve.py", "match_tabs.py",
-                 "cache.py", "wbkit.py", "arr_policy.py"):
+                 "cache.py", "wbkit.py", "arr_policy.py", "sql.py"):
         if (root / "scripts" / name).is_file() and not (tests / f"test_{name}").is_file():
             bad.append(f"{rel(root / 'scripts' / name)}: has no test at {rel(tests / f'test_{name}')}")
     for t in sorted(tests.glob("test_*.py")):

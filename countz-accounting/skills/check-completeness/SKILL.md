@@ -44,7 +44,7 @@ reported in `blockers`, not dropped.
 
 ## 3. Match members, in passes
 
-Match with polars joins, one per pass; check the assignment with
+Match with SQL joins, one per pass; check the assignment with
 `${CLAUDE_PLUGIN_ROOT}/scripts/matching.py`'s `check_assignment()` before writing it.
 
 By identifier first (account number or masked suffix), then by name or label, then by

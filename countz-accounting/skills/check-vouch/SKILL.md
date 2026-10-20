@@ -33,7 +33,7 @@ consume the whole list — every item on it ends with a classification, none dro
 
 ## 2. Trace each item
 
-Trace with polars joins, one join per matching round; check the assignment with
+Trace with SQL joins, one per matching round; check the assignment with
 `${CLAUDE_PLUGIN_ROOT}/scripts/matching.py`'s `check_assignment()`, and classify every
 item left unmatched after the last round per § 3.
 

@@ -51,7 +51,7 @@ total, cited as spans.
 
 ## 2. Trace both directions
 
-Pair with polars joins, one per pass; check the assignment with
+Pair with SQL joins, one per pass; check the assignment with
 `${CLAUDE_PLUGIN_ROOT}/scripts/matching.py`'s `check_assignment()` before writing it.
 
 - **book → bank**: every book posting in the window resolves to a bank line with its

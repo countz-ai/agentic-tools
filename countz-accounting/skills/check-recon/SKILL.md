@@ -81,7 +81,7 @@ Call `resolve()` once, over the whole population: never filter a stream first or
 items out of it (undated items included); an item left out is a counterpart no rule
 could see.
 
-Elsewhere, match with polars joins, one per pass — by reference, then amount-and-date,
+Elsewhere, match with SQL joins, one per pass — by reference, then amount-and-date,
 then looser keys, each pass recorded — over streams mapped as above, and read the
 assignment back with `resolve.py`'s `from_assignment()`: each pass a `Pass`, its criteria
 in words and, where its groups' sides differ, the difference it tolerates, named; `transit=`
