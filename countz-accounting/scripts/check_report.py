@@ -59,6 +59,15 @@ anywhere on a slide, a copied table's cells included; and no working-paper term 
 `as supported`, `candidate`, `boundary`, `ruled`, `routed`, `standing`) in what the
 author writes — a term opening its own definition and a tab's name are not read.
 
+GATE 8 — the walk as drawn (REPORT.md § 2). Every waterfall is rebuilt from where its bars
+stand, never from the builder's word for which bar is a total: each bar stands either
+from the axis start (a total) or from where the bar above it ends (a step); each step's
+length is its value at the chart's scale; each total ends where the running total has
+reached and as far from the opening bar's end as its value is from the opening's; and the
+last bar is a total, the walk's closing figure, drawn from the axis start. A closing line
+drawn as one more step — stacked on the running total, the axis stretched to twice the
+walk — passes GATE 1, since its value is the cell's; this gate refuses it.
+
 Parsed from the .pptx zip with the standard library only, like check_workbook.py.
 
 Usage:
@@ -101,7 +110,9 @@ SKIP_SHAPES = {"kicker", "footer-page", "footer-left", "footer-source", "table-m
                "chart-axis", "chart-cat", "chart-legend"}
 # build_report.py draws a chart as shapes so it stays vector in every viewer, and carries
 # each plotted value on its shape's name: `chartval:<tab>:<value>`.
-CHARTVAL = re.compile(r"^chartval:(.+):(-?[\d.eE+-]+)$")
+# A waterfall's bar adds its place in the walk: `chartval:<tab>:<value>:waterfall:<i>`. A
+# tab's name carries no colon (Excel refuses one).
+CHARTVAL = re.compile(r"^chartval:([^:]+):(-?[\d.eE+-]+)(?::waterfall:(\d+))?$")
 
 # A schedule of money is shown at a scale, its table's title stating it (REPORT.md § 4) in
 # any currency — `$ in thousands`, `€ in millions`; the figure behind such a cell is the
@@ -163,6 +174,57 @@ def offset(xml: str) -> tuple[int, int]:
     return (int(m.group(1)), int(m.group(2))) if m else (0, 0)
 
 
+EXT = re.compile(r"<a:ext\b[^>]*\bcx=\"(\d+)\"")
+# GATE 8's slack, in EMU: 0.015 in. The builder draws a bar at least 0.01 in wide, so a
+# step too small to see may end that far from where the next bar starts.
+WALK_SLACK = 13716
+
+
+def walk_faults(bars: list[tuple[float, int, int]]) -> list[str]:
+    """Where a waterfall's bars, as drawn, do not walk (GATE 8). `bars` are (value, left
+    edge, width) in EMU, top to bottom. A bar's start is the edge its value runs from —
+    the left for a value up, the right for a value down — and its end the other edge."""
+    def edges(v: float, x: int, cx: int) -> tuple[int, int]:
+        return (x, x + cx) if v >= 0 else (x + cx, x)
+
+    v0 = bars[0][0]
+    axis, run = edges(*bars[0])                       # the opening stands from the axis start
+    end0 = run
+    kinds = ["total"]
+    out = []
+    for v, x, cx in bars[1:]:
+        a, b = edges(v, x, cx)
+        if abs(a - run) <= WALK_SLACK:
+            kinds.append("step")
+        elif abs(a - axis) <= WALK_SLACK:
+            kinds.append("total")
+            if abs(b - run) > WALK_SLACK:
+                out.append(f"the total bar for {v:,.0f} ends where the bars above it do not reach")
+        else:
+            kinds.append("?")
+            out.append(f"the bar for {v:,.0f} stands neither from the axis start nor where the bar "
+                       f"above it ends")
+        run = b
+    # the chart's scale, EMU per unit, from its longest step: a step is drawn at its value
+    steps = [(abs(v), abs(edges(v, x, cx)[1] - edges(v, x, cx)[0]))
+             for (v, x, cx), k in zip(bars, kinds) if k == "step" and v]
+    if steps:
+        big, width = max(steps)
+        scale = width / big
+        for (v, x, cx), k in zip(bars, kinds):
+            a, b = edges(v, x, cx)
+            # a step shorter than 0.01 in is drawn at 0.01 in (9144 EMU)
+            if k == "step" and abs(abs(b - a) - max(abs(v) * scale, 9144)) > WALK_SLACK:
+                out.append(f"the step bar for {v:,.0f} is not drawn at its value's length")
+            if k == "total" and abs((b - end0) - (v - v0) * scale) > WALK_SLACK:
+                out.append(f"the total bar for {v:,.0f} does not end at its value on the chart's scale")
+    if len(bars) > 1 and kinds[-1] != "total":
+        out.append(f"the last bar, {bars[-1][0]:,.0f}, continues from the bar above it — the walk "
+                   f"closes on its closing figure, drawn from the axis start; mark the closing line "
+                   f"on the tab (`= …`, or the Total style) and rebuild")
+    return out
+
+
 def read_slide(z: zipfile.ZipFile, part: str) -> dict:
     xml = z.read(part).decode("utf-8", "replace")
     name = ""
@@ -171,9 +233,17 @@ def read_slide(z: zipfile.ZipFile, part: str) -> dict:
         name = html.unescape(m.group(1))
     shapes: list[tuple[str, str]] = []
     titles: list[tuple[int, int, str]] = []            # (x, y, text) of each table title
+    walks: list[tuple[str, list[tuple[float, int, int]]]] = []   # (tab, bars) per waterfall
     for sp in re.findall(r"<p:sp\b.*?</p:sp>", xml, re.S):
         nm = re.search(r"<p:cNvPr\b[^>]*\bname=\"([^\"]*)\"", sp)
         shapes.append((html.unescape(nm.group(1)) if nm else "", para_text(sp)))
+        wm = CHARTVAL.match(shapes[-1][0])
+        if wm and wm.group(3) is not None:
+            if wm.group(3) == "0":
+                walks.append((wm.group(1), []))
+            cx = EXT.search(sp)
+            if walks and cx:
+                walks[-1][1].append((float(wm.group(2)), offset(sp)[0], int(cx.group(1))))
         if shapes[-1][0] == "table-title":
             titles.append((*offset(sp), shapes[-1][1]))
     tables: list[tuple[str, list[list[str]]]] = []
@@ -216,7 +286,7 @@ def read_slide(z: zipfile.ZipFile, part: str) -> dict:
                     vals += [float(v) for v in re.findall(r"<c:v>(-?[\d.eE+-]+)</c:v>", cache)]
                 charts.append((gname, vals))
     return {"part": part, "name": name, "shapes": shapes, "tables": tables, "charts": charts,
-            "table_titles": table_titles,
+            "table_titles": table_titles, "walks": walks,
             "kicker": next((t for n, t in shapes if n == "kicker"), ""),
             "title": next((t for n, t in shapes if n == "title"), ""),
             "footer_source": next((t for n, t in shapes if n == "footer-source"), "")}
@@ -970,6 +1040,11 @@ def audit(deck: pathlib.Path, workbook: pathlib.Path, run_dir: pathlib.Path | No
             if shape_name in PROSE_SHAPES and text.strip() and not SENTENCE_END.search(text.strip()):
                 fails.append(f"slide {n}: {shape_name} `{text.strip()[:50]}` does not end with a full stop — "
                              f"a complete sentence")
+    # GATE 8 — the walk as drawn.
+    for n, s in enumerate(slides, 1):
+        for tab, bars in s["walks"]:
+            for why in walk_faults(bars):
+                fails.append(f"slide {n}: the waterfall from `{tab}` — {why}")
     # GATE 7 — the reader's words.
     tokens = step_tokens(tabs)
     jargon: dict[int, list[str]] = {}

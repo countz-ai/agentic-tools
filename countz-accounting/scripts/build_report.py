@@ -558,7 +558,9 @@ class Book:
                 line = [self.as_cell(cells[col]) if col in cells
                         else Cell(None, "", False, "", f"{openpyxl.utils.get_column_letter(col)}{rr}")
                         for col in cols]
-                lead = next((c for c in line if c.value is not None), None)
+                # the row's lead is its first cell past a ledger id: an id carries no style
+                lead = next((c for c in line if c.value is not None
+                             and not (isinstance(c.value, str) and LEDGER_ID.match(c.value.strip()))), None)
                 label = str(lead.value) if lead else ""
                 kind = "body"
                 if lead and lead.bold:
@@ -1336,10 +1338,14 @@ WATERFALL_SLOT = 0.3                     # inches, the least height of one walk 
 
 def waterfall_block(v, at: str, res: Resolver, book: Book) -> dict:
     """A walk drawn as floating bars (REPORT.md § 2): `rows` are the walk's lines in
-    order and `columns` names one period. The first line and every derived line (`= …`)
-    is a total, drawn from zero; every other line is a step from the running total, its
-    stored sign its direction. The builder draws what the tab holds and adds nothing: a
-    total that its steps do not reach is refused, as a condensed table is."""
+    order and `columns` names one period. A total is drawn from zero: the first line, a
+    derived line (`= …`), a line carrying the tab's Total style (the double rule, read as
+    `read_table` reads it), a bold subtotal stating the running total, and the last line,
+    the walk's closing figure, whatever its label says. Every other line is a step from
+    the running total, its stored sign its direction. The builder draws what the tab holds
+    and adds nothing: a total that its steps do not reach is refused, as a condensed table
+    is, and so is a plain line equal to the running total before it — a subtotal the tab
+    does not mark, which drawn as a step doubles the walk."""
     cols = v.get("columns")
     if not isinstance(cols, list) or len(cols) != 1:
         raise SpecError(f"{at}: a waterfall charts one period — `columns: [<period header>]`")
@@ -1351,20 +1357,35 @@ def waterfall_block(v, at: str, res: Resolver, book: Book) -> dict:
                if t.numeric[i] and normalize(h) == normalize(str(cols[0]))), None)
     if ci is None:
         raise SpecError(f"{at}: `{t.source}` has no numeric column headed `{cols[0]}`")
-    steps = []
+    steps, run = [], 0.0
+    last = len(t.rows) - 1
     for k, row in enumerate(t.rows):
         label = next((str(c.value).strip() for j, c in enumerate(row)
                       if isinstance(c.value, str) and c.value.strip() and not t.numeric[j]
                       and t.headers[j].strip().lower() not in ID_HEADERS
                       and not LEDGER_ID.match(c.value.strip())), "")
-        val = row[ci].value if isinstance(row[ci].value, (int, float)) else 0.0
-        total = k == 0 or bool(DERIVED_ROW.match(label))
-        if not total and round(float(val), 2) == 0:
+        val = float(row[ci].value) if isinstance(row[ci].value, (int, float)) else 0.0
+        kind = t.kinds[k] if k < len(t.kinds) else "body"
+        tol = 0.55 * (len(steps) + 2) * shown_unit(row[ci].fmt)
+        # a bold subtotal is a cause's subtotal, a step, unless it states the running total
+        total = k == 0 or k == last or bool(DERIVED_ROW.match(label)) or kind == "total" \
+            or (kind == "subtotal" and abs(val - run) <= tol)
+        if total and k > 0 and abs(val - run) > tol:
+            raise SpecError(f"{at}: the lines above `{label}` come to {run:,.2f} against its "
+                            f"{val:,.2f} — a total is drawn from zero and must equal the running "
+                            f"total; show every line it derives from"
+                            + (", and close the walk on its closing line" if k == last else ""))
+        if not total and run and abs(val - run) <= tol:
+            raise SpecError(f"{at}: `{label}` equals the running total above it ({val:,.2f}) — a "
+                            f"subtotal the tab does not mark, which drawn as a step doubles the walk. "
+                            f"Mark it on the tab (`= …`, or the Total style) or leave it out of `rows`")
+        run = val if total else run + val
+        if not total and round(val, 2) == 0:
             continue                            # a cause with nothing in it draws no bar
         label = label.lstrip("= ").strip() if total else label
         if shown_labels:
             label = shown_labels[k]
-        steps.append({"label": label[:1].upper() + label[1:], "value": float(val),
+        steps.append({"label": label[:1].upper() + label[1:], "value": val,
                       "total": total, "fmt": row[ci].fmt,
                       "money": book.currency if is_money(row[ci].fmt) else ""})
     if not steps[0]["total"] or len(steps) < 3:
@@ -2097,8 +2118,10 @@ class Deck:
             top = y + i * slot
             colour = MARKER if st["total"] else (TEAL if st["value"] >= 0 else MUTED)
             lo_x, hi_x = sorted((vx(a), vx(b)))
+            # the bar's place in the walk rides on its name after its value, so the gate
+            # can rebuild the walk from the bars as drawn (check_report.py GATE 8)
             self.rect(s, lo_x, top + slot * 0.18, max(hi_x - lo_x, 0.01), slot * 0.64, colour,
-                      f"chartval:{tag}:{float(st['value'])!r}")
+                      f"chartval:{tag}:{float(st['value'])!r}:waterfall:{i}")
             if cut and st["total"]:             # a total on a cut axis is broken where the axis starts
                 for dx in (0.0, 0.07):
                     gap = self.rect(s, lo_x + 0.16 + dx, top + slot * 0.12, 0.03, slot * 0.76, BONE,
