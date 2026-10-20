@@ -55,6 +55,7 @@ Exit 0 when every case holds, 1 otherwise, naming the case.
 from __future__ import annotations
 
 import html
+import io
 import json
 import pathlib
 import re
@@ -846,6 +847,26 @@ def main() -> int:
             g = run(gate)
             if g.returncode != 0:
                 fails.append(f"19: a waterfall deck must pass (exit {g.returncode}): {(g.stdout + g.stderr).strip()[:400]}")
+            # 19a. the gate rebuilds the walk from where its bars stand: the closing bar moved
+            #      to stand on the running total (its value still the cell's) is refused.
+            stacked = deck.with_name("stacked.pptx")
+            hits = 0
+            with zipfile.ZipFile(deck) as zin, zipfile.ZipFile(stacked, "w", zipfile.ZIP_DEFLATED) as zout:
+                for item in zin.infolist():
+                    data = zin.read(item.filename)
+                    if item.filename.startswith("ppt/slides/slide") and b":waterfall:" in data:
+                        bars = [sp for sp in re.findall(rb"<p:sp\b.*?</p:sp>", data, re.S)
+                                if re.search(rb'name="chartval:[^"]*:waterfall:\d+"', sp)]
+                        prev, last = bars[-2], bars[-1]
+                        end = (int(re.search(rb'<a:off x="(-?\d+)"', prev).group(1))
+                               + int(re.search(rb'<a:ext cx="(\d+)"', prev).group(1)))
+                        moved = re.sub(rb'(<a:off x=")-?\d+', rb"\g<1>" + str(end).encode(), last, count=1)
+                        data, hits = data.replace(last, moved), hits + 1
+                    zout.writestr(item, data)
+            g = run([py, str(SCRIPTS / "check_report.py"), str(stacked), "--workbook", str(wb), "--run-dir", str(rd)])
+            if not hits or g.returncode != 1 or "continues from the bar above it" not in g.stdout:
+                fails.append(f"19a: a closing bar stacked on the running total must be refused (exit "
+                             f"{g.returncode}, edited {hits}): {(g.stdout + g.stderr).strip()[:400]}")
         spec.write_text(GOOD_SPEC.replace(chart_line, "          - chart: {type: waterfall, from: q6, rows: "
                                           "[\"EBIT\", \"= Reported EBITDA\", \"= Diligence adjusted EBITDA\"], "
                                           "columns: [LTM Jul 2025]}\n"), encoding="utf-8")
@@ -853,6 +874,84 @@ def main() -> int:
         if r.returncode != 1 or "do not foot" not in r.stdout:
             fails.append(f"19: a waterfall skipping its steps must be refused (exit {r.returncode}): "
                          f"{(r.stdout + r.stderr).strip()[:300]}")
+
+        # 19b. a walk whose lines carry no `= ` (the client's labels, a helper's plain
+        #      label): the closing line is still drawn as a total, from zero, and the deck
+        #      passes; a subtotal the tab does not mark, drawn as a step, would double the
+        #      walk and is refused.
+        kept = wb.read_bytes()
+        with zipfile.ZipFile(io.BytesIO(kept)) as zin, zipfile.ZipFile(wb, "w", zipfile.ZIP_DEFLATED) as zout:
+            for item in zin.infolist():           # the labels only: an openpyxl save drops cached results
+                data = zin.read(item.filename)
+                if item.filename == "xl/sharedStrings.xml":
+                    data = data.replace(b">= Reported EBITDA<", b">Reported EBITDA<").replace(
+                        b">= Diligence adjusted EBITDA<", b">Diligence adjusted EBITDA<")
+                zout.writestr(item, data)
+        plain = GOOD_SPEC.replace("= Reported EBITDA", "Reported EBITDA").replace(
+            "= Diligence adjusted EBITDA", "Diligence adjusted EBITDA")
+        plain_chart = chart_line.replace("= ", "")
+        assert plain_chart in plain
+        spec.write_text(plain.replace(plain_chart, "          - chart: {type: waterfall, from: q6, rows: "
+                                      "[EBIT, \"+ D&A\", \"Non-recurring, supported\", \"Normalization, "
+                                      "supported\", Diligence adjusted EBITDA], columns: [LTM Jul 2025]}\n"),
+                        encoding="utf-8")
+        r = run(build)
+        g = run(gate) if r.returncode == 0 else r
+        if g.returncode != 0:
+            fails.append(f"19b: a walk closing on a plain label must build and pass (exit {g.returncode}): "
+                         f"{(g.stdout + g.stderr).strip()[:400]}")
+        spec.write_text(plain.replace(plain_chart, "          - chart: {type: waterfall, from: q6, rows: "
+                                      "[EBIT, \"+ D&A\", Reported EBITDA, \"Non-recurring, supported\", "
+                                      "\"Normalization, supported\", Diligence adjusted EBITDA], "
+                                      "columns: [LTM Jul 2025]}\n"), encoding="utf-8")
+        r = run(build)
+        g = run(gate) if r.returncode == 0 else r
+        if g.returncode != 0:
+            fails.append(f"19b: a bold subtotal stating the running total is drawn as a total and the "
+                         f"deck passes (exit {g.returncode}): {(g.stdout + g.stderr).strip()[:400]}")
+        wb.write_bytes(kept)
+
+        # 19c. which lines of a walk are totals, read in process: the last line whatever
+        #      its label; a plain line equal to the running total is refused, a bold one
+        #      drawn as a total; a closing line its steps do not reach is refused.
+        import build_report  # noqa: PLC0415 — the builder's own formatter
+
+        class _Res:
+            def resolve(self, x, at):
+                return x
+
+        class _Book:
+            currency = "usd"
+
+        def walk(lines, kinds=None):
+            rows = [[build_report.Cell(lb, "", False, "", f"B{i}"), build_report.Cell(float(v), "#,##0", False, "", f"C{i}")]
+                    for i, (lb, v) in enumerate(lines)]
+            t = build_report.Table("x1 ARR bridge", None, ["line", "Sep 2025"], rows,
+                                   kinds=kinds or ["body"] * len(lines), numeric=[False, True])
+            saved = build_report.table_block
+            build_report.table_block = lambda *a, **k: {"table": t}
+            try:
+                return build_report.waterfall_block({"from": "x1", "rows": [lb for lb, _ in lines],
+                                                     "columns": ["Sep 2025"]}, "chart", _Res(), _Book())
+            except build_report.SpecError as e:
+                return str(e)
+            finally:
+                build_report.table_block = saved
+
+        got = walk([("Opening ARR", 100), ("New", 20), ("Churn", -5), ("Closing ARR, September 30, 2025", 115)])
+        if isinstance(got, str) or [st["total"] for st in got["steps"]] != [True, False, False, True]:
+            fails.append(f"19c: a walk's last line is its closing total, whatever its label: {got}")
+        mid = [("Opening ARR", 100), ("New", 20), ("ARR before acquisitions", 120), ("Acquired", 30),
+               ("Closing ARR", 150)]
+        got = walk(mid)
+        if not isinstance(got, str) or "equals the running total" not in got:
+            fails.append(f"19c: a plain line equal to the running total must be refused: {got}")
+        got = walk(mid, ["body", "body", "subtotal", "body", "total"])
+        if isinstance(got, str) or [st["total"] for st in got["steps"]] != [True, False, True, False, True]:
+            fails.append(f"19c: a bold subtotal stating the running total is a total: {got}")
+        got = walk([("Opening ARR", 100), ("New", 20), ("Closing ARR", 130)])
+        if not isinstance(got, str) or "come to 120.00" not in got:
+            fails.append(f"19c: a closing line its steps do not reach must be refused: {got}")
 
         # 21. a check tab stating a status as the run's code (`not_supported`) is refused by
         #     the workbook gate (WORKBOOK.md § 3 Language); a check id naming a check is not.
@@ -870,7 +969,6 @@ def main() -> int:
             fails.append("21: a check id naming its check is navigation, not machine vocabulary")
 
         # 20. days on the deck: never `-0.0`; a table's negative in parentheses.
-        import build_report  # noqa: PLC0415 — the builder's own formatter
         for v, want in ((-0.004, "–"), (0.0, "–"), (-5.66, "(5.7)"), (5.66, "5.7")):
             got = build_report.fmt_value(v, "0.0")
             if got != want:
@@ -965,7 +1063,8 @@ def main() -> int:
           "and a figure block, the key-metrics page headed as the recipe declares, the first schedule "
           "at most one page after it — is held; the recipe's structure — an appendix schedule under "
           "the `Appendix` kicker, nothing after the appendix, the narrative in its declared order — is "
-          "held; twin rows are refused; a waterfall builds and foots; days never read `-0.0`; a status "
+          "held; twin rows are refused; a waterfall builds and foots, closes on a total drawn from "
+          "zero whatever its closing line's label, and a bar stacked past its walk is refused; days never read `-0.0`; a status "
           "written as the run's code is refused on the workbook.")
     return 0
 
