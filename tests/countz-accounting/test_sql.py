@@ -129,7 +129,7 @@ def main() -> int:
         L.write()
 
         r = sql.verify(rd)
-        if r["failures"] or r["figures"] != 6:
+        if r["failures"] or r["figures"] != 6 or "warnings" in r:
             bad.append(f"verify on a clean run: {r}")
         # a value that moved is a failure
         p = rd / "workpapers" / "figures-t1.yaml"
@@ -148,20 +148,84 @@ def main() -> int:
         r = sql.verify(rd, "t2")
         if not any("no cache_id" in f for f in r["failures"]):
             bad.append(f"verify: a span parsed outside the cache passes: {r['failures']}")
-        # four single-figure queries that differ only in literals: a warning
-        L2 = Ledger(rd, "t3")
-        for m in ("2025-05", "2025-06"):
-            for k in ("INV", "CM"):
-                L2.fig_sql(db, f"F.t3.{k}.{m}", f"{k} {m}", "usd",
-                           f"SELECT coalesce(sum(amount), 0) FROM inv WHERE month = '{m}' "
-                           f"AND kind = '{k}'", zero_basis=None) if (m, k) != ("2025-06", "CM") \
-                    else L2.fig_sql(db, f"F.t3.{k}.{m}", f"{k} {m}", "usd",
-                                    f"SELECT coalesce(sum(amount), 0) FROM inv WHERE month = '{m}' "
-                                    f"AND kind = '{k}'", zero_basis="not_applicable")
-        L2.write()
-        r = sql.verify(rd, "t3")
-        if not any("differ only in their literals" in w for w in r["warnings"]):
-            bad.append(f"verify: a loop over SQL draws no warning: {r['warnings']}")
+        # fig() reads a figure the open Ledger minted outside SQL, with no hold
+        db = sql.connect(rd)
+        L3 = Ledger(rd, "t3")
+        L3.fig("F.t3.rate", "Stated rate", 0.5, "pct", "as stated", [("rate", "params.rate")],
+               disposition="as_stated")
+        try:
+            v = L3.fig_sql(db, "F.t3.half", "Half of the item-table total", "usd",
+                           "SELECT fig('F.t1.pairs') * fig('F.t3.rate')")
+            if L3.entries[v]["value"] != 6.25:
+                bad.append(f"fig() over a Ledger figure: {L3.entries[v]}")
+        except ValueError as exc:
+            bad.append(f"fig() does not read the open Ledger's figure: {exc}")
+        # a schedule with zero and non-zero rows: zero_basis lands on the zero rows only
+        L3.population("P.t3.inv", "Invoices", total_n=4, included_n=4)
+        try:
+            zs = L3.figs_sql(db, "F.t3.cm.{month}", "Credit memos, {month}", "usd",
+                             "SELECT month, coalesce(sum(amount) FILTER (kind = 'CM'), 0) AS value FROM inv "
+                             "GROUP BY month", key="month", zero_basis="measured_zero",
+                             population="P.t3.inv")
+            zb = {k: L3.entries[k]["zero_basis"] for k in zs}
+            if zb != {"F.t3.cm.2025-05": None, "F.t3.cm.2025-06": "measured_zero"}:
+                bad.append(f"figs_sql zero_basis per row: {zb}")
+        except ValueError as exc:
+            bad.append(f"figs_sql refuses a schedule with zero and non-zero rows: {exc}")
+        # an item table written after connect is read on the next statement, typed
+        write_items(rd, "t3", "rows", [{"item_id": "a", "side": "s", "hours": 2, "rate": 1.5,
+                                        "acct": "1350"},
+                                       {"item_id": "b", "side": "s", "hours": 3, "rate": 2.0,
+                                        "acct": "1360"}],
+                    extensions=["hours", "rate", "acct"], sides=["s"])
+        try:
+            if db.value('SELECT sum(hours * rate) FROM checks."t3-rows"') != 9.0:
+                bad.append("typed item table: hours * rate does not sum to 9")
+            t = dict(db.con.execute('SELECT column_name, data_type FROM '
+                                    'information_schema.columns WHERE table_name = '
+                                    "'t3-rows'").fetchall())
+            if (t.get("hours"), t.get("rate"), t.get("acct")) != ("BIGINT", "DOUBLE", "VARCHAR"):
+                bad.append(f"item table types: {t}")
+        except ValueError as exc:
+            bad.append(f"an item table written after connect is not read: {exc}")
+        # rewritten: the next statement reads the new rows
+        write_items(rd, "t3", "rows", [{"item_id": "a", "side": "s", "hours": 5, "rate": 1.0,
+                                        "acct": "1350"}],
+                    extensions=["hours", "rate", "acct"], sides=["s"])
+        if db.value('SELECT sum(hours) FROM checks."t3-rows"') != 5:
+            bad.append("a rewritten item table is not re-read")
+        # a CSV edited after its parquet reads as text
+        import os
+        import time
+        csvp = rd / "checks" / "t3-rows.csv"
+        time.sleep(0.01)
+        csvp.write_text(csvp.read_text())
+        os.utime(csvp)
+        t = dict(db.con.execute('SELECT column_name, data_type FROM information_schema.columns '
+                                "WHERE table_name = 't3-rows'").fetchall()) \
+            if db.lineage('SELECT * FROM checks."t3-rows"') else {}
+        if t.get("hours") != "VARCHAR":
+            bad.append(f"a hand-edited item table is not read as text: {t}")
+        L3.write()
+        # a table parsed from a folder of files lands in the cache and verifies
+        forms = room / "forms"
+        forms.mkdir()
+        (forms / "a.md").write_text("fee 10\n")
+        (forms / "b.md").write_text("fee 20\n")
+        ff = pl.DataFrame({"file": ["a.md", "b.md"], "fee": [10.0, 20.0]})
+        try:
+            fs = evidence.span(frame=ff, run_dir=rd, file="forms", source="dataroom",
+                               file_role="correspondence", header_at="none - one form per file",
+                               rows="2 files", columns={"file": {"at": "file name", "parse": "text"},
+                                                        "fee": {"at": "line 1", "parse": "number"}},
+                               id="E.t4.forms")
+            if [x["agrees"] for x in cache.verify(rd, fs["cache_id"])] != [True]:
+                bad.append("folder span: the cache does not verify")
+            (forms / "b.md").write_text("fee 25\n")
+            if [x["agrees"] for x in cache.verify(rd, fs["cache_id"])] != [False]:
+                bad.append("folder span: a changed file in the folder still verifies")
+        except ValueError as exc:
+            bad.append(f"folder span refused: {exc}")
     if bad:
         print("sql.py self-check FAILED:")
         for b in bad:

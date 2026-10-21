@@ -13,28 +13,32 @@ figure's `expression`, and `verify` re-runs it.
     L.figs_sql(db, "F.r5.sales.{month}", "Billed credit sales, {month}", "usd",
                "SELECT strftime(invoice_date, '%Y-%m') AS month, sum(amount) AS value "
                "FROM inv_2025 GROUP BY month", key="month")
+    L.figs_sql(db, "F.r5.credits.{customer_id}", "Credit memos, {customer_id}", "usd",
+               "SELECT customer_id, sum(credit) AS value FROM inv_2025 GROUP BY customer_id",
+               key="customer_id", population="P.r5.customers", zero_basis="measured_zero")
     L.fig_sql(db, "F.r5.dso3.2025-06", "DSO at 30 June 2025", "days",
               "SELECT fig('F.r5.numerator.2025-06') / fig('F.r5.sales3.2025-06') * 91")
     rows = db.frame("SELECT customer_id, sum(open_amount) AS amount FROM aging_2025_06_30 "
                     "GROUP BY customer_id")          # polars DataFrame, for an item table or a tab
     L.write()
 
-A statement reads cache tables by id, item tables as `checks."<check>-<table>"`, and
-recorded figures as `fig('F.x')`. It is one SELECT. File functions (`read_csv`, ...) are
+A statement reads cache tables by id, item tables as `checks."<check>-<table>"` (typed as
+`write_items` was given them; a table written after `connect` is read on the next
+statement), and figures as `fig('F.x')`: every ledger's, and every figure this run's
+`Ledger` has minted so far. It is one SELECT. File functions (`read_csv`, ...) are
 refused: parse a file into the cache first. Aliases are lower case, because an upper-case
 `P.x` reads as a ledger id in the expression.
 
 `fig_sql` takes a statement that returns one row. `figs_sql` takes a GROUP BY: `key` names
 the column(s) that fill the `{name}` placeholders, and `value` the figure's column (default
-`value`). Each cites the tables it reads once per ledger.
+`value`); `zero_basis` applies to the rows whose value is zero or null. Each cites the
+tables it reads once per ledger.
 
 `verify(run_dir, check=None)` re-runs every statement and fails three things:
 - a figure whose value changed (money beyond half its minor unit, a count by any amount,
   anything else beyond 1e-9);
 - a statement that no longer runs;
 - a data-room span with no `cache_id`.
-
-It warns when four or more one-row statements in a check differ only in their literals.
 
     sql.py tables <run_dir>
     sql.py query <run_dir> "<select>" [--limit 20]
@@ -62,8 +66,6 @@ ITEM_TABLE = re.compile(r"(?P<check>[a-z0-9][a-z0-9_]*)-(?P<table>[a-z0-9][a-z0-
 # An identifier that reads as a ledger id (EVIDENCE.md § 0) once string literals are blanked.
 ID_LIKE = re.compile(r"(?<![\w.\"])[A-Z]{1,2}\.[A-Za-z0-9_]")
 QUOTED = re.compile(r"'(?:[^']|'')*'|\"(?:[^\"]|\"\")*\"")
-LITERAL = re.compile(r"'(?:[^']|'')*'|\b\d+(?:\.\d+)?\b")
-LOOP_SHAPE = 4                  # single-figure queries of one shape before verify warns
 
 
 def _duckdb():
@@ -87,6 +89,10 @@ def _literal(s: str) -> str:
     return "'" + str(s).replace("'", "''") + "'"
 
 
+def _float(v):
+    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+
 def _ledger_figures(run_dir: pathlib.Path) -> list[tuple[str, object, str, str]]:
     """(id, value, unit, ledger file) for every figure entry in workpapers/figures-*.yaml."""
     import yaml
@@ -97,9 +103,7 @@ def _ledger_figures(run_dir: pathlib.Path) -> list[tuple[str, object, str, str]]
             raise ValueError(f"{f}: the ledger is not a YAML list (EVIDENCE.md § 0)")
         for e in doc:
             if isinstance(e, dict) and str(e.get("id", "")).startswith("F."):
-                v = e.get("value")
-                v = float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
-                out.append((e["id"], v, str(e.get("unit") or ""), f.name))
+                out.append((e["id"], _float(e.get("value")), str(e.get("unit") or ""), f.name))
     return out
 
 
@@ -119,26 +123,61 @@ class Db:
                                  f"SELECT * FROM read_parquet({_literal(p)})")
                 self.tables[e["id"]] = {"kind": "cache", "id": e["id"], "file": e["file"]}
         self.con.execute(f"CREATE SCHEMA {ARTIFACTS}")
-        for p in sorted((self.run_dir / "checks").glob("*-*.csv")):
-            m = ITEM_TABLE.fullmatch(p.stem)
-            if not m:
-                continue
-            cols = self.con.execute(f"SELECT * FROM read_csv({_literal(p)}, all_varchar = true, "
-                                    f"header = true) LIMIT 0").description
-            names = [c[0] for c in cols]
-            sel = "* REPLACE (CAST(amount AS DOUBLE) AS amount)" if "amount" in names else "*"
-            self.con.execute(f"CREATE VIEW {ARTIFACTS}.{_ident(p.stem)} AS SELECT {sel} FROM "
-                             f"read_csv({_literal(p)}, all_varchar = true, header = true)")
-            self.tables[f"{ARTIFACTS}.{p.stem}"] = {
-                "kind": "artifact", "id": p.stem, "file": f"checks/{p.name}",
-                "from_check": m.group("check")}
+        self._items: dict[str, tuple] = {}       # item table -> the file stats its view read
+        self._refresh_items()
         self.con.execute("CREATE TABLE figures (id VARCHAR, value DOUBLE, unit VARCHAR, "
                          "ledger VARCHAR)")
         rows = _ledger_figures(self.run_dir)
         if rows:
             self.con.executemany("INSERT INTO figures VALUES (?, ?, ?, ?)", rows)
         self.con.execute("CREATE MACRO fig(i) AS (SELECT value FROM figures WHERE id = i)")
-        self._held = {r[0] for r in rows}
+        self._held = {r[0]: (r[1], r[3]) for r in rows}
+        self._ledgers: list = []                 # the Ledgers whose figures fig() reads
+
+    def _refresh_items(self) -> None:
+        """One view per item table in checks/, re-made when its files change. A table
+        reads typed from the parquet `write_items` writes beside the CSV; a CSV newer than
+        its parquet (edited by hand) reads as text with `amount` a number."""
+        seen = set()
+        for p in sorted((self.run_dir / "checks").glob("*-*.csv")):
+            m = ITEM_TABLE.fullmatch(p.stem)
+            if not m:
+                continue
+            seen.add(p.stem)
+            pq = p.with_suffix(".parquet")
+            typed = pq.is_file() and pq.stat().st_mtime_ns >= p.stat().st_mtime_ns
+            stat = (p.stat().st_mtime_ns, p.stat().st_size,
+                    pq.stat().st_mtime_ns if typed else None)
+            if self._items.get(p.stem) == stat:
+                continue
+            if typed:
+                body = f"SELECT * FROM read_parquet({_literal(pq)})"
+            else:
+                read = f"read_csv({_literal(p)}, all_varchar = true, header = true)"
+                names = [c[0] for c in self.con.execute(f"SELECT * FROM {read} LIMIT 0").description]
+                sel = "* REPLACE (CAST(amount AS DOUBLE) AS amount)" if "amount" in names else "*"
+                body = f"SELECT {sel} FROM {read}"
+            self.con.execute(f"CREATE OR REPLACE VIEW {ARTIFACTS}.{_ident(p.stem)} AS {body}")
+            self._items[p.stem] = stat
+            self.tables[f"{ARTIFACTS}.{p.stem}"] = {
+                "kind": "artifact", "id": p.stem, "file": f"checks/{p.name}",
+                "from_check": m.group("check")}
+        for gone in set(self._items) - seen:
+            self.con.execute(f"DROP VIEW IF EXISTS {ARTIFACTS}.{_ident(gone)}")
+            del self._items[gone]
+            del self.tables[f"{ARTIFACTS}.{gone}"]
+
+    def attach(self, L) -> None:
+        """Let `fig()` read the figures `L` mints, as it mints them."""
+        if not any(x is L for x in self._ledgers):
+            self._ledgers.append(L)
+
+    def _sync(self) -> None:
+        for L in self._ledgers:
+            led = L.figures_path.name
+            for fid, e in L.entries.items():
+                if fid.startswith("F.") and self._held.get(fid) != (_float(e.get("value")), led):
+                    self.hold(fid, e.get("value"), str(e.get("unit") or ""), led)
 
     # -- reading a statement -------------------------------------------------------------
     def lineage(self, query: str) -> dict:
@@ -148,6 +187,8 @@ class Db:
         not hold and a figure no ledger holds."""
         if not isinstance(query, str) or not query.strip():
             raise ValueError("the statement is empty")
+        self._refresh_items()
+        self._sync()
         tree = json.loads(self.con.execute("SELECT json_serialize_sql(?)", [query]).fetchone()[0])
         if tree.get("error"):
             raise ValueError(f"the statement is one SELECT: {tree.get('error_message')}")
@@ -170,13 +211,13 @@ class Db:
                 elif t == "TABLE_FUNCTION":
                     funcs.append((o.get("function") or {}).get("function_name", "?"))
                 if o.get("class") == "FUNCTION" and o.get("function_name") == "fig":
-                    ch = o.get("children") or []
-                    val = (ch[0].get("value") or {}) if ch and ch[0].get("class") == "CONSTANT" \
-                        else {}
-                    if not isinstance(val.get("value"), str):
+                    args = [a.get("expression") or {} for a in o.get("arguments") or []]
+                    lit = (args[0].get("literal") or {}) if len(args) == 1 \
+                        and args[0].get("class") == "CONSTANT" else {}
+                    if lit.get("kind") != "STRING":
                         raise ValueError("fig() takes one figure id as a quoted string: "
                                          "fig('F.x.y')")
-                    figs.append(val["value"])
+                    figs.append(lit["text"])
                 for v in o.values():
                     walk(v)
             elif isinstance(o, list):
@@ -244,10 +285,10 @@ class Db:
 
     def hold(self, fid: str, value, unit: str, ledger: str) -> None:
         """Make a figure just minted readable by `fig()` on this connection."""
-        v = float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+        v = _float(value)
         self.con.execute("DELETE FROM figures WHERE id = ? AND ledger = ?", [fid, ledger])
         self.con.execute("INSERT INTO figures VALUES (?, ?, ?, ?)", [fid, v, unit, ledger])
-        self._held.add(fid)
+        self._held[fid] = (v, ledger)
 
 
 def connect(run_dir) -> Db:
@@ -314,6 +355,7 @@ def fig(L, db: Db, fid: str, label: str, unit: str, query: str, *, value: str | 
     `Ledger.fig` (population, disposition, zero_basis, caveats, extras)."""
     if "expression" in kw or "inputs" in kw:
         raise ValueError(f"{fid}: the statement is the expression and its reads the inputs")
+    db.attach(L)
     lin = db.lineage(query)
     names, rows = db.rows(query)
     v = _number(_one_value(names, rows, value), fid)
@@ -326,15 +368,17 @@ def fig(L, db: Db, fid: str, label: str, unit: str, query: str, *, value: str | 
 
 
 def figs(L, db: Db, fid: str, label: str, unit: str, query: str, *, key, value: str = "value",
-         population=None, **kw) -> list[str]:
+         population=None, zero_basis=None, **kw) -> list[str]:
     """One figure per row of one SELECT (`Ledger.figs_sql`): `key` (a column or a list of
     columns) fills the `{name}` placeholders of `fid`, `label` and a string `population`;
-    `value` is the column holding each figure. Every row is minted or none is."""
+    `value` is the column holding each figure; `zero_basis` goes on the rows whose value is
+zero or null. Every row is minted or none is."""
     if "expression" in kw or "inputs" in kw:
         raise ValueError(f"{fid}: the statement is the expression and its reads the inputs")
     keys = [key] if isinstance(key, str) else list(key)
     if not keys:
         raise ValueError(f"{fid}: `key` names the column(s) that tell the rows apart")
+    db.attach(L)
     lin = db.lineage(query)
     names, rows = db.rows(query)
     for k in keys + [value]:
@@ -369,9 +413,11 @@ def figs(L, db: Db, fid: str, label: str, unit: str, query: str, *, key, value: 
     saved = {k: L.entries.get(k) for k, *_ in plan}
     try:
         for one, lab, pop, kv, v in plan:
+            zb = zero_basis if v is None or v == 0 or v != v else None
             L.fig(one, lab, v, unit, f"{text}\n-- row: " + ", ".join(
                 f"{k} = {_literal(x)}" for k, x in kv.items()), ins, population=pop,
-                sql={"engine": engine(), "text": text, "key": kv, "value": value}, **kw)
+                zero_basis=zb, sql={"engine": engine(), "text": text, "key": kv,
+                                    "value": value}, **kw)
             minted.append(one)
     except Exception:
         for k in minted:                            # every row or none
@@ -400,16 +446,12 @@ def _agrees(stored, now, unit: str) -> bool:
     return abs(a - b) <= 1e-9 * max(1.0, abs(a), abs(b))
 
 
-def _shape(text: str) -> str:
-    return re.sub(r"\s+", " ", LITERAL.sub("?", text)).strip().lower()
-
-
 def verify(run_dir, check: str | None = None) -> dict:
     """Re-run every figure's query and compare (module docstring, verify)."""
     import yaml
     run_dir = pathlib.Path(run_dir).resolve()
     wp = run_dir / "workpapers"
-    failures, warnings = [], []
+    failures = []
     entries = []
     for f in sorted(wp.glob("figures-*.yaml")):
         if check is not None and f.name != f"figures-{check}.yaml":
@@ -452,17 +494,6 @@ def verify(run_dir, check: str | None = None) -> dict:
         if not _agrees(e.get("value"), now, str(e.get("unit") or "")):
             failures.append(f"{fid} ({led}): recorded {e.get('value')!r}, its query now "
                             f"returns {now!r} - re-run the check, or fix what moved")
-    by_check: dict[str, dict[str, set[str]]] = {}
-    for led, e in entries:
-        if not e["sql"].get("key"):
-            t = e["sql"].get("text") or ""
-            by_check.setdefault(led, {}).setdefault(_shape(t), set()).add(t)
-    for led, shapes in sorted(by_check.items()):
-        for shp, texts in shapes.items():
-            if len(texts) >= LOOP_SHAPE:
-                warnings.append(f"{led}: {len(texts)} single-figure queries differ only in "
-                                f"their literals ({shp[:90]}...) - one GROUP BY query "
-                                f"through figs_sql mints them together")
     for f in sorted(wp.glob("evidence-*.yaml")):
         if f.name.startswith("evidence-profile-"):
             continue
@@ -475,7 +506,7 @@ def verify(run_dir, check: str | None = None) -> dict:
                                 f"the table was parsed outside the cache; write it with "
                                 f"cache.write (or evidence.span(frame=..., run_dir=...)) and "
                                 f"read it by SQL")
-    return {"failures": failures, "warnings": warnings, "figures": len(entries),
+    return {"failures": failures, "figures": len(entries),
             "statements": len(results)}
 
 
@@ -509,12 +540,10 @@ def main() -> int:
     try:
         if a.cmd == "verify":
             r = verify(a.run_dir, a.check)
-            for w in r["warnings"]:
-                print(f"warning: {w}")
             for f in r["failures"]:
                 print(f"FAIL: {f}")
             print(f"{r['figures']} SQL figure(s) over {r['statements']} statement(s): "
-                  f"{len(r['failures'])} failure(s), {len(r['warnings'])} warning(s)")
+                  f"{len(r['failures'])} failure(s)")
             return 1 if r["failures"] else 0
         db = Db(a.run_dir)
         if a.cmd == "tables":

@@ -153,7 +153,7 @@ def _from_frame(frame, run_dir: pathlib.Path | None, file, source, file_role, sh
         raise ValueError(f"file_role {file_role!r}; a data-room file is one of "
                          f"{', '.join(sorted(cache.FILE_ROLES))}")
     if run_dir is not None:
-        _, sid, rel = cache.resolve_file(run_dir, file, source)
+        _, sid, rel = cache.resolve_file(run_dir, file, source, folder=True)
     else:
         p = pathlib.Path(str(file or ""))
         if not str(file or "").strip() or not p.is_file():
@@ -346,8 +346,8 @@ def span(what=None, *, run_dir=None, frame=None, file=None, id: str | None = Non
     `header_at`, `rows` and `columns` ({name: {"at", "parse"}}, the columns cited) are
     the step's coordinates, and `row_count` / `control_total` are measured over the frame
     after `filter`. With `run_dir`, `file` is relative to the folder of the source whose
-    id `source` names in run.json; without it, `file` is the file's path on disk, which
-    must exist, and `source` is a short name for where it came from (`bank`,
+    id `source` names in run.json, and may be a folder for a table parsed from one row per
+    file in it; without it, `file` is the file's path on disk, which must exist, and `source` is a short name for where it came from (`bank`,
     `invoices`). A data-room path with no frame is refused — this module parses no
     client file. With `reperform`, a cache read first runs `cache.verify` (source and
     parquet sha256, row count) and raises CacheDefect on a disagreement. With no

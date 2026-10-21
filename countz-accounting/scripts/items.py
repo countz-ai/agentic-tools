@@ -28,7 +28,10 @@ not at all. Everything else is an **extension**, declared
 by name when the table is written; a column the call did not declare is refused, and a
 declared one missing from a row is written empty. Every cell is written as text (a float
 as its shortest round-trip form, numpy scalars included) and read back as text, except
-`amount`, read back as a float.
+`amount`, read back as a float. Beside the CSV, `write_items` writes
+`checks/<check>-<name>.parquet` with each column typed as the rows gave it (all ints an
+integer, all numbers a float, all dates a date, anything else text), which SQL reads
+(`scripts/sql.py`).
 
 **The path is unambiguous.** `check` is a check id (`check_playbook.CHECK_ID`:
 `[a-z0-9][a-z0-9_]*`, no `-`) and the table name a lower-case slug
@@ -56,8 +59,8 @@ FX-translated or allocated item keeps the figure it closes to) and each total is
 correctly rounded sum of those floats (`math.fsum`); only `manifest_md` rounds, for
 display.
 
-Stdlib and sibling modules only, except `read_items(..., frame=True)`,
-which returns a polars DataFrame.
+Stdlib and sibling modules only, except polars for the parquet and for
+`read_items(..., frame=True)`, which returns a polars DataFrame.
 """
 from __future__ import annotations
 
@@ -264,6 +267,51 @@ def _cell(v) -> str:
     return "" if v is None else repr(float(v)) if isinstance(v, float) else str(v)
 
 
+def _column_type(values: list):
+    """The polars dtype every value of one column fits, and the values as that type holds
+    them; text where they disagree."""
+    import polars as pl
+    vals = [None if v is None or v == "" else _scalar(v) for v in values]
+    got = [v for v in vals if v is not None]
+    if got and all(isinstance(v, bool) for v in got):
+        return pl.Boolean, vals
+    if got and all(isinstance(v, int) and not isinstance(v, bool) for v in got):
+        return pl.Int64, vals
+    if got and all(isinstance(v, (int, float, decimal.Decimal)) and not isinstance(v, bool)
+                   for v in got):
+        return pl.Float64, [None if v is None else float(v) for v in vals]
+    if got and all(isinstance(v, datetime.datetime) for v in got):
+        return pl.Datetime, vals
+    if got and all(isinstance(v, datetime.date) and not isinstance(v, datetime.datetime)
+                   for v in got):
+        return pl.Date, vals
+    return pl.String, [None if v is None else _cell(v) for v in vals]
+
+
+def _write_typed(path: pathlib.Path, columns: list[str], rows: list[dict]) -> None:
+    """The item table as a typed parquet, written after the CSV so it is the newer file.
+    Without polars none is written and SQL reads the CSV as text."""
+    try:
+        import polars as pl
+    except ImportError:                               # pragma: no cover
+        path.unlink(missing_ok=True)
+        return
+    data, schema = {}, {}
+    for c in columns:
+        dtype, vals = _column_type([r.get(c) for r in rows])
+        if c == "amount":
+            dtype, vals = pl.Float64, [r.get(c) for r in rows]
+        data[c], schema[c] = vals, dtype
+    fd, tmpname = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    os.close(fd)
+    tmp = pathlib.Path(tmpname)
+    try:
+        pl.DataFrame(data, schema=schema).write_parquet(tmp)
+        tmp.replace(path)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
 def _totals(rows: list[dict]) -> tuple[dict, dict]:
     """Rows per side and `{side: {unit: total}}`, each total the correctly rounded sum of
     the amounts' floats (`fsum`), never rounded further."""
@@ -339,6 +387,7 @@ def write_items(run_dir, check: str, name: str, rows, *, extensions=(), classes=
         tmp.replace(path)
     finally:
         tmp.unlink(missing_ok=True)
+    _write_typed(path.with_suffix(".parquet"), columns, clean)
     counts, totals = _totals(clean)
     rel = path.relative_to(pathlib.Path(run_dir)).as_posix()
     return {"table": rel, "columns": columns, "row_count": len(clean), "sides": counts,

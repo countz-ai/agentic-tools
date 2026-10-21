@@ -105,7 +105,15 @@ def sha256(path: pathlib.Path) -> str:
 
 
 def _digest(path: pathlib.Path) -> tuple[str, int]:
-    """(sha256, bytes) of one read of the file."""
+    """(sha256, bytes) of one read of the file. For a folder: the sha256 of each file's
+    relative path and sha256, in path order, and the bytes of all its files."""
+    if path.is_dir():
+        h, n = hashlib.sha256(), 0
+        for f in sorted(x for x in path.rglob("*") if x.is_file()):
+            d, b = _digest(f)
+            h.update(f"{f.relative_to(path).as_posix()}\0{d}\n".encode())
+            n += b
+        return h.hexdigest(), n
     h, n = hashlib.sha256(), 0
     with open(path, "rb") as fh:
         for chunk in iter(lambda: fh.read(1 << 20), b""):
@@ -174,7 +182,8 @@ def _under(p: pathlib.Path, root: pathlib.Path) -> tuple[str, int] | None:
     return None
 
 
-def resolve_file(run_dir, file, source: str | None = None) -> tuple[pathlib.Path, str | None, str]:
+def resolve_file(run_dir, file, source: str | None = None, *,
+                 folder: bool = False) -> tuple[pathlib.Path, str | None, str]:
     """(absolute path, source id, path relative to that source's registered path). `file`
     is relative to the source's registered path, or absolute. An absolute path under a
     registered source — through a symlinked directory or an alias such as `/tmp` for
@@ -184,7 +193,8 @@ def resolve_file(run_dir, file, source: str | None = None) -> tuple[pathlib.Path
     is its name. Refused: no `file`; a `source` not registered in run.json; a relative
     `file` with no `source`, or one that climbs out of its source (`..`); a `file` that
     is not under the `source` named; for a one-file source, a `file` naming another file;
-    a file that does not exist."""
+    a file that does not exist. With `folder`, `file` may be a folder under the source (a
+    table parsed from one row per file)."""
     if file is None or not isinstance(file, (str, os.PathLike)) or not str(file).strip():
         raise ValueError("no `file`")
     raw = pathlib.Path(str(file))
@@ -225,8 +235,10 @@ def resolve_file(run_dir, file, source: str | None = None) -> tuple[pathlib.Path
                 raise ValueError(f"file {str(raw)!r} climbs out of source {sid!r} "
                                  f"({root}); name it from inside the source")
             rel = hit[0]
-    if not p.is_file():
-        raise ValueError(f"file missing: {p}")
+    if not (p.is_file() or folder and p.is_dir()):
+        raise ValueError(f"file missing: {p}" + ("" if folder or not p.is_dir() else
+                         " - it is a folder; a table parsed from its files is cached with "
+                         "the folder as `file`"))
     if sid is not None and not rel:
         rel = p.name                              # the source is this one file
     return p, sid, rel
@@ -426,7 +438,7 @@ def write(run_dir, id: str, frame, *, file, source: str | None, file_role: str,
     if objects:
         raise ValueError(f"{id}: column(s) {objects} are Object-typed; a parquet holds typed "
                          f"columns only - cast each to the type it holds")
-    path, sid, rel = resolve_file(run_dir, file, source)
+    path, sid, rel = resolve_file(run_dir, file, source, folder=True)
     cols = _columns(frame, columns)
     if not isinstance(header_at, str) or not header_at.strip():
         raise ValueError("`header_at` is where the header sits: a cell (\"B4\"), \"line 5\", "
@@ -509,7 +521,7 @@ def verify(run_dir, id: str | None = None) -> list[dict]:
     for e in ents:
         why = None
         try:
-            path, _, _ = resolve_file(run_dir, e["file"], e.get("source"))
+            path, _, _ = resolve_file(run_dir, e["file"], e.get("source"), folder=True)
             digest, size = _digest(path)
         except (ValueError, OSError) as exc:
             why = f"the source file: {exc}"
