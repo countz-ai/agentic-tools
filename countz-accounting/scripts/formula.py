@@ -32,6 +32,7 @@ import re
 import zipfile
 
 COORD = re.compile(r"^\$?([A-Z]{1,3})\$?(\d+)$")
+_COPY = re.compile(r"^='((?:[^']|'')+)'!(\$?[A-Z]{1,3}\$?\d+)$")
 _SHEET = r"(?:'((?:[^']|'')+)'|([A-Za-z_][A-Za-z0-9_.]*))!"
 _CELL = r"\$?[A-Z]{1,3}\$?\d+"
 TOKEN = re.compile(
@@ -69,6 +70,13 @@ def quote(sheet: str) -> str:
 
 def reference(sheet: str, coord: str) -> str:
     return f"={quote(sheet)}!{coord}"
+
+
+def copy_of(value) -> tuple[str, str] | None:
+    """(sheet, coord) of a formula that is one reference to another tab's cell, as
+    `reference` writes it; None for anything else."""
+    m = _COPY.match(value) if isinstance(value, str) else None
+    return (m.group(1).replace("''", "'"), m.group(2).replace("$", "")) if m else None
 
 
 def sum_formula(col: str, rows: list[int]) -> str:

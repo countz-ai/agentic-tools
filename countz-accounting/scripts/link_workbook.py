@@ -50,11 +50,11 @@ What gets wired, in this order:
   8. The arithmetic between the check tabs is made live (WORKBOOK.md § 7). With
      `--run-dir`, each tab's cells map (`out/tabs/<check>.cells.json`, `wbkit.save`)
      says which cell holds which figure and which cells copy another check's figure: each
-     copy becomes a reference to the cell holding it (`='r5 Position and DSO'!G23`),
-     refused — left a value and reported — when the two disagree. A tab written before the
+     copy becomes a reference to the cell holding it (`='r5 Position and DSO'!G23`) and a
+     link to it, refused — left a value and reported — when the two disagree. A tab written before the
      map existed is retrofitted on evidence alone: a total, a subtotal or a walk's derived
      line (`= …`) becomes a formula over the rows above it when one plain reading of
-     those rows adds to it exactly; a figure becomes a reference when its value, to the
+     those rows adds to it exactly; a figure becomes a reference, and a link, when its value, to the
      cent, sits in exactly one cell of an earlier check's tabs under a header naming the
      same period. Anything less certain stays a value and is listed. Last, every
      formula's result is computed (scripts/formula.py) and cached, since a load and save
@@ -757,6 +757,7 @@ def main() -> int:
     matches = match_targets(wb)
     targets.update(matches)
 
+    copies: dict[tuple[str, str], tuple[str, str]] = {}
     live_rep = {"copies_wired": 0, "copy_problems": [], "totals_made_live": 0,
                 "totals_left_as_values": [], "copies_retrofitted": 0}
     if not a.dry_run:
@@ -786,6 +787,17 @@ def main() -> int:
         live_rep["copies_wired"], live_rep["copy_problems"] = wire_copies(wb, value, maps, known)
         live_rep["totals_made_live"], live_rep["totals_left_as_values"] = retrofit_totals(wb, value, known)
         live_rep["copies_retrofitted"] = retrofit_copies(wb, value, rank, known)
+        # Every copy (`='Tab'!G23`) also links to the cell it reads: Google Sheets does not
+        # follow a reference from the formula, and turns this link into a HYPERLINK() it
+        # can. Read from the formulas, so a re-run keeps the copies an earlier pass made.
+        for ws in wb.worksheets:
+            for row in ws.iter_rows():
+                for cell in row:
+                    t = fx.copy_of(cell.value)
+                    at = (ws.title, cell.coordinate)
+                    if t and t[0] != ws.title and t[0] in wb.sheetnames and at not in targets:
+                        copies[at] = t
+        targets.update(copies)
 
         # Every link in this workbook is placed here, so a re-run owns them all: clear
         # first, or a link this pass no longer wants survives, pointing where it did.
@@ -815,7 +827,8 @@ def main() -> int:
             font.color = LINK_COLOR
             # A linked AMOUNT takes color only: under a figure, an underline is the
             # accounting rule that says "sum above", and a link must not draw one.
-            if (sheet, coord) not in walk and not isinstance(cell.value, (int, float)):
+            if (sheet, coord) not in walk and (sheet, coord) not in copies \
+                    and not isinstance(cell.value, (int, float)):
                 font.underline = "single"
             cell.font = font
         # Every table an Excel table of its own (wbkit.excel_tables): a tab copied cell by
@@ -842,7 +855,8 @@ def main() -> int:
                                       for c, l, h in missed],
            "match_lines": len(matches),
            "tables": 0 if a.dry_run else n_tables,
-           "other": len(targets) - up - back - nav - len(walk) - len(matches),
+           "copy_links": len(copies),
+           "other": len(targets) - up - back - nav - len(walk) - len(matches) - len(copies),
            "dead_ends": sorted(dead), "internal_refs": sorted(internal),
            "dry_run": a.dry_run, **live_rep}
     if a.json:
@@ -852,7 +866,8 @@ def main() -> int:
     print(f"{a.workbook.name}: {verb} {len(targets)} links over {len(tokens)} ids — "
           f"{up} to {SOURCES}/{EVIDENCE}, {back} back out, {fam} family stems, "
           f"{rep['other'] - fam} to stated homes, {nav} check-tab navigation, "
-          f"{len(walk)} {EXEC} amounts, {len(matches)} match-summary lines.")
+          f"{len(walk)} {EXEC} amounts, {len(matches)} match-summary lines, "
+          f"{len(copies)} copies.")
     if not a.dry_run:
         print(f"  live arithmetic: {live_rep['copies_wired']} copies wired by the cells maps, "
               f"{live_rep['copies_retrofitted']} copies retrofitted by value, "

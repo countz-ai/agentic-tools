@@ -6,7 +6,7 @@ from the repository root; it lives outside the plugin so it never ships.
 
 A run of four check tabs: two written before the cells maps existed (retrofitted on
 evidence alone) and two with maps (wired by figure id). After the pass every total is a
-formula over its rows, every copy a reference to its producer's cell, a copy that
+formula over its rows, every copy a reference to its producer's cell and a link to it, a copy that
 disagrees with its producer is reported and left, every formula's result is cached, and
 check_workbook.py GATE 8 has nothing to refuse.
 """
@@ -94,6 +94,14 @@ def main() -> int:
                                 ("b1 Walk", "D5"): 1234.56, ("c1 Mapped", "D5"): 500.25}.items():
             if v[sh][co].value is None or abs(v[sh][co].value - value) > 1e-9:
                 bad.append(f"{sh}!{co} caches {v[sh][co].value!r}, want {value}")
+        for (sh, co), loc in {("b1 Walk", "D5"): "'a1 Base'!D5", ("c1 Mapped", "D5"): "'m1 Producer'!D5"}.items():
+            h = f[sh][co].hyperlink
+            if h is None or h.location != loc:
+                bad.append(f"{sh}!{co}: a copy links to {loc}, got {h and h.location!r}")
+            elif f[sh][co].font.underline:
+                bad.append(f"{sh}!{co}: a linked amount takes no underline")
+        if rep["copy_links"] != 2:
+            bad.append(f"copy_links: {rep['copy_links']}, want 2")
         if f["c1 Mapped"]["D6"].value != 501.0 or not any("c1 Mapped!D6" in p for p in rep["copy_problems"]):
             bad.append(f"a copy that disagrees with its producer is left and reported: {rep['copy_problems']}")
         if not any("F.zz.none" in p for p in rep["copy_problems"]):
