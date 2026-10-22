@@ -39,15 +39,14 @@ for pe, (start, end) in zip(spec["period_ends"], spec["windows"]):
 ```
 
 — so the dates on the tab are the dates the gate validated. A dispatch without a window
-is recorded as a blocker. Place each posting and each bank line on its **local** date:
-filter with `Period.mask` / `local_date`, which convert a timezone-aware timestamp to
-`params.timezone` before taking the date (a UTC export otherwise moves a 23:30 posting on
-the period end into the next period), and refuse a timezone-aware column when no zone is
-declared. They also refuse a string or integer date column (`"09/30/2025"`,
-`20250930`): parse it to `Date` or `Datetime` first, in the file's own format
-(`str.to_date("%m/%d/%Y")`), never by guess. State the populations: every book posting
-and every bank line dated inside the window, each side with its count and control
-total, cited as spans.
+is recorded as a blocker. Filter in SQL, writing the window's dates into the statement.
+Place each posting and each bank line on its **local** date: a timezone-aware timestamp
+is `CAST(timezone('<params.timezone>', <column>) AS DATE)` (a UTC export otherwise moves
+a 23:30 posting on the period end into the next period); a timezone-aware column with no
+zone declared is a blocker. A date the cache holds as text or an integer is a cache
+defect: the extract parses it to a date in the file's own format. State the populations
+with `Ledger.populations`: every book posting and every bank line dated inside the
+window, each side with its count and control total.
 
 ## 2. Trace both directions
 
@@ -59,9 +58,10 @@ Pair with SQL joins, one per pass; check the assignment with
 - **bank → book**: every bank line in the window resolves to a book posting with its
   period.
 
-Write `checks/<check>-window.csv` — side, date, amount, reference, matched-to, book
-period, bank date, classification — with its manifest block in `checks/<check>.md` per
-EVIDENCE.md § 5. Matched plus unmatched per side must equal that side's population.
+Write `checks/<check>-window.csv` with `write_items(..., sql=)` — side, date, amount,
+reference, matched-to, book period, bank date, classification — with its manifest block
+in `checks/<check>.md` per EVIDENCE.md § 5. Matched plus unmatched per side must equal
+that side's population.
 
 ## 3. Transfers, where the goal names them
 

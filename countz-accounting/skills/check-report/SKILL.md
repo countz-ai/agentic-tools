@@ -24,7 +24,7 @@ statuses), the latest review record, every `checks/<check>.md`, and the ledgers.
 check wrote its own tab; **you copy tabs, cached values intact — never rewrite one.** A
 rostered check with no tab gets no empty tab; it is stated in coverage. An `extract`
 step is such a row: kind `extract`, its status, and under *what was examined* the count
-of tables it cached, from `cache/manifest.json`.
+of tables it cached, from `countz.tables`.
 
 ## 1. The workbook — `out/workbook.xlsx`
 

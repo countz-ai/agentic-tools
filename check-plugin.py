@@ -2337,13 +2337,14 @@ def check(root: pathlib.Path) -> list[str]:
     #     the gates read with), figures.py (units per currency, cross-currency ties
     #     refused), periods.py (fiscal calendars, windows, time zones), step_record.py,
     #     check_prose.py's gate cases, cache.py (the cache's bookkeeping: refusals, stated
-    #     totals, the exact re-check), wbkit.py (8w), arr_policy.py (8y), and the shared
+    #     totals, the exact re-check), wbkit.py (8w), render.py (the check's page from its
+    #     template), arr_policy.py (8y), and the shared
     #     helpers a worker computes with instead of retyping them (reference/CONDUCT.md
     #     § Libraries).
     tests = root.parent / "tests" / root.name
     for name in ("style.py", "figures.py", "periods.py", "step_record.py", "check_prose.py",
                  "rework.py", "items.py", "matching.py", "resolve.py", "match_tabs.py",
-                 "cache.py", "wbkit.py", "arr_policy.py", "sql.py"):
+                 "cache.py", "wbkit.py", "arr_policy.py", "sql.py", "render.py"):
         if (root / "scripts" / name).is_file() and not (tests / f"test_{name}").is_file():
             bad.append(f"{rel(root / 'scripts' / name)}: has no test at {rel(tests / f'test_{name}')}")
     for t in sorted(tests.glob("test_*.py")):
@@ -2395,9 +2396,13 @@ def check(root: pathlib.Path) -> list[str]:
                 "                   'amount': [100.0, 200.0, 300.0, 50.0]})\n"
                 f"cache.write({str(rd)!r}, 'ar', df, file='ar.csv', source='dataroom',\n"
                 "            file_role='management_prepared', header_at='A4', rows='5:7,9:9',\n"
-                "            columns={'customer': {'at': 'A', 'parse': 'as written'},\n"
-                "                     'region': {'at': 'B', 'parse': 'as written'},\n"
-                "                     'amount': {'at': 'C', 'parse': 'as written'}},\n"
+                "            what='AR by customer', grain='one customer',\n"
+                "            columns={'customer': {'at': 'A', 'parse': 'as written',\n"
+                "                                  'description': 'the customer'},\n"
+                "                     'region': {'at': 'B', 'parse': 'as written',\n"
+                "                                'description': 'the sales region'},\n"
+                "                     'amount': {'at': 'C', 'parse': 'as written',\n"
+                "                                'description': 'the balance', 'unit': 'usd'}},\n"
                 "            control='amount', stated={'value': 600.0, 'where': 'C8 (Total)'})\n")
             r = subprocess.run(["uv", "run", "--project", str(root), "python3", "-c", land],
                                capture_output=True, text=True)
@@ -2415,7 +2420,7 @@ def check(root: pathlib.Path) -> list[str]:
                 if r.returncode != 0 or not all(w in r.stdout for w in want):
                     bad.append(f"{rel(ev)}: `select` must return the span of the rows the "
                                f"statement selects - file, anchors, letters and parses from "
-                               f"the manifest, the WHERE as filter, count and control "
+                               f"the table's metadata, the WHERE as filter, count and control "
                                f"measured (exit {r.returncode}): "
                                f"{(r.stdout + r.stderr).strip()[:200]}")
                 r = subprocess.run(["uv", "run", "--project", str(root), "python3", str(ev),

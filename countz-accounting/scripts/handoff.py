@@ -4,8 +4,8 @@
     python3 handoff.py <run_dir> <brief.md>     print the handoff for that brief's arguments
 
 A fresh worker otherwise spends its first turns finding out what its inputs are: which
-cache ids exist and their columns, which item tables and figure ids each `_from` check
-left, what those checks concluded and carried forward, and the kit's call signatures.
+parsed tables exist and how to read their columns, which tables and figure ids each
+`_from` check left, what those checks concluded and carried forward, and the kit's call signatures.
 `run_state.render_brief` appends this block to every check brief, so the worker starts
 with those facts instead of rediscovering them. It names only what the brief's own
 params name (`params.reads`, every `*_from`), as `agents/worker.md` § Your procedure
@@ -21,17 +21,19 @@ import pathlib
 import re
 import sys
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import sql  # noqa: E402  sibling: room.constants, read without duckdb
+
 SCRIPTS = pathlib.Path(__file__).resolve().parent
 
 # The kit calls a check script makes, by module: the signature and the first sentence of
 # the docstring are rendered from the source, so the block cannot drift from the code.
 KIT = {
-    "evidence": ["select", "span"],
-    "cache": ["read", "scan", "entry"],
-    "figures": ["Ledger", "Ledger.cite", "Ledger.population", "Ledger.fig", "Ledger.tie",
-                "Ledger.write", "room", "check_output", "figure", "declared", "load", "fmt",
-                "md_table"],
-    "items": ["read_items", "write_items", "table_path", "manifest_md"],
+    "sql": ["run_sql"],
+    "figures": ["Ledger", "Ledger.figures", "Ledger.populations", "Ledger.constants",
+                "Ledger.tie", "Ledger.write", "load", "fmt", "md_table"],
+    "items": ["write_items", "manifest_md"],
+    "evidence": ["span"],
     "step_record": ["start", "finish", "place_tab"],
     "wbkit": ["styles", "band", "header", "section", "table", "text", "amount", "count",
               "total", "status", "fit_rows", "finish", "save"],
@@ -108,32 +110,40 @@ def _prefixes(ids: list[str], width: int = 3, examples: int = 2, most: int = 20)
     return out
 
 
+def _sql_command(run_dir: pathlib.Path, query: str) -> str:
+    return (f"{SCRIPTS / 'countz-sql'} -agent -init {run_dir / 'catalog.sql'} "
+            f"-c \"{query}\"")
+
+
 def cache_block(run_dir: pathlib.Path, reads: list[str]) -> list[str]:
-    try:
-        m = json.loads((run_dir / "cache" / "manifest.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    held = sorted(p.stem for p in (run_dir / "cache").glob("*.parquet"))
+    if not held:
         return []
-    files = {e.get("id"): e for e in m.get("files", [])}
-    out = ["### Cache tables your params read (`cache/manifest.json`)", "",
-           "The manifest's `files` is a list of entries keyed by `id`; read a table with "
-           "`evidence.select(run_dir, sql, id=...)` (the SQL names the id as its table) or "
-           "`cache.read(run_dir, id)`.", ""]
-    for rid in reads:
-        e = files.get(rid)
-        if e is None:
-            out.append(f"- `{rid}` — not in the manifest (it holds "
-                       f"{', '.join('`' + k + '`' for k in files)})")
-            continue
-        cols = ", ".join(f"{c['name']} ({c.get('dtype', '?')})" for c in e.get("columns", []))
-        ct = e.get("control_total") or {}
-        tot = f"; control total {ct.get('column')} = {ct.get('value')}" if ct.get("column") else ""
-        out.append(f"- `{rid}` — {e.get('what', '')}. `{e.get('file', '')}`"
-                   f"{' sheet ' + str(e['sheet']) if e.get('sheet') else ''}; "
-                   f"{e.get('row_count', '?')} rows{tot}. Columns: {cols}")
-    notx = m.get("not_extracted") or []
+    names = [f"room.{r}" for r in reads if r in held]
+    out = ["### The parsed tables your params read", ""]
+    if names:
+        listed = ", ".join("'" + n + "'" for n in names)
+        out += ["Their columns, with type, description, unit and where each sits in the file:",
+                "", "    " + _sql_command(run_dir, "SELECT table_name, column_name, type, "
+                "description, unit FROM countz.columns WHERE table_name IN (" + listed
+                + ") ORDER BY table_name, ordinal"), ""]
+        out += [f"- `{n}`" for n in names]
+    for r in reads:
+        if r not in held:
+            out.append(f"- `room.{r}` — not parsed (the cache holds "
+                       f"{', '.join('`room.' + k + '`' for k in held)})")
+    try:
+        notx = json.loads((run_dir / "cache" / "not_extracted.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        notx = []
     if notx:
         out += ["", "Read as passages, not tables (`not_extracted`):"]
         out += [f"- `{n.get('file')}` {n.get('where', '')}: {n.get('what', '')}" for n in notx]
+    consts = sql.constant_rows(run_dir)
+    if consts:
+        out += ["", "`room.constants` (read with `const('name')`, `const_date`, `const_text`):"]
+        out += [f"- `{c[0]}` = {c[1]}{' ' + c[2] if c[2] else ''}, {c[3]}"
+                + (f" by `{c[9]}`" if c[9] else "") for c in consts]
     return out + [""]
 
 
@@ -150,11 +160,14 @@ def checks_block(run_dir: pathlib.Path, froms: dict[str, list[str]]) -> list[str
         if rec.get("notes"):
             out.append(f"Notes: {rec['notes']}")
         tables = sorted((run_dir / "checks").glob(f"{check}-*.csv"))
-        if tables:
-            out.append(f"Item tables (`items.read_items(run_dir, \"{check}\", <name>)`):")
+        derived = sorted((run_dir / "tables" / check).glob("*.parquet"))
+        if tables or derived:
+            out.append("Tables (read in SQL by these names; `countz.columns` describes them):")
             for t in tables:
                 cols, n = _csv_head(t)
-                out.append(f"- `{t.stem[len(check) + 1:]}`: {n} rows; {', '.join(cols)}")
+                out.append(f"- `{check}.{t.stem[len(check) + 1:]}` (item table): {n} rows; "
+                           f"{', '.join(cols)}")
+            out += [f"- `{check}.{t.stem}`" for t in derived]
         ids = _figure_ids(run_dir / "workpapers" / f"figures-{check}.yaml")
         if ids:
             out.append(f"Figures (`figures.load(run_dir, \"{check}\")`, {len(ids)} ids), by "

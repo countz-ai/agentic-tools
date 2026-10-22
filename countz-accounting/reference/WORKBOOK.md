@@ -299,10 +299,11 @@ expression | inputs | root source | To reperform | population | caveats and
 carry-forwards | from check`. `inputs` and `root source` hold one id per cell, spread
 across adjacent columns. `root source` is where the figure lands once every passthrough
 and figure-to-figure hop is collapsed: the `E.` id(s) of the reads against the data room
-(`resolve_roots.py` computes it). `To reperform` is the flattened recipe in one cell —
-file · sheet · rows · columns · filter · arithmetic · expected value with its control
-total; a figure that combines other figures states the combining arithmetic and points at
-its input rows. A `check_output` input is presented as derived from its producing check,
+(`resolve_roots.py` computes it). `To reperform` is the recipe in one cell. For a figure
+computed in SQL it is `sql.reperform(run_dir, id)`: the parsed tables with file, sheet,
+rows and control total, then each statement in the order to run it, with the expected
+value. For any other figure it is file · sheet · rows · columns · filter · arithmetic ·
+expected value. A `check_output` input is presented as derived from its producing check,
 never as a room read. `value` formatted by its `unit`; id column 44; `MIST` on even rows;
 gridlines on.
 
@@ -316,56 +317,49 @@ link) go below the last ledger row under a `Source roots` line.
 
 ## 7. Writing it
 
-Every tab script imports one kit, `scripts/wbkit.py` — the style's § 9 constants and
-`styles()`, and the helpers that place the band and the blocks: `band`, `header`,
-`section`, `ident`, `text`, `amount`, `count`, `status`, `fit_rows`, `finish` (and
-`register_status` for a recipe's own status words). The script opens:
+A check writes no tab script. It writes one template, `workpapers/<check>.tpl.md`, and
+`scripts/render.py` renders it to the tab, `checks/<check>.md` and
+`checks/<check>-summary.md`. The template's syntax is the module's docstring: front matter
+for the band, `{F.id}` in prose, and an `sql` block per table, whose rows are the table's
+rows. The renderer writes through the kit, `scripts/wbkit.py` (the style's § 9 constants
+and `styles()`, and the helpers that place the band and the blocks), which a run-level
+tab's script imports too:
 
 ```python
 import sys; sys.path.insert(0, "<${CLAUDE_PLUGIN_ROOT}>/scripts")   # the token expanded
 from wbkit import *
 ```
 
-and never carries a copy of any of it: the module is the one place the kit is written,
-and `check_workbook.py` GATE 4 verifies the stored workbook against the same values. Each
-helper's contract is its docstring and signature in the module; the rules they implement
-are § 3 to § 5 above.
+No script carries a copy of the kit, and `check_workbook.py` GATE 4 verifies the stored
+workbook against the same values.
 
 **The arithmetic is live.** A reviewer foots a schedule by its formulas and traces a
 figure to where it came from by Excel's precedents, so:
 
 - A body figure is a value: it comes from the data room, which the workbook does not
-  hold, and its reperformance is its Sources row. Write it with `amount(cell, v,
-  fid="F.…")` (or `count(…, fid=…)`) naming the figure it holds.
-- A figure copied from ANOTHER check's tab is written with `src="F.…"`, naming the
-  figure it copies. At assembly `link_workbook.py --run-dir` replaces it with a reference
-  to the producing check's cell (`='r5 Position and DSO'!G23`), and reports a copy that
-  disagrees with its source — the copying check's to fix.
-- A subtotal, a total and a walk's derived line (`= …`) are `total(cell, value,
-  rows=[…])`: a formula over the rows it adds (`less=[…]` for `Less:` lines stored as
-  positive figures; `when=("N", "supported")` for a walk's conditional subtotal over its
-  verdict column). It refuses a formula that does not reach the figure the script
-  computed — the table is missing a row or carries a wrong one. A figure in such a row
-  that is not the sum of the rows above (a reconciliation's item count per bank) is
-  declared with `stated(cell)`.
-- Save with `save(wb, path)`, never `wb.save`: it caches every formula's result (a
-  viewer that does not recalculate shows nothing otherwise) and writes the cells map,
-  `<path stem>.cells.json`, that `step_record.place_tab` moves with the tab.
+  hold, and its reperformance is its Sources row. In a template it is `cell('F.…')`, and
+  the cell carries the figure's id.
+- A figure of ANOTHER check is written as a copy of it. At assembly `link_workbook.py
+  --run-dir` replaces it with a reference to the producing check's cell (`='r5 Position
+  and DSO'!G23`), and reports a copy that disagrees with its source — the copying check's
+  to fix.
+- A subtotal, a total and a walk's derived line (`= …`) are rows the query marks
+  (`_row`): each figure on one is a formula over the rows it adds, `Less:` lines deducted
+  and a conditional sum over the verdict column where the row names a word (`_when`). The
+  renderer refuses a formula that does not reach the figure, so a table missing a row or
+  carrying a wrong one does not render. A figure in such a row that is not the sum of the
+  rows above (a reconciliation's item count per bank) is declared stated (`_stated`).
+- A recon check writes its match tabs first and passes the workbook to
+  `render.render(run_dir, check, wb=wb)`.
 
 `check_workbook.py` GATE 8 recomputes every formula from the stored values and refuses a
 stale result, and on a mapped sheet refuses a subtotal, a total or a derived line typed
-as a value. A tab written before the maps existed is retrofitted at assembly as far as
-the evidence allows (`link_workbook.py` § 8).
-
-`finish(ws, table_last_row, ledger=False)` sets the per-sheet
-settings of the style's § 9 — the primary table's rules, row heights, the `B4` freeze, gridlines,
-tab color, an Excel table per table block (§ 4), print setup and the § 7 footer — after the
-last row is written.
+as a value.
 
 ## 8. Before the tab leaves staging
 
-Write the tab into `out/.staging/`, gate it there, and rename it into place as your last
-act:
+`render.py <run_dir> <check>` writes the tab into `out/.staging/`, gates it there, and
+renames it into place; run it as your last act. The gates it runs:
 
 ```
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/check_workbook.py <run_dir>/out/.staging/<tab>.xlsx --run-dir <run_dir>

@@ -79,23 +79,29 @@ Do both of these on every file:
 
 ### Libraries
 
-Prefer, in order: the plugin's own scripts in `${CLAUDE_PLUGIN_ROOT}/scripts/` where one
-fits; SQL; polars; custom Python last, only for what none of those express. Read a
-module's docstring before using it, then import it; never copy or rewrite it.
-
-**Use SQL, not code, wherever SQL can do the work.** Compute each figure with one SQL
-statement through `scripts/sql.py` (`Ledger.fig_sql`), and a schedule with one GROUP BY
-(`Ledger.figs_sql`). Never loop over queries where one aggregate does the job.
+**Parse in Python (`scripts/cache.py`), compute in SQL (`scripts/sql.py`).** Python reads
+files into tables and writes the tab and the prose; every figure, population and item
+table is a SQL statement over the run's tables, and the statement is its lineage. A value
+a document states, a plan parameter or a value the step chooses is a row of
+`room.constants` (`Ledger.constants`), read with `const('name')`; a statement types no
+other number, date or record id. A result or a status is a column the statement computes.
+A tab and its prose take every number, count, result and status from a figure or a
+query's row. `sql.py verify` fails one minted outside SQL. Never loop over queries where
+one aggregate does the job. Explore with
+`${CLAUDE_PLUGIN_ROOT}/scripts/countz-sql -agent -init <run_dir>/catalog.sql -c "<sql>"`:
+`countz.tables` and `countz.columns` describe every table. Read a module's docstring
+before using it, then import it; never copy or rewrite it.
 
 - **uv** — use `uv` instead of `pip` wherever possible. The preferred packages are
   pinned in the plugin root's `pyproject.toml` / `uv.lock`; run a script with
   `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 <script>`. Never install into the
   user's environment. duckdb, numpy and polars are pinned; scipy is not installed.
 - **polars** — parse files with polars, and write every parsed table to the cache
-  (`cache.write`, or `evidence.span(frame=..., run_dir=...)`) so SQL reads it there. Use
-  `scan_csv` for large csv files.
-- **openpyxl** — the workbook: every tab script and the assembler write through it,
-  importing the kit from `scripts/wbkit.py` (`${CLAUDE_PLUGIN_ROOT}/reference/WORKBOOK.md` § 7).
+  (`cache.write`, or `evidence.span(frame=..., run_dir=...)`). Use `scan_csv` for large
+  csv files.
+- **openpyxl** — the workbook: `scripts/render.py`, which renders a check's tab from its
+  template, and the assembler write through it, with the kit in `scripts/wbkit.py`
+  (`${CLAUDE_PLUGIN_ROOT}/reference/WORKBOOK.md` § 7).
 - **figures and periods** — every figure ledger is written through `scripts/figures.py`
   (`EVIDENCE.md` § 3) and every period column through `scripts/periods.py`
   (`DOCTRINE.md` § Periods).

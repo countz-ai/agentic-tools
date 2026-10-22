@@ -10,18 +10,18 @@ In a step's code:
                           "WHERE stream = 'subscription'",
                      id="E.a4.sub_lines", control="invoice_amount", note="...")
     write_ledger(RUN / "workpapers/evidence-a4_cube.yaml", [e])
-    total = rows["invoice_amount"].sum()          # the figure's arithmetic, in code
 
-`select()` is the read. One SQL statement over one cache id (a table name in
-`cache/manifest.json`) returns the rows and the citation of the same rows: `file`,
+`select()` cites rows of one cached table; compute from them with `scripts/sql.py`. One SQL
+statement over one cache id (a table in `cache/`) returns the rows and the citation of the
+same rows: `file`,
 `source`, `file_role`, `header_at`, the columns (letter and parse) and the `rows` come from
-the manifest; `filter` is the WHERE clause verbatim, in the file's own column names;
+the table's metadata; `filter` is the WHERE clause verbatim, in the file's own column names;
 `row_count` and `control_total` are measured over the rows returned. The two cannot
 disagree because there is one query. A span cites one table: a JOIN, a GROUP BY, a
 subquery or a computed column is refused; compute with `scripts/sql.py`. A column is named as the file's header
 names it: bare (`invoice_amount`, `Débit`) or double-quoted where it carries punctuation
 (`"Amount (USD)"`); a quoted string in the WHERE clause is a value, whatever words it holds.
-The span's `rows` are the manifest's — the block as cut, never recomputed from a count.
+The span's `rows` are the metadata's — the block as cut, never recomputed from a count.
 
 `span()` is the same citation for a read the cache did not serve. `what` is a cache id
 (with `run_dir`), or a run artifact under `checks/` — the run's own CSV item tables, read
@@ -63,7 +63,7 @@ import re
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-import cache  # noqa: E402  sibling: the cache and its manifest
+import cache  # noqa: E402  sibling: the cache and its metadata
 
 ROLES = cache.FILE_ROLES | {"run_artifact"}
 AS_WRITTEN = "as written"
@@ -177,7 +177,7 @@ def _from_frame(frame, run_dir: pathlib.Path | None, file, source, file_role, sh
                or not isinstance(spec.get(k), str) or not spec[k].strip()]
         if bad:
             raise ValueError(f"column {n!r}: no {' / '.join(bad)}")
-        cols[n] = {"at": spec["at"].strip(), "parse": spec["parse"].strip()}
+        cols[n] = {k: v.strip() if isinstance(v, str) else v for k, v in spec.items()}
     e = {"id": None, "source": sid, "file": rel, "file_role": file_role, "sheet": sheet,
          "header_at": header_at_.strip(),
          "rows": rows.strip() if isinstance(rows, str) and rows.strip() else cache.NO_ROWS}
@@ -219,10 +219,10 @@ def _split_columns(cols: str) -> list[str]:
 
 
 def header_at(e: dict) -> str:
-    """Where the header is, as the manifest states it: a cell (`A4`), `line 5`, `p2:L3`,
+    """Where the header is, as the table's metadata states it: a cell (`A4`), `line 5`, `p2:L3`,
     or `none - columns by position`."""
     if not e.get("header_at"):
-        raise ValueError(f"{e.get('id')}: the manifest entry states no `header_at`; re-run "
+        raise ValueError(f"{e.get('id')}: the table's metadata states no `header_at`; re-run "
                          f"the extract step's script")
     return e["header_at"]
 
@@ -231,10 +231,10 @@ _header_at = header_at        # span()'s `header_at` parameter shadows the name
 
 
 def cited_rows(e: dict) -> str:
-    """The block's rows as the manifest states them: sheet rows (`6:1204`), or a PDF's
+    """The block's rows as the table's metadata states them: sheet rows (`6:1204`), or a PDF's
     page and line ranges (`p2:L7-15,p3:L4-12`)."""
     if e.get("rows") is None:
-        raise ValueError(f"{e.get('id')}: the manifest entry states no `rows`; re-run "
+        raise ValueError(f"{e.get('id')}: the table's metadata states no `rows`; re-run "
                          f"the extract step's script")
     return e["rows"]
 
@@ -339,13 +339,15 @@ def span(what=None, *, run_dir=None, frame=None, file=None, id: str | None = Non
          header_at: str | None = None, rows: str | None = None, columns=None,
          control: str | None = None, filter=None, note: str | None = None,
          from_check: str | None = None, read_at: str | None = None,
-         reperform: bool = False, cache_id: str | None = None) -> dict:
+         reperform: bool = False, cache_id: str | None = None,
+         grain: str | None = None) -> dict:
     """One measured span entry. `what` is a cache id (with `run_dir`; `columns` a list of
     the names consumed) or a run artifact under `<run_dir>/checks/`. With `frame`, the
     step parsed a data-room file itself: `file`, `source`, `file_role`, `sheet`,
-    `header_at`, `rows` and `columns` ({name: {"at", "parse"}}, the columns cited) are
-    the step's coordinates, and `row_count` / `control_total` are measured over the frame
-    after `filter`. With `run_dir`, `file` is relative to the folder of the source whose
+    `header_at`, `rows` and `columns` ({name: {"at", "parse", "description", "unit"}},
+    the columns cited, as cache.write takes them) are the step's coordinates, `grain` what
+    one row is, and `row_count` / `control_total` are measured over the frame after
+    `filter`. With `run_dir`, `file` is relative to the folder of the source whose
     id `source` names in run.json, and may be a folder for a table parsed from one row per
     file in it; without it, `file` is the file's path on disk, which must exist, and `source` is a short name for where it came from (`bank`,
     `invoices`). A data-room path with no frame is refused — this module parses no
@@ -362,7 +364,8 @@ def span(what=None, *, run_dir=None, frame=None, file=None, id: str | None = Non
                                   header_at, rows, columns)
         names = list(cols)
         if run_dir is not None:
-            cid = _cache_frame(run_dir, cache_id, df.select(names), e, cols, control, note)
+            cid = _cache_frame(run_dir, cache_id, df.select(names), e, cols, control, note,
+                               grain)
             e = dict(e, cache_id=cid)
     else:
         art = _artifact(run_dir, what) if what is not None else None
@@ -380,7 +383,7 @@ def span(what=None, *, run_dir=None, frame=None, file=None, id: str | None = Non
                              f"the cache by id")
         else:
             raise ValueError(f"{what!r} is neither a cache id in "
-                             f"{run_dir}/cache/manifest.json nor a run artifact under "
+                             f"{run_dir}/cache/ nor a run artifact under "
                              f"checks/" if run_dir else
                              f"{what!r}: a cache id or a checks/ path needs `run_dir`")
         names = columns
@@ -432,7 +435,7 @@ def _slug(text: str) -> str:
 
 
 def _cache_frame(run_dir: pathlib.Path, cache_id, frame, e: dict, cols: dict, control,
-                 note) -> str:
+                 note, grain) -> str:
     """Write a table the step parsed itself to the cache; return its id. Without
     `cache_id`, the id is the file's stem, the sheet and a digest of the read, so the same
     read reuses its id and a different read gets a new one."""
@@ -448,7 +451,7 @@ def _cache_frame(run_dir: pathlib.Path, cache_id, frame, e: dict, cols: dict, co
     cache.write(run_dir, cache_id, frame, file=e["file"], source=e.get("source"),
                 file_role=e["file_role"], header_at=e["header_at"],
                 rows=None if e["rows"] == cache.NO_ROWS else e["rows"],
-                columns=cols, control=ctl, sheet=e.get("sheet"),
+                columns=cols, control=ctl, sheet=e.get("sheet"), grain=grain,
                 what=note or f"parsed by the step that cited it: {e['file']}")
     return cache_id
 

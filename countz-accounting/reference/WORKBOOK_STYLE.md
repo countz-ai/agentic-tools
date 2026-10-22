@@ -251,10 +251,10 @@ blue do not appear.
 ### openpyxl
 
 The constants below, `font()`, `fill`, the three `Side`s, the number formats and
-`styles()` are code in `scripts/wbkit.py`, which every tab script imports
-(`WORKBOOK.md` § 7). They are not copied into a script: the module is the one place the
-palette and the named styles are written, and `check_workbook.py` verifies the stored
-workbook against the same values. The names, for reading a tab script:
+`styles()` are code in `scripts/wbkit.py`, which `scripts/render.py` and every run-level
+tab script import (`WORKBOOK.md` § 7). They are not copied into a script: the module is
+the one place the palette and the named styles are written, and `check_workbook.py`
+verifies the stored workbook against the same values. The names, for reading the kit:
 
 - palette: `BAND`, `ACCENT`, `MARKER`, `TINT`, `INK`, `SLATE`, `HAIRLINE`, `MIST`,
   `WHITE`, `INPUT`, `BREAK_T`/`BREAK_F`, `REVIEW_T`/`REVIEW_F`, `TIED_T`/`TIED_F` — the

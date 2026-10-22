@@ -91,6 +91,9 @@ for _code in (
         "UZS VED VES VUV WST XAF XCD XCG XOF XPF YER ZMW ZWG").split():
     CURRENCIES.setdefault(_code.lower(), _c(_code, "", _ISO_MINOR.get(_code, 2)))
 
+# The units that are not a currency, for a figure (figures.py) and a cached column (cache.py).
+OTHER_UNITS = ("pct", "count", "ratio", "days", "rate", "fx_rate", "quantity")
+
 
 def is_money(unit: str | None) -> bool:
     return (unit or "").lower() in CURRENCIES

@@ -2,9 +2,9 @@
 name: check-extract
 description: >-
   Perform one extraction: write and run the script that parses every table the plan's
-  steps read out of the data room into the run's typed cache, once, with each table's
-  file coordinates, column parses, row count and control total recorded in the cache
-  manifest for the steps that read it to cite from.
+  steps read out of the data room into the run's typed cache, once, each table holding
+  its file coordinates, column descriptions, units and parses, row count and control
+  total for the steps that read it to cite from.
 context: fork
 agent: countz-accounting:worker
 background: false
@@ -41,10 +41,12 @@ and signs are written.
 `workpapers/extract-<check>.py`, with polars, openpyxl, fastexcel or pypdf as the file
 needs. Where `params.prior_script` is set, read it first and start from it, changing
 what this period's files show is different; never run it unread. Per `params.files`
-entry, parse that table and `cache.write` it — with the entry's `what` — and true file
-coordinates (`header_at`, `rows` as the rows sit in the file) and, per column, where it
-sits and how its text was read (`parse`, in words). A value you cannot read stays text,
-and its column's `parse` says so. Where the document states a total for the table, give
+entry, parse that table and `cache.write` it — with the entry's `what`, its `grain` (what
+one row is), true file coordinates (`header_at`, `rows` as the rows sit in the file) and,
+per column, where it sits (`at`), how its text was read (`parse`), what it holds
+(`description`) and, for a number, its `unit`. Parse only: a column computed from others
+belongs in the step that uses it, in SQL. A value you cannot read stays text, and its
+column's `parse` says so. Where the document states a total for the table, give
 it as `stated`, with a `tolerance` where 0.005 is not the difference that agrees (the
 tolerance is recorded). Any other table you see on a file is a `cache.note`, not
 extracted.
@@ -63,7 +65,7 @@ Type each column as what it holds, and write ids with `_`, not `-` (`aging_2025_
 ## 3. Run and rule
 
 `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 workpapers/extract-<check>.py`, then
-`cache.py <run_dir> --show`. Where it refuses a manifest another schema wrote, delete
+`cache.py <run_dir> --show`. Where it refuses a table another schema wrote, delete
 `cache/` and re-run the script. A `stated` total the rows do not agree to, or a row
 count or control total that disagrees with the profile's citation of the same table, is
 a blocker until you explain it: correct the script and re-run, or rule on why the
@@ -73,8 +75,8 @@ naming its id; never drop an entry to make the step succeed.
 ## 4. Files
 
 `checks/<check>.md` — one table, one row per id: file, rows, row count, control total,
-stated agreement. Then the manifest's `not_extracted` notes, then your rulings. No
-figures or evidence ledger: the manifest is what consumers cite
+stated agreement. Then the `not_extracted` notes, then your rulings. No figures or
+evidence ledger: the cached tables are what consumers cite
 (`${CLAUDE_PLUGIN_ROOT}/reference/EVIDENCE.md` § 1).
 
 ## `mode: fix`
@@ -87,8 +89,8 @@ total before and after. Record under `fix` per defect what moved.
 ## Record
 
 Write `steps/<NNNN>-extract.json` per `RUN_CONTRACT.md`: `check_id` set, `produced`
-naming `cache/manifest.json`, every `cache/<id>.parquet`, `workpapers/extract-<check>.py`
-and `checks/<check>.md`; `consumed` every file the manifest names with its mtime;
+naming every `cache/<id>.parquet`, `workpapers/extract-<check>.py` and
+`checks/<check>.md`; `consumed` every file the tables were read from, with its mtime;
 `blockers` one per unparsed table or unexplained disagreement. `conclusion` counts the
 tables cached and names each that did not land, in two sentences. Return at most ten
 lines.

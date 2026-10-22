@@ -24,7 +24,8 @@ def main() -> int:
         (rd / "workpapers" / "figures-t.yaml").write_text(
             "- id: F.a\n  value: 44.6\n- id: F.b\n  value: 6312400.55\n"
             "- id: F.c\n  value: -1204.4\n- id: F.d\n  value: 5000000\n"
-            "- id: F.e\n  value: 0.174\n- id: F.f\n  value: -2100000\n", encoding="utf-8")
+            "- id: F.e\n  value: 0.174\n- id: F.f\n  value: -2100000\n"
+            "- id: F.g\n  value: 44\n- id: P.h\n  total_n: 372\n", encoding="utf-8")
         admitted = admitted_values(rd, [])
         cases = [
             ("The metric is 44.6 days; $6.3M is unapplied.", 0),
@@ -37,12 +38,22 @@ def main() -> int:
             ("Share is 18.4%.", 1),
             ("Aging buckets 31-60 days and 90+ days.", 0),
         ]
-        for text, want in cases:
+        # counts, with counts=True: a figure's value backs it, a typed one does not
+        counts = [
+            ("We read 44 lines and 6 new-logo orders.", 1),          # 6 is no figure
+            ("All 372 contract lines agree; 1,204 invoices tie.", 1),
+            ("Under rule 3 and ASC 718, at December 31 the lines agree.", 0),
+            ("Account 1350 holds 2025 postings over 36 months.", 0),
+        ]
+        for text, want in cases + counts:
             f = rd / "t.md"
             f.write_text(text + "\n", encoding="utf-8")
-            _, ub = scan([f], admitted)
+            _, ub = scan([f], admitted, counts=(text, want) in counts)
             if len(ub) != want:
                 bad.append(f"{text!r}: {len(ub)} unbacked, want {want} ({ub})")
+        f.write_text("We read 372 lines.\n", encoding="utf-8")
+        if scan([f], admitted)[1]:
+            bad.append("a count is checked without counts=True")
     for b in bad:
         print(f"check_prose: {b}")
     print("check_prose: ok" if not bad else "check_prose: self-check FAILED")

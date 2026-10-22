@@ -97,12 +97,13 @@ data-room role. Its basis is the producing check's own citations, and the delive
 presents the read as derived.
 
 **A span is measured.** Every table a step reads is parsed once into the run's cache
-(`scripts/cache.py`), with its file coordinates and each column's parse. A span takes
-those from the cache and names its `cache_id`. Its `row_count` and `control_total` are
-measured over the rows it cites. `evidence.select` cites rows of a cached table. A table
-the step parsed itself is cited with `span(frame=<df>, run_dir=, file=, source=,
-file_role=, sheet=, header_at=, rows=, columns={name: {at, parse}}, filter=, control=)`,
-which writes it to the cache first. The deliverable never names the parquet: a reader
+(`scripts/cache.py`), with its file coordinates and each column's parse, description and
+unit. A span takes those from the cache and names its `cache_id`. Its `row_count` and
+`control_total` are measured over the rows it cites. `Ledger.figures` cites each parsed
+table its statement reads. A table the step parsed itself is cited with
+`span(frame=<df>, run_dir=, file=, source=, file_role=, sheet=, header_at=, rows=,
+columns={name: {at, parse, description, unit}}, grain=, filter=, control=)`, which writes
+it to the cache first. The deliverable never names the parquet: a reader
 opens the file at `header_at`, reads the columns as `parse` says, applies `filter`, counts
 the rows and sums the control column.
 
@@ -147,7 +148,9 @@ page:
 
 A passage records what a document says and where. A figure may cite one as `as_stated`
 support or as the evidence behind a `candidate` explanation (DOCTRINE.md § Resolving
-issues). Arithmetic never runs over a quote.
+issues). Arithmetic never runs over a quote. A number, date or id a passage states that a
+statement uses is a constant: `Ledger.constants` checks the quote is in the file and
+shows the value, and cites the passage (`scripts/sql.py`).
 
 ## 2. Read the formulas, not only the values
 
@@ -184,10 +187,10 @@ check's figures, populations and citations, and checks each field below as it is
 citation or id in an `expression` does not resolve. `Ledger.tie()` mints a tie's
 difference figure (check-tie SKILL § 4). A step never writes its own `fig()`.
 
-**Compute a figure with SQL.** `Ledger.fig_sql` runs one SELECT through `scripts/sql.py`.
-The statement becomes the figure's `expression`, and the tables and figures it reads its
-`inputs`. `Ledger.figs_sql` mints one figure per row of a GROUP BY. `sql.py verify` re-runs
-every statement and fails a figure whose value has changed.
+**Compute a figure with SQL.** `Ledger.figures(<SELECT>)` mints one figure per row,
+`Ledger.populations` one `P.` entry per row (`scripts/sql.py`). The statement is the
+`expression`, and what it reads the `inputs`. `sql.py verify` re-runs every statement and
+fails a figure whose value moved and one computed outside SQL.
 
 - **`inputs[]` is never empty, and `role` is required.** `source_type` is one of
   `room_file` (with `citation_id`: a read of a file the user gave us), `figure` (with
@@ -210,16 +213,19 @@ every statement and fails a figure whose value has changed.
 with no cached result, and the cell renders blank in a viewer that does not recalculate.
 A body figure is a value, and its `expression` on the Sources tab shows how it was
 computed. A subtotal, a total, a derived line and a copy of another check's figure
-are formulas with their results cached — `wbkit.total`, `wbkit.save` and
-`link_workbook.py` write them (WORKBOOK.md § 7). The gate is `scripts/check_workbook.py`. A typed constant that resolves to no figure id is blocking.
+are formulas with their results cached — `scripts/render.py` and `link_workbook.py`
+write them (WORKBOOK.md § 7). The gate is `scripts/check_workbook.py`. A typed constant that resolves to no figure id is blocking.
 
-**Prose numbers are interpolated, never typed.** A sentence is authored as a template
-around a figure id; the code that writes the tab or the deck loads the ledger and
-substitutes the value, formatted per `DOCTRINE.md` § Number conventions —
-`Ledger.sub("... {F.a5.nrr.fy2025} ...")` or `figures.fmt(value, unit)`, one formatter
-for every tab and the deck. The gate is
+**Prose numbers are interpolated, never typed.** A sentence cites a figure id,
+`{F.a5.nrr.fy2025}`, in the check's template (WORKBOOK.md § 7) or through `Ledger.sub`,
+and the value is substituted, formatted per `DOCTRINE.md` § Number conventions by one
+formatter for every tab and the deck. This holds for a count written as a word ("eight
+contracts") and for a statement about the data ("every tie passes", "no exception"): it
+is a figure or a rendered table, or it is left out. A judgment is typed once, by the check
+that makes it; another step cites it by its id and does not restate it. The gate is
 `scripts/check_prose.py`: it extracts every dollar amount, percentage and multiple from
-text and refuses any that no ledger value backs within rounding tolerance. A declared
+text, and on a check's tab every count ("372 lines"), and refuses any that no ledger
+value backs within rounding tolerance. A declared
 tolerance a sentence states is admitted with `--allow`.
 
 **Every presented figure re-performs in one hop.** The Sources tab carries, beside each
@@ -241,15 +247,16 @@ Item-level work is written down, not only summarized. A check that matches, trac
 pairs rosters at item grain writes one CSV per item table at `checks/<check>-<table>.csv`
 (each kind's SKILL.md names its own tables and columns) plus a manifest block in
 `checks/<check>.md` recording what built it: the citations behind each side, the keys
-used, `row_count`, and a control total per side. The report and a re-performer read the
+used, `row_count`, and a control total per side. `{manifests}` in the template renders
+it from what `write_items` stored. The report and a re-performer read the
 table; the ledger's figures cite the citations; the manifest block is the hop between
 them. A fix re-run that moves the check's figures rewrites its own tables in the same
 pass; no other step edits them.
 
-Write and read them through `scripts/items.py`; its docstring lists the columns and
-every refusal. The check id is a run's check id (`RUN_CONTRACT.md` § run.json), and the
-table name a lower-case slug, `[a-z0-9][a-z0-9_-]*`. A row's `period` is a period key
-(§ 0) or an ISO date (`YYYY-MM-DD`). `amount` is stored as a float. `items.py` refuses an
-amount a float cannot hold exactly (an integer beyond 2**53, a Decimal or string with
-more significant digits than a float keeps): round it to the precision it closes to, or
-give the float.
+Write them with `items.write_items(..., sql=<SELECT>)`, and read them in SQL as
+`<check>.<table>`; `scripts/items.py` lists the columns and every refusal. The check id is
+a run's check id (`RUN_CONTRACT.md` § run.json), and the table name a lower-case slug,
+`[a-z0-9][a-z0-9_-]*`. A row's `period` is a period key (§ 0) or an ISO date
+(`YYYY-MM-DD`). `amount` is stored as a float. `items.py` refuses an amount a float cannot
+hold exactly (an integer beyond 2**53, a Decimal or string with more significant digits
+than a float keeps): round it to the precision it closes to, or give the float.
