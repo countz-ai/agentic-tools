@@ -16,6 +16,7 @@ SCRIPTS = pathlib.Path(__file__).resolve().parents[2] / "countz-accounting" / "s
 sys.path.insert(0, str(SCRIPTS))
 import cache  # noqa: E402
 import evidence  # noqa: E402
+import items  # noqa: E402
 import sql  # noqa: E402
 from figures import Ledger  # noqa: E402
 from items import write_items  # noqa: E402
@@ -146,7 +147,7 @@ def main() -> int:
             bad.append("a CTE over range() does not run")
 
         # item tables from SQL: the statement is recorded and the table reads as t0.pairs
-        m = write_items(rd, "t0", "pairs", sql="SELECT id AS item_id, 'book' AS side, month AS "
+        m = write_items(rd, "t0", "pairs", about="One row per invoice.", sql="SELECT id AS item_id, 'book' AS side, month AS "
                         "period, amount, 'usd' AS unit FROM room.inv WHERE kind = 'INV'",
                         sides=["book"], keys=["item_id"])
         if m["row_count"] != 3 or "FROM room.inv" not in (m.get("sql") or ""):
@@ -245,7 +246,14 @@ def main() -> int:
         run_sql("CREATE TABLE t1.plain AS SELECT round(amount / 2, 2) AS half, amount / 12 AS "
                 "monthly, 2025 AS yr, CASE WHEN amount > 0 THEN 'held' ELSE 'departed' END AS "
                 "result, start >= DATE '2024-07-01' AS this_year FROM room.inv "
-                "WHERE month IN ('2025-05', '2025-06') AND start <= DATE '2025-06-30' LIMIT 20000", rd)
+                "WHERE month IN ('2025-05', '2025-06') AND start <= DATE '2025-06-30' LIMIT 20000;"
+                "COMMENT ON TABLE t1.plain IS 'One row per May or June invoice.'", rd)
+        refused("a table that does not say what a row is", lambda: run_sql(
+            "CREATE TABLE t1.bare AS SELECT * FROM room.inv", rd), "COMMENT ON TABLE t1.bare")
+        if (rd / "tables" / "t1" / "bare.parquet").exists():
+            bad.append("a refused CREATE wrote its table")
+        refused("an item table that does not say what a row is", lambda: items.write_items(
+            rd, "t0", "bare", [{"item_id": "a", "side": "s"}]), "give `about`")
         if [float(x) for x in run_sql("SELECT 1100.42 AS v", rd)["v"]] != [1100.42]:
             bad.append("an exploring SELECT is refused a typed number")
         L.write()
@@ -360,7 +368,7 @@ def main() -> int:
                [("rate", "params.rate")], disposition="as_stated")
         L5.write()
         write_items(rd, "t5", "rows", [{"item_id": "a", "side": "s", "amount": 1.0, "unit": "usd"}],
-                    sides=["s"])
+                    sides=["s"], about="One row per test item.")
         fails = sql.verify(rd, "t5")["failures"]
         if not any(f.startswith("P.t5.py") and "Ledger.populations" in f for f in fails) \
                 or not any(f.startswith("F.t5.py") and "Ledger.figures" in f for f in fails) \

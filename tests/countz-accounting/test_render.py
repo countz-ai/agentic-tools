@@ -131,7 +131,7 @@ def main() -> int:
                     columns={"id": col("A", "invoice number"), "month": col("B", "billing month"),
                              "amount": col("C", "invoice amount", "usd"), "kind": col("D", "INV or CM"),
                              "start": col("E", "service start")})
-        write_items(rd, "t1", "invoices", sql="SELECT id AS item_id, 'book' AS side, month AS period, "
+        write_items(rd, "t1", "invoices", about="One row per invoice.", sql="SELECT id AS item_id, 'book' AS side, month AS period, "
                     "amount, 'usd' AS unit FROM room.inv", sides=["book"], keys=["item_id"],
                     closes="F.t1.billed.total")
         L0 = Ledger(rd, "t0")

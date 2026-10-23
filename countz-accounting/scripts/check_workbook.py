@@ -106,7 +106,7 @@ GATE 5 — the map, on a workbook that has an Exec Summary. The tab strip is the
 path (reference/WORKBOOK.md § 2): Exec Summary first; then the lead tabs — the check
 tabs the Exec Summary's numbers stand on, in the recipe's `lead` order, by default the
 headline family's tab alone; then Basis of Preparation and every other check tab in
-roster order; then Coverage, Open Items, Sources, Evidence. A check's match tabs follow
+roster order; then Coverage, Open Items, Sources, Tables, Evidence. A check's match tabs follow
 its own tab, together, each summary before its schedule. Without `--run-dir` the gate
 holds the shape — Exec Summary first, the tail last. With `--run-dir` it reads
 `run.json` (the roster, each check's `params.family`, `plan.recipe`) and the recipe's
@@ -173,6 +173,7 @@ ATTR = lambda name: re.compile(rf'\b{name}="([^"]*)"')
 ID_TOKEN = re.compile(
     r"\b(?:RI|[EFPTSXCDQ])\.(?:\d+|[A-Za-z0-9_][A-Za-z0-9_.-]*[A-Za-z0-9])")
 SOURCES = "Sources"
+TABLES = "Tables"
 EVIDENCE = "Evidence"
 EXEC = "Exec Summary"
 # Which ledger tab an id prefix resolves on. Mirrors link_workbook.py — change both.
@@ -555,8 +556,9 @@ def audit_links(z: zipfile.ZipFile, declared: set[str] | None = None) -> dict:
                 fails.append(f"dead-end id `{i}` — cited at {tokens[i][0]}!{tokens[i][1]}, "
                              f"on no {ledger} row")
                 continue
+            home = next(c for c in cells if c[0] == ledger)
             for at in cells:
-                if at[0] != ledger:
+                if at != home:
                     err = link_states(at, i, require_tab=ledger)
                     if err:
                         fails.append(err)
@@ -593,8 +595,8 @@ def audit_links(z: zipfile.ZipFile, declared: set[str] | None = None) -> dict:
         few = ", ".join(f"`{i}`" for i in no_evidence_tab[:4])
         more = f", … and {len(no_evidence_tab) - 4} more" if len(no_evidence_tab) > 4 else ""
         fails.append(f"workbook cites {len(no_evidence_tab)} evidence id(s) ({few}{more}) "
-                     f"but has no '{EVIDENCE}' tab — merge workpapers/evidence-*.yaml "
-                     f"into one (check-report SKILL § 1)")
+                     f"but has no '{EVIDENCE}' tab — write the ledger tabs with "
+                     f"ledger_tabs.write (check-report SKILL § 1)")
     if has_sources:
         fails.extend(audit_reperform(texts))
 
@@ -605,8 +607,8 @@ def audit_links(z: zipfile.ZipFile, declared: set[str] | None = None) -> dict:
 # GATE 4 — the design (reference/WORKBOOK.md § 8, WORKBOOK_STYLE.md § 10). Parsed from
 # styles.xml and each sheet's XML, so the gate sees the stored formatting.
 BASIS = "Basis of Preparation"
-RUN_LEVEL_TABS = {EXEC, BASIS, "Coverage", "Open Items", SOURCES, EVIDENCE}
-LEDGER_TABS = {SOURCES, EVIDENCE}
+RUN_LEVEL_TABS = {EXEC, BASIS, "Coverage", "Open Items", SOURCES, TABLES, EVIDENCE}
+LEDGER_TABS = {SOURCES, TABLES, EVIDENCE}
 DESIGN_FONT = "Arial"
 DESIGN_SIZES = {9.0, 10.0, 11.0, 12.0, 14.0}
 BAND_FILL = "0A5F6A"
@@ -671,7 +673,7 @@ def get_col(n: int) -> str:
 STYLE_CELL = re.compile(r'<c r="([A-Z]+)(\d+)"([^>]*?)(?:/>|>(.*?)</c>)', re.S)
 # GATE 5 — the map (reference/WORKBOOK.md § 2): Exec Summary, the lead tabs, Basis of
 # Preparation, the other check tabs in roster order, then the tail in this order.
-TAIL_TABS = ["Coverage", "Open Items", SOURCES, EVIDENCE]
+TAIL_TABS = ["Coverage", "Open Items", SOURCES, TABLES, EVIDENCE]
 
 
 def style_table(z: zipfile.ZipFile) -> dict:
@@ -1541,7 +1543,7 @@ def main() -> int:
             print(f"    … and {len(order_fails) - a.max_report} more")
         print(f"\n  Fix: order the tabs {EXEC}, the lead tabs (the recipe's `lead`, else its")
         print(f"  headline family), {BASIS}, the other check tabs in roster order — each check's")
-        print("  match tabs after its own tab — then Coverage, Open Items, Sources, Evidence")
+        print("  match tabs after its own tab — then Coverage, Open Items, Sources, Tables, Evidence")
         print("  (WORKBOOK.md § 2). Pass --run-dir and the gate names the strip it wants.")
     elif EXEC in rep.get("tabs", []):
         print(f"{a.workbook.name}: the tab strip is the reader's path — {EXEC}, the lead "

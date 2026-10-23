@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="560" viewBox="0 0 880 560" font-family="Arial, Helvetica, sans-serif">
+  <rect width="880" height="560" fill="#FFFFFF"/>
+  <text x="24" y="34" font-size="18" font-weight="bold" fill="#1F2933">Where 1,221,656.67 comes from</text>
+  <text x="24" y="56" font-size="13" fill="#52606D">Each box is one step. Read left to right; every arrow is a link in a reads cell.</text>
+
+  <g fill="none" stroke="#9FB3C8" stroke-width="1.5">
+    <!-- figure to its two reads -->
+    <path d="M168,272 C190,272 190,150 212,150"/>
+    <path d="M168,272 C190,272 190,500 212,500"/>
+    <!-- by_portfolio to its reads -->
+    <path d="M372,150 C394,150 394,110 416,110"/>
+    <path d="M372,150 C394,150 394,250 416,250"/>
+    <path d="M372,150 C394,150 394,330 416,330"/>
+    <!-- balances to costs and customers -->
+    <path d="M576,110 C598,110 598,84 620,84"/>
+    <path d="M576,110 C598,110 598,172 620,172"/>
+    <!-- schedule_lines -->
+    <path d="M576,250 C598,250 598,258 620,258"/>
+  </g>
+
+  <g font-size="12">
+    <!-- the figure -->
+    <rect x="24" y="244" width="144" height="56" rx="6" fill="#0A5F6A"/>
+    <text x="34" y="266" fill="#FFFFFF" font-weight="bold">Figure, Sources tab</text>
+    <text x="34" y="286" fill="#FFFFFF">noncurrent, 2025-12</text>
+
+    <!-- level 1 -->
+    <rect x="212" y="122" width="160" height="56" rx="6" fill="#E6F2F3" stroke="#0A5F6A"/>
+    <text x="222" y="144" fill="#0A5F6A" font-weight="bold">by_portfolio</text>
+    <text x="222" y="162" fill="#1F2933">per portfolio and date</text>
+
+    <rect x="212" y="472" width="160" height="56" rx="6" fill="#FFFFFF" stroke="#9FB3C8" stroke-dasharray="4,3"/>
+    <text x="222" y="494" fill="#52606D" font-weight="bold">writeoffs</text>
+    <text x="222" y="512" fill="#52606D">same SQL, other figures</text>
+
+    <!-- level 2 -->
+    <rect x="416" y="82" width="160" height="56" rx="6" fill="#E6F2F3" stroke="#0A5F6A"/>
+    <text x="426" y="104" fill="#0A5F6A" font-weight="bold">balances</text>
+    <text x="426" y="122" fill="#1F2933">per cost item and date</text>
+
+    <rect x="416" y="222" width="160" height="56" rx="6" fill="#E6F2F3" stroke="#0A5F6A"/>
+    <text x="426" y="244" fill="#0A5F6A" font-weight="bold">schedule_lines</text>
+    <text x="426" y="262" fill="#1F2933">the company's schedule</text>
+
+    <rect x="416" y="302" width="160" height="56" rx="6" fill="#FFFFFF" stroke="#52606D"/>
+    <text x="426" y="324" fill="#1F2933" font-weight="bold">room.dic_schedule_*</text>
+    <text x="426" y="342" fill="#52606D">a data-room file</text>
+
+    <!-- level 3 -->
+    <rect x="620" y="60" width="236" height="48" rx="6" fill="#E6F2F3" stroke="#0A5F6A"/>
+    <text x="630" y="80" fill="#0A5F6A" font-weight="bold">costs</text>
+    <text x="630" y="97" fill="#1F2933">→ M2 cost items, M3 periods</text>
+
+    <rect x="620" y="148" width="236" height="48" rx="6" fill="#E6F2F3" stroke="#0A5F6A"/>
+    <text x="630" y="168" fill="#0A5F6A" font-weight="bold">customers</text>
+    <text x="630" y="185" fill="#1F2933">→ contract register, 2 constants</text>
+
+    <rect x="620" y="234" width="236" height="48" rx="6" fill="#E6F2F3" stroke="#0A5F6A"/>
+    <text x="630" y="254" fill="#1F2933">→ room.dc_schedule_*, M3 periods</text>
+    <text x="630" y="271" fill="#52606D" font-size="11">(schedule_lines reads these)</text>
+  </g>
+
+  <!-- legend -->
+  <g font-size="12" fill="#1F2933">
+    <rect x="416" y="410" width="18" height="14" rx="3" fill="#0A5F6A"/><text x="442" y="421">a figure (Sources)</text>
+    <rect x="416" y="436" width="18" height="14" rx="3" fill="#E6F2F3" stroke="#0A5F6A"/><text x="442" y="447">a table a check made (Tables)</text>
+    <rect x="416" y="462" width="18" height="14" rx="3" fill="#FFFFFF" stroke="#52606D"/><text x="442" y="473">a table read from a data-room file (Tables, then Evidence)</text>
+    <rect x="416" y="488" width="18" height="14" rx="3" fill="#FFFFFF" stroke="#9FB3C8" stroke-dasharray="4,3"/><text x="442" y="499">read by the statement, not needed for this number</text>
+  </g>
+</svg>

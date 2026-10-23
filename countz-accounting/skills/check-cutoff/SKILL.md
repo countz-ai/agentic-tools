@@ -58,7 +58,7 @@ Pair with SQL joins, one per pass; check the assignment with
 - **bank → book**: every bank line in the window resolves to a book posting with its
   period.
 
-Write `checks/<check>-window.csv` with `write_items(..., sql=)` — side, date, amount,
+Write `checks/<check>-window.csv` with `write_items(..., about=, sql=)` — side, date, amount,
 reference, matched-to, book period, bank date, classification — with its manifest block
 in `checks/<check>.md` per EVIDENCE.md § 5. Matched plus unmatched per side must equal
 that side's population.

@@ -99,17 +99,10 @@ def ledger_entries(path: pathlib.Path, kind: str, refusals: list[str]) -> list[d
     return out
 
 
-def main() -> int:
-    args = [a for a in sys.argv[1:] if a != "--json"]
-    if len(args) != 1:
-        print(__doc__.split("Usage:")[1].strip(), file=sys.stderr)
-        return 2
-    run_dir = pathlib.Path(args[0])
-    wp = run_dir / "workpapers"
-    if not wp.is_dir():
-        print(f"{run_dir}: no workpapers/ directory", file=sys.stderr)
-        return 2
-
+def collapse(run_dir) -> dict:
+    """{figures, unresolved, ledgers, refusals} for the run's ledgers; `figures` is empty
+    when any ledger record is refused."""
+    wp = pathlib.Path(run_dir) / "workpapers"
     figures: dict[str, dict] = {}
     citations: dict[str, dict] = {}
     ledgers: dict[str, int] = {}
@@ -125,11 +118,7 @@ def main() -> int:
         for entry in entries:
             citations.setdefault(entry["id"], entry)
     if refusals:
-        print(f"{len(refusals)} ledger record(s) refused - the owning check rewrites its "
-              f"ledger; nothing is collapsed until every ledger reads:", file=sys.stderr)
-        for r in refusals:
-            print(f"  {r}", file=sys.stderr)
-        return 2
+        return {"figures": {}, "unresolved": {}, "ledgers": ledgers, "refusals": refusals}
 
     unresolved: dict[str, str] = {}   # missing id -> first figure that cites it
 
@@ -182,16 +171,34 @@ def main() -> int:
                 "depth": depth, "passthrough": passthrough}
 
     out = {fid: walk(fid, (fid,)) for fid in sorted(figures)}
-    print(json.dumps({"figures": out,
-                      "unresolved": {k: f"first cited by {v}"
-                                     for k, v in sorted(unresolved.items())},
-                      "ledgers": ledgers},
-                     indent=2))
+    return {"figures": out,
+            "unresolved": {k: f"first cited by {v}" for k, v in sorted(unresolved.items())},
+            "ledgers": ledgers, "refusals": []}
+
+
+def main() -> int:
+    args = [a for a in sys.argv[1:] if a != "--json"]
+    if len(args) != 1:
+        print(__doc__.split("Usage:")[1].strip(), file=sys.stderr)
+        return 2
+    run_dir = pathlib.Path(args[0])
+    if not (run_dir / "workpapers").is_dir():
+        print(f"{run_dir}: no workpapers/ directory", file=sys.stderr)
+        return 2
+    res = collapse(run_dir)
+    if res["refusals"]:
+        print(f"{len(res['refusals'])} ledger record(s) refused - the owning check rewrites "
+              f"its ledger; nothing is collapsed until every ledger reads:", file=sys.stderr)
+        for r in res["refusals"]:
+            print(f"  {r}", file=sys.stderr)
+        return 2
+    unresolved = res["unresolved"]
+    print(json.dumps({k: res[k] for k in ("figures", "unresolved", "ledgers")}, indent=2))
     if unresolved:
         print(f"{len(unresolved)} reference(s) no ledger defines — each is a blocker "
               f"against the check that cited it:", file=sys.stderr)
-        for k, v in sorted(unresolved.items()):
-            print(f"  {k}  (first cited by {v})", file=sys.stderr)
+        for k, v in unresolved.items():
+            print(f"  {k}  ({v})", file=sys.stderr)
     return 1 if unresolved else 0
 
 

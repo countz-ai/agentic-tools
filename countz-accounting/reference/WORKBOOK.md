@@ -21,7 +21,7 @@ what goes where.
   run, or dropped by the plan — has no tab and is skipped
 - Basis of Preparation
 - every other check tab in roster order
-- Coverage, Open Items, Sources, Evidence
+- Coverage, Open Items, Sources, Tables, Evidence
 - Nothing hidden, nothing else.
 
 A reconciliation's match tabs (check-recon § 3) follow its check's own tab, wherever
@@ -270,10 +270,11 @@ Tables, not paragraphs, in this order:
 5. **How to read this workbook** — the prefix table from `EVIDENCE.md` § 0, one row per
    prefix the workbook uses; then one line each for the dispositions (`measured` /
    `inferred` / `as_stated`), `passthrough`, `zero_basis`, populations (included of
-   total, exclusions named), the citation form (file · sheet · range), and the one-hop
-   rule: a figure id clicks to its Sources row, whose `To reperform` cell is the recipe
-   and whose `root source` clicks to the Evidence row that re-selects the data. The
-   reader never opens `EVIDENCE.md`; this block is their copy of it.
+   total, exclusions named), the citation form (file · sheet · range), and the path
+   down: a figure's cell clicks to its Sources row; each of its reads clicks to that
+   table's row on Tables, which shows the statement that made it and its own reads; a
+   table read from a file clicks to its Evidence row. The reader never opens
+   `EVIDENCE.md`; this block is their copy of it.
 
 **Coverage** — primary table `token · title | kind | step | status | what was
 examined | what was not examined, and why`, one row per rostered check, colored per `WORKBOOK_STYLE.md` § 5.
@@ -290,30 +291,23 @@ or `D.` id the check raises is stated on that check's own tab as well, so the ro
 resolves there and the reader lands on the schedule that raised it; a row whose only link
 is the check's name sends them to the top of a tab to search.
 
-**Sources** — the ledger every figure and population id resolves on, merged from every
-`workpapers/figures-*.yaml`; identical entries under one id collapse to one, and a
-disagreement is a blocker for the report step, never a repair. Band: title; subtitle
-naming the run and the row count; row 3 blank; header on row 4. Columns, every one
-named, no spacer, these labels exactly: `id | label | value | unit | disposition |
-expression | inputs | root source | To reperform | population | caveats and
-carry-forwards | from check`. `inputs` and `root source` hold one id per cell, spread
-across adjacent columns. `root source` is where the figure lands once every passthrough
-and figure-to-figure hop is collapsed: the `E.` id(s) of the reads against the data room
-(`resolve_roots.py` computes it). `To reperform` is the recipe in one cell. For a figure
-computed in SQL it is `sql.reperform(run_dir, id)`: the parsed tables with file, sheet,
-rows and control total, then each statement in the order to run it, with the expected
-value. For any other figure it is file · sheet · rows · columns · filter · arithmetic ·
-expected value. A `check_output` input is presented as derived from its producing check,
-never as a room read. `value` formatted by its `unit`; id column 44; `MIST` on even rows;
-gridlines on.
+**Sources, Tables, Evidence** — the ledger tabs, written by `scripts/ledger_tabs.py`
+from the run's records, never by hand. They are the trail a reader follows down from a
+number to the data room (`docs/REPERFORM.md`); the module's docstring states their
+columns.
 
-**Evidence** — one row per `E.` id, merged from every `workpapers/evidence-*.yaml`, the
-same ledger treatment. Columns: kind, file (room-relative path), source, role (a
-`run_artifact` row says "derived — from <check>"), sheet, anchor (`header_at` / cell /
-locator), rows, columns with their letters and `holds`, filter, row count, control
-total, value basis, read date, and the note, quote or `label_from`. Header on row 4; the
-source-id lines (one per source id, naming the path the run was given — text, not a
-link) go below the last ledger row under a `Source roots` line.
+- **Sources**: one row per figure and population: its value, the statement that
+  computed it, what that statement reads (each a link), where it lands in the data room
+  (`root source`, from `resolve_roots.py`) and `To reperform`.
+- **Tables**: one row per table: what one row of it is, the check that made it, its row
+  count, totals and result hash, the statement that made it or the read of its file, and
+  what it reads (each a link). The constants follow, each with the sentence or basis it
+  rests on.
+- **Evidence**: one row per read of a file, with its rows and control total, then the
+  source roots.
+
+A disagreement between two ledgers on one id is a blocker for the report step, never a
+repair.
 
 ## 7. Writing it
 

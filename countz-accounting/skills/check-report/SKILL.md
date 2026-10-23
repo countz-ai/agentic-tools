@@ -30,7 +30,8 @@ of tables it cached, from `countz.tables`.
 
 The tab strip, the band and the content of every run-level tab are `WORKBOOK.md` § 2
 and § 6. Copy each check's tab cell by cell with its resolved formatting — every sheet
-of its tab file, the match tabs included; write the run-level tabs yourself. Each
+of its tab file, the match tabs included; write the other run-level tabs yourself, and
+the three ledger tabs with the kit (**Sources, Tables, Evidence** below). Each
 check's match tabs follow its own tab (`WORKBOOK.md` § 2); where the Exec Summary tells
 how much of the population is matched, copy the match summary's walk.
 
@@ -50,19 +51,22 @@ recipe tells the story its objective and results support. Read `${CLAUDE_PLUGIN_
 § Voice again before writing its sentences
 (`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py DOCTRINE.md Voice`).
 
-**Sources.** Collapse the roots first, never by hand:
+**Sources, Tables, Evidence.** Run the root collapse first:
 
 ```
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/resolve_roots.py <run_dir>
 ```
 
-It renders, per figure, the root citation ids, the derived citations crossed, the
-declared fields relied on and the collapsed depth, and per ledger file the entries it
-contributed. An `unresolved` entry is a ledger reference nothing defines — a blocker
-against the check that cited it, never patched here. Exit 2 is a refused ledger — a
-top level that is not a list, an id outside the grammar (EVIDENCE.md § 0) — named on
-stderr with its file: the owning check's to rewrite. Do not normalize a copy and
-proceed; end the step `blocked` naming that check (§ 6).
+An `unresolved` entry is a ledger reference nothing defines — a blocker against the check
+that cited it, never patched here. Exit 2 is a refused ledger — a top level that is not a
+list, an id outside the grammar (EVIDENCE.md § 0) — named on stderr with its file: the
+owning check's to rewrite. Do not normalize a copy and proceed; end the step `blocked`
+naming that check (§ 6). Then, as the last tabs of the assembly, one call writes all three:
+
+```
+from ledger_tabs import write
+write(wb, RUN, "<entity> · <the period set, as the band's subtitle states it>")
+```
 
 **Links.** After assembly:
 
@@ -268,8 +272,8 @@ seal (§ 6).** On a surface YOU wrote — a run-level tab, `report.yaml` — fix
 re-gate. On a copied tab you may not repair it: name the cell or the id,
 name the check that wrote it, and end the step `blocked` so the run re-runs that check. A
 dead-end ledger id is the owning check's record to write even when the citation sits on
-the Sources or Evidence tab you assembled — those tabs are merged from
-`workpapers/*.yaml`, so an id no record declares cannot be repaired here either. Also
+the Sources, Tables or Evidence tab — those tabs are written from the run's records, so
+an id no record declares cannot be repaired here either. Also
 assert the open-item
 accounting balances (every finding `fixed`, `carried_to_open_items` or `withheld`; the
 counts sum; every carried item names its `from_finding`) and that the deck and the

@@ -71,6 +71,9 @@ def main() -> int:
                 json.dumps({"schema": "countz-accounting/cells@1", "sheets": sheets}))
         src_tab = wb.create_sheet("Sources")
         band(src_tab, "Sources", "Fixture", None)
+        header(src_tab, 4, ["id", "label"], ["id", "description"])
+        ident(src_tab.cell(5, 2), "F.m1.x")
+        text(src_tab.cell(5, 3), "Produced figure")
         path = rd / "out" / ".staging" / "workbook.xlsx"
         path.parent.mkdir(parents=True)
         wb.save(path)
@@ -100,6 +103,12 @@ def main() -> int:
                 bad.append(f"{sh}!{co}: a copy links to {loc}, got {h and h.location!r}")
             elif f[sh][co].font.underline:
                 bad.append(f"{sh}!{co}: a linked amount takes no underline")
+        h = f["m1 Producer"]["D5"].hyperlink
+        if h is None or h.location != "'Sources'!B5":
+            bad.append(f"a figure's cell links to its Sources row, got {h and h.location!r}")
+        h = f["Sources"]["B5"].hyperlink
+        if h is None or h.location != "'m1 Producer'!B5":
+            bad.append(f"the id links back to the cell citing it, got {h and h.location!r}")
         if rep["copy_links"] != 2:
             bad.append(f"copy_links: {rep['copy_links']}, want 2")
         if f["c1 Mapped"]["D6"].value != 501.0 or not any("c1 Mapped!D6" in p for p in rep["copy_problems"]):

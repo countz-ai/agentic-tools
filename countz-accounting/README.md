@@ -45,6 +45,8 @@ Layout:
   where things go, how cells look),
   `OBSERVABILITY.md` + `rates.json`, `ARR_POLICY.md` (the ARR policy: its model, its
   file, where it lives and how a run reads it)
+- `docs/` — for the people who read a run's deliverables: `REPERFORM.md` (following a
+  workbook number down to the data room, and reperforming it)
 - Playbooks — user-saved ones land in `$HOME/.countz-accounting/playbooks/`; a
   plan-driven run drafts its own at `<run_dir>/plan/<name>.json`. New packaged capability
   is a playbook recipe (plus its shim skill — `reference/RECIPE_FORMAT.md`) composing the
@@ -70,7 +72,8 @@ Layout:
   `section.py` (prints a named section of a
   plugin document, so a section-scoped citation costs its section and not its whole file),
   `wbkit.py` (the workbook kit every tab script imports — the style constants, the
-  named styles and the block helpers, written once), `cache.py` (the run's cache:
+  named styles and the block helpers, written once), `ledger_tabs.py` (the Sources,
+  Tables and Evidence tabs, written from the run's records), `cache.py` (the run's cache:
   `write()` / `note()` for the extract step's script, `read()` / `verify()` for consumers),
   `evidence.py` (`span`: a citation measured on the file or the cache manifest — header,
   rows, columns, row count, control total — never typed), `figures.py` (the `Ledger`

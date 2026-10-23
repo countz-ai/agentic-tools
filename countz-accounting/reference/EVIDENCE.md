@@ -228,13 +228,12 @@ text, and on a check's tab every count ("372 lines"), and refuses any that no le
 value backs within rounding tolerance. A declared
 tolerance a sentence states is admitted with `--allow`.
 
-**Every presented figure re-performs in one hop.** The Sources tab carries, beside each
-figure's `expression` and inputs, its **root source** (the citation ids reached by
-collapsing every passthrough and figure-to-figure hop) and a **To reperform** recipe:
-file, sheet, rows, columns, filter, the arithmetic or SQL statement, and the expected
-value. The Evidence tab carries the citation records merged from `workpapers/evidence-*.yaml`. A reader holding only the
-workbook and the data room can re-select the same rows; the run directory is never
-required reading. Layout and assembly: check-report SKILL § 1; the gate is
+**Every presented figure re-performs from the workbook.** Its Sources row carries its
+`expression`, what that reads, its **root source** (the citation ids reached by
+collapsing every hop) and **To reperform**. Each table it reads has a Tables row: what one
+row is, the statement that made it, its own reads and the counts a re-run is compared
+against, down to the Evidence row of the file read. Re-running a statement row by row
+needs the run's tables. `scripts/ledger_tabs.py` writes the three tabs; the gate is
 `scripts/check_workbook.py`.
 
 **An id sits alone in its cell.** `link_workbook.py` links a cell that is exactly one id to
@@ -253,7 +252,7 @@ table; the ledger's figures cite the citations; the manifest block is the hop be
 them. A fix re-run that moves the check's figures rewrites its own tables in the same
 pass; no other step edits them.
 
-Write them with `items.write_items(..., sql=<SELECT>)`, and read them in SQL as
+Write them with `items.write_items(..., about="One row per ...", sql=<SELECT>)`, and read them in SQL as
 `<check>.<table>`; `scripts/items.py` lists the columns and every refusal. The check id is
 a run's check id (`RUN_CONTRACT.md` § run.json), and the table name a lower-case slug,
 `[a-z0-9][a-z0-9_-]*`. A row's `period` is a period key (§ 0) or an ISO date

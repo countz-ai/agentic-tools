@@ -9,6 +9,7 @@ and a manifest:
     from items import write_items, manifest_md
 
     m = write_items(RUN, "c4_lockbox", "matches",
+                    about="One row per deposit or bank line, with how it matched.",
                     sql='''SELECT deposit_id AS item_id, side, deposit_date AS period, amount,
                                   'usd' AS unit, class, matched_to, match_pass, note
                            FROM c4_lockbox.paired''',          # the rows, from SQL
@@ -327,13 +328,15 @@ def _totals(rows: list[dict]) -> tuple[dict, dict]:
     return counts, totals
 
 
-def write_items(run_dir, check: str, name: str, rows=None, *, sql: str | None = None,
-                extensions=(), classes=None, class_column: str = "class", sides=None,
-                keys=None, citations=None, closes=None) -> dict:
+def write_items(run_dir, check: str, name: str, rows=None, *, about: str | None = None,
+                sql: str | None = None, extensions=(), classes=None,
+                class_column: str = "class", sides=None, keys=None, citations=None,
+                closes=None) -> dict:
     """Write `checks/<check>-<name>.csv` atomically and return its manifest (EVIDENCE.md
     § 5): `table`, `columns`, `row_count`, `sides` (rows per side), `control_total`
     (`{side: {unit: total}}`), and `keys`, `citations` (`{side: [E. ids]}`) and `closes`
-    (what the table closes to: a figure id or a sentence) as the call states them. Give the
+    (what the table closes to: a figure id or a sentence) as the call states them. `about`
+    is one sentence on what a row of the table is, shown on the workbook's Tables tab. Give the
     rows as `sql`, one SELECT over the run's tables (scripts/sql.py), and the statement is
     recorded in the parquet and the manifest. `rows` (a list of dicts or a polars
     DataFrame) writes the rows as given, and `sql.py verify` fails the table.
@@ -344,7 +347,7 @@ def write_items(run_dir, check: str, name: str, rows=None, *, sql: str | None = 
     period that is neither a period key nor an ISO date, a vocabulary that is not a list
     of words, a side outside `sides`, a class outside `classes`, `keys` that are not a
     list of names, `citations` that are not `{side: [E. ids]}` (a side outside `sides`
-    included), or a `closes` that is not a non-empty string."""
+    included), a `closes` that is not a non-empty string, or no `about`."""
     path = table_path(run_dir, check, name)
     if (rows is None) == (sql is None):
         raise ItemsError("give exactly one of `sql` (the SELECT the rows come from) and `rows`")
@@ -384,6 +387,9 @@ def write_items(run_dir, check: str, name: str, rows=None, *, sql: str | None = 
         if classes is not None and _empty(c.get(class_column)):
             c[class_column] = None                 # an empty class is written empty
         clean.append(c)
+    if not isinstance(about, str) or not about.strip():
+        raise ItemsError("give `about`: one sentence on what a row of the table is "
+                         "('One row per ...')")
     buf = io.StringIO()
     w = csv.DictWriter(buf, fieldnames=columns, lineterminator="\n")
     w.writeheader()
@@ -406,7 +412,8 @@ def write_items(run_dir, check: str, name: str, rows=None, *, sql: str | None = 
                 "sql": sql.strip() if sql else None}
     # the manifest is kept in the parquet, where render.py's {manifests} reads it
     meta = {"schema": "countz-accounting/table@1", "id": f"{check}.{name}", "check": check,
-            "name": name, "kind": "item", "sql": manifest["sql"], "reads": reads,
+            "name": name, "kind": "item", "description": about.strip(),
+            "sql": manifest["sql"], "reads": reads,
             "row_count": len(clean), "manifest": manifest}
     _write_typed(path.with_suffix(".parquet"), columns, clean, meta)
     import sql as sqlmod

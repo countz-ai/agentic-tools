@@ -13,7 +13,13 @@ import sys
 # The plugin under test: <repo>/countz-accounting/scripts, from <repo>/tests/countz-accounting.
 SCRIPTS = pathlib.Path(__file__).resolve().parents[2] / "countz-accounting" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
-from items import ItemsError, manifest_md, read_items, write_items  # noqa: E402
+import functools  # noqa: E402
+
+import items  # noqa: E402
+from items import ItemsError, manifest_md, read_items  # noqa: E402
+
+# Every table says what one row of it is; the cases below are about everything else.
+write_items = functools.partial(items.write_items, about="One row per test item.")
 
 
 def main() -> int:

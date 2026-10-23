@@ -50,20 +50,25 @@ What gets wired, in this order:
   8. The arithmetic between the check tabs is made live (WORKBOOK.md § 7). With
      `--run-dir`, each tab's cells map (`out/tabs/<check>.cells.json`, `wbkit.save`)
      says which cell holds which figure and which cells copy another check's figure: each
-     copy becomes a reference to the cell holding it (`='r5 Position and DSO'!G23`) and a
-     link to it, refused — left a value and reported — when the two disagree. A tab written before the
+     copy becomes a reference to the cell holding it (`='r5 Position and DSO'!G23`),
+     refused — left a value and reported — when the two disagree. A tab written before the
      map existed is retrofitted on evidence alone: a total, a subtotal or a walk's derived
      line (`= …`) becomes a formula over the rows above it when one plain reading of
-     those rows adds to it exactly; a figure becomes a reference, and a link, when its value, to the
+     those rows adds to it exactly; a figure becomes a reference when its value, to the
      cent, sits in exactly one cell of an earlier check's tabs under a header naming the
-     same period. Anything less certain stays a value and is listed. Last, every
-     formula's result is computed (scripts/formula.py) and cached, since a load and save
-     by openpyxl stores none.
+     same period. Anything less certain stays a value and is listed. Every copy also
+     links to the cell it reads, and each figure's own cell to its Sources row. Last,
+     every formula's result is computed (scripts/formula.py) and cached, since a load and
+     save by openpyxl stores none.
 
   7. On a match summary (scripts/match_tabs.py), each line's status words link to that
      status's rows on its match schedule: the link selects the block, which the schedule
      holds together because it is sorted by status. A hyperlink cannot apply a filter; the
      selected block is the filter's rows, and check_workbook.py holds the line to them.
+
+  9. On Sources and Tables (scripts/ledger_tabs.py), a cell that is exactly the name of a
+     table or a constant links to its row on Tables, so each `reads` cell opens the step
+     below it.
 
 Every link carries the cell's own text as its `display` attribute, so a consumer that
 renders the anchor from link metadata instead of the cell shows the same readable text.
@@ -105,11 +110,13 @@ STEM_SEG = r"(?:[A-Za-z0-9_-]+|<[A-Za-z0-9_]+>)"
 STEM_CELL = re.compile(rf"(?:RI|[EFPTSXCDQ])\.{STEM_SEG}(?:\.{STEM_SEG})*")
 
 SOURCES = "Sources"
+TABLES = "Tables"
 EVIDENCE = "Evidence"
 EXEC = "Exec Summary"
 # The workbook's run-level tabs (check-report SKILL § 1), on the fold. Every other tab
 # belongs to a check.
-RUN_TABS = {"exec_summary", "basis_of_preparation", "coverage", "open_items", "sources", "evidence"}
+RUN_TABS = {"exec_summary", "basis_of_preparation", "coverage", "open_items", "sources", "tables",
+            "evidence"}
 # Which ledger tab an id prefix resolves on. Every other prefix homes where it is stated.
 LEDGER = {"F": SOURCES, "P": SOURCES, "E": EVIDENCE}
 LINK_COLOR = "0A5F6A"   # WORKBOOK_STYLE.md § 1a `ACCENT`; the cell keeps its own font
@@ -224,8 +231,9 @@ def resolve(exact_cells, line_homes, tokens, sheets):
                 dead.append(i)
                 continue
             homes[i] = home
+            # every other cell that is the id, a figure another figure's Sources row reads among them
             for at in cells:
-                if at[0] != ledger:
+                if at != home:
                     targets[at] = home
             cited = [c for c in cells if c[0] != ledger]
             if cited:
@@ -750,6 +758,25 @@ def main() -> int:
                     targets[at] = (hits[0], TITLE_CELL)
                     nav += 1
 
+    # Tables: a cell on Sources or Tables that is exactly a table's or a constant's name
+    # links to that name's row on Tables (ledger_tabs.py), the reads a reader follows down.
+    tables_links = 0
+    if TABLES in wb.sheetnames:
+        named: dict[str, tuple[str, str]] = {}
+        for (cell,) in wb[TABLES].iter_rows(min_row=5, min_col=2, max_col=2):
+            if isinstance(cell.value, str) and cell.style not in ("cz_header", "cz_section"):
+                named.setdefault(cell.value.strip(), (TABLES, cell.coordinate))
+        for sheet in (SOURCES, TABLES):
+            if sheet not in wb.sheetnames:
+                continue
+            for row in wb[sheet].iter_rows(min_row=5):
+                for cell in row:
+                    at = (sheet, cell.coordinate)
+                    home = named.get(cell.value.strip()) if isinstance(cell.value, str) else None
+                    if home and home != at and at not in targets:
+                        targets[at] = home
+                        tables_links += 1
+
     # The Exec Summary's copied tables: every amount back to the cell it was copied from.
     walk, missed = walk_targets(wb)
     targets.update(walk)
@@ -758,6 +785,7 @@ def main() -> int:
     targets.update(matches)
 
     copies: dict[tuple[str, str], tuple[str, str]] = {}
+    figure_cells: dict[tuple[str, str], tuple[str, str]] = {}
     live_rep = {"copies_wired": 0, "copy_problems": [], "totals_made_live": 0,
                 "totals_left_as_values": [], "copies_retrofitted": 0}
     if not a.dry_run:
@@ -798,6 +826,15 @@ def main() -> int:
                     if t and t[0] != ws.title and t[0] in wb.sheetnames and at not in targets:
                         copies[at] = t
         targets.update(copies)
+        # A figure's own cell shows its number, not its id: it links to its Sources row,
+        # and that row's id links back to it when nothing else cites the id.
+        for sheet, cells in maps.items():
+            for coord, e in cells.items():
+                home, at = homes.get(e.get("fid") or ""), (sheet, coord)
+                if home and sheet in wb.sheetnames and at not in targets:
+                    figure_cells[at] = home
+                    targets.setdefault(home, at)
+        targets.update(figure_cells)
 
         # Every link in this workbook is placed here, so a re-run owns them all: clear
         # first, or a link this pass no longer wants survives, pointing where it did.
@@ -827,8 +864,8 @@ def main() -> int:
             font.color = LINK_COLOR
             # A linked AMOUNT takes color only: under a figure, an underline is the
             # accounting rule that says "sum above", and a link must not draw one.
-            if (sheet, coord) not in walk and (sheet, coord) not in copies \
-                    and not isinstance(cell.value, (int, float)):
+            amount = isinstance(cell.value, (int, float)) or str(cell.value).startswith("=")
+            if (sheet, coord) not in walk and not amount:
                 font.underline = "single"
             cell.font = font
         # Every table an Excel table of its own (wbkit.excel_tables): a tab copied cell by
@@ -845,18 +882,22 @@ def main() -> int:
         wb.save(a.workbook)
         fx.cache_results(a.workbook, results)
 
-    ledgers = (SOURCES, EVIDENCE)
-    up = sum(1 for at, t in targets.items() if t[0] in ledgers and at[0] not in ledgers)
+    ledgers = (SOURCES, TABLES, EVIDENCE)
+    up = sum(1 for at, t in targets.items()
+             if t[0] in ledgers and at[0] not in ledgers and at not in figure_cells)
     back = sum(1 for at, t in targets.items() if at[0] in ledgers and t[0] not in ledgers)
     rep = {"workbook": str(a.workbook), "ids_seen": len(tokens),
            "links": len(targets), "to_ledgers": up, "back_from_ledgers": back,
            "family_links": fam, "navigation": nav, "walk_amounts": len(walk),
+           "table_links": tables_links,
            "unmatched_walk_amounts": [{"cell": c, "row": l, "column": h}
                                       for c, l, h in missed],
            "match_lines": len(matches),
            "tables": 0 if a.dry_run else n_tables,
-           "copy_links": len(copies),
-           "other": len(targets) - up - back - nav - len(walk) - len(matches) - len(copies),
+           "copy_links": len(copies), "figure_links": len(figure_cells),
+           "other": len(targets) - up - back - nav - len(walk) - len(matches) - len(copies)
+                    - tables_links
+                    - len(figure_cells),
            "dead_ends": sorted(dead), "internal_refs": sorted(internal),
            "dry_run": a.dry_run, **live_rep}
     if a.json:
@@ -867,7 +908,8 @@ def main() -> int:
           f"{up} to {SOURCES}/{EVIDENCE}, {back} back out, {fam} family stems, "
           f"{rep['other'] - fam} to stated homes, {nav} check-tab navigation, "
           f"{len(walk)} {EXEC} amounts, {len(matches)} match-summary lines, "
-          f"{len(copies)} copies.")
+          f"{len(copies)} copies, {len(figure_cells)} figures to their {SOURCES} rows, "
+          f"{tables_links} reads to their {TABLES} rows.")
     if not a.dry_run:
         print(f"  live arithmetic: {live_rep['copies_wired']} copies wired by the cells maps, "
               f"{live_rep['copies_retrofitted']} copies retrofitted by value, "

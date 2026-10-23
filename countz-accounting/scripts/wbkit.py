@@ -56,7 +56,7 @@ __all__ = [
     "grid", "styles", "S", "STATUS", "STATUS_KINDS", "register_status", "WIDTH", "WRAP",
     "band", "header", "section", "ident", "text", "amount", "count", "status", "table", "KINDS", "fit_rows",
     "finish", "excel_tables", "table_blocks", "next_block", "HEADING_GAP", "BLOCK_GAP", "get_column_letter", "Alignment",
-    "total", "stated", "save", "CELLS_SUFFIX",
+    "total", "stated", "save", "CELLS_SUFFIX", "bind_styles",
 ]
 
 # --- WORKBOOK_STYLE.md § 9 ------------------------------------------------------------
@@ -131,6 +131,15 @@ def styles():
 
 # --- WORKBOOK.md § 7 -------------------------------------------------------------------
 S = styles()
+
+
+def bind_styles(wb) -> None:
+    """Point `S` at `wb`'s own copies of the kit's styles. A workbook loaded from disk
+    already holds styles of the same names; openpyxl reads such a style as present and never
+    registers the kit's copy, so a cell given it falls back to the default style."""
+    for key, st in list(S.items()):
+        if st.name in wb.named_styles:
+            S[key] = wb._named_styles[st.name]
 STATUS = {"pass": "StatusTied", "supported": "StatusTied", "tied": "StatusTied",
           "warn": "StatusReview", "candidate": "StatusReview",
           "fail": "StatusBreak", "unexplained": "StatusBreak"}

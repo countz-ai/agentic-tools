@@ -6,9 +6,11 @@ SQL, and the SQL is its lineage.
     from sql import run_sql
     from figures import Ledger
 
-    run_sql('''CREATE OR REPLACE TABLE r5_position.open_items AS
+    run_sql(\"\"\"CREATE OR REPLACE TABLE r5_position.open_items AS
                SELECT customer_id, due_date, open_amount FROM room.aging_2025_06_30
-               WHERE open_amount <> 0''')
+               WHERE open_amount <> 0;
+               COMMENT ON TABLE r5_position.open_items IS
+                 'One row per open invoice at 30 June 2025: its due date and amount open.'\"\"\")
     df = run_sql("SELECT count(*) AS n FROM r5_position.open_items")   # a polars DataFrame
     L = Ledger(RUN, "r5_position")
     L.figures('''SELECT 'F.r5.past_due.2025-06' AS id, 'Past due at 30 June 2025' AS label,
@@ -30,9 +32,11 @@ behind a figure or table in the order a re-performer runs them, down to the pars
 and the file, sheet and rows each was read from.
 
 A statement reads these by name: no file function, and of table functions only `range`,
-`generate_series` and `unnest`. `COMMENT ON TABLE <check>.<name> IS '...'` and `COMMENT
-ON COLUMN <check>.<name>.<column> IS '...'` describe a check's table and its columns,
-kept across a CREATE OR REPLACE. A check writes only its own schema; `room` and `countz`
+`generate_series` and `unnest`. `COMMENT ON TABLE <check>.<name> IS 'One row per ...'`
+says what one row of a check's table is, and run_sql refuses a CREATE that leaves its
+table without one: follow the CREATE with its COMMENT in the same call. `COMMENT ON
+COLUMN <check>.<name>.<column> IS '...'` describes a column. Both are kept across a
+CREATE OR REPLACE. The workbook's Tables tab shows the description beside the statement. A check writes only its own schema; `room` and `countz`
 are read only. Aliases are lower case, because an upper-case `P.x` reads as a ledger id.
 
 **Constants are rows of `room.constants`** (`name`, `value`, `unit`, `kind`, and where it
@@ -884,9 +888,11 @@ class Db:
             self._run(f"COPY ({query.strip().rstrip(';')}) TO {_literal(out)} (FORMAT parquet)")
             return pl.read_parquet(out)
 
-    def create(self, check: str, name: str, body: str, *, replace: bool) -> dict:
+    def create(self, check: str, name: str, body: str, *, replace: bool,
+               described: bool = False) -> dict:
         """`CREATE [OR REPLACE] TABLE <check>.<name> AS <body>`: the rows to
-        `tables/<check>/<name>.parquet`, with the statement and what it reads."""
+        `tables/<check>/<name>.parquet`, with the statement and what it reads. `described`:
+        a COMMENT ON TABLE for it follows in the same call."""
         if check in RESERVED or not CHECK.fullmatch(check):
             raise ValueError(f"schema {check!r}: a check writes its own schema, named by its "
                              f"check id; room and countz are read only")
@@ -904,6 +910,10 @@ class Db:
             raise ValueError(f"{key} reads itself")
         df = self.frame(body)
         was = (have or {}).get("meta") or {}
+        if not described and not was.get("description"):
+            raise ValueError(f"{key}: a check's table says what one row of it is - follow the "
+                             f"CREATE with COMMENT ON TABLE {key} IS 'One row per ...' in the "
+                             f"same run_sql call")
         notes = {c["name"]: c.get("description") for c in was.get("columns") or []}
         meta = {"schema": TABLE_SCHEMA, "id": key, "check": check, "name": name,
                 "description": was.get("description"), "sql": body.strip(), "reads": lin,
@@ -981,12 +991,18 @@ def run_sql(sql: str, run_dir=None):
     COMMENT's {table, column}."""
     d = db(run_dir)
     result = None
-    for st in d.con.extract_statements(sql):
-        text = _bare(st.query)
+    statements = [(st, _bare(st.query)) for st in d.con.extract_statements(sql)]
+    described = set()
+    for _, text in statements:
+        c = COMMENT.fullmatch(text)
+        if c and c.group("what").upper() == "TABLE" and c.group("text").strip():
+            described.add(f"{_unquote(c.group('schema'))}.{_unquote(c.group('name'))}")
+    for st, text in statements:
         m, c = CREATE.fullmatch(text), COMMENT.fullmatch(text)
         if m:
-            result = d.create(_unquote(m.group("schema")), _unquote(m.group("name")),
-                              m.group("body"), replace=bool(m.group("replace")))
+            schema, name = _unquote(m.group("schema")), _unquote(m.group("name"))
+            result = d.create(schema, name, m.group("body"), replace=bool(m.group("replace")),
+                              described=f"{schema}.{name}" in described)
         elif c:
             result = d.comment(_unquote(c.group("schema")), _unquote(c.group("name")),
                                _unquote(c.group("col")) if c.group("col") else None,
@@ -1306,9 +1322,10 @@ def constants(L, rows) -> list[str]:
 
 
 def reperform(run_dir, id: str) -> str:
-    """The Sources tab's `To reperform` cell for a figure or table computed in SQL: the
-    steps `lineage(id)` lists, one per line - each parsed table with its file, sheet,
-    rows and control total, then each statement with the row it yields and its value."""
+    """Every step behind a figure or table computed in SQL, in the order a re-performer
+    runs them, one per line: the steps `lineage(id)` lists - each parsed table with its
+    file, sheet, rows and control total, then each statement with the row it yields and
+    its value."""
     d = db(run_dir)
     d.refresh()
     cur = d.con.execute("SELECT * FROM lineage(?)", [id])

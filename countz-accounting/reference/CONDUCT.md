@@ -81,7 +81,9 @@ Do both of these on every file:
 
 **Parse in Python (`scripts/cache.py`), compute in SQL (`scripts/sql.py`).** Python reads
 files into tables and writes the tab and the prose; every figure, population and item
-table is a SQL statement over the run's tables, and the statement is its lineage. A value
+table is a SQL statement over the run's tables, and the statement is its lineage. Each
+table a step makes says what one row of it is (`COMMENT ON TABLE`, or `write_items`'s
+`about`); the reader sees it beside the statement on the Tables tab. A value
 a document states, a plan parameter or a value the step chooses is a row of
 `room.constants` (`Ledger.constants`), read with `const('name')`; a statement types no
 other number, date or record id. A result or a status is a column the statement computes.
