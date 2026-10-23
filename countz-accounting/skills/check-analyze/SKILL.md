@@ -46,7 +46,7 @@ the declared dependency reads — you transcribe nothing; compute in SQL
 (`CONDUCT.md` § Libraries). One citation per read in
 `workpapers/evidence-<check>.yaml`; every number that may reach the deliverable as a
 figure in `workpapers/figures-<check>.yaml`, populations stated with exclusions named.
-Item-grain work lands as `checks/<check>-<table>.csv` tables with their manifest blocks
+Item-grain work lands as `checks/<check>-<table>.parquet` tables with their manifest blocks
 per EVIDENCE.md § 5. No size threshold narrows the computation: every member of the
 stated population enters the schedules at full precision, whatever its amount
 (DOCTRINE.md § Materiality).
@@ -71,7 +71,7 @@ Where the procedure classifies members — accounts, cost lines, adjustment cand
 
 - `checks/<check>.md` — the definition, the procedure as resolved, each schedule, every
   ruling with its basis, the exceptions and the open items.
-- `checks/<check>-<table>.csv` — the item-grain tables of § 2, each with its manifest
+- `checks/<check>-<table>.parquet` — the item-grain tables of § 2, each with its manifest
   block.
 - `out/tabs/<check>.xlsx` — your tab, blocks per `WORKBOOK.md` § 4, with the schedules as
   the primary table, the rulings and their bases, and the exceptions. The recipe's

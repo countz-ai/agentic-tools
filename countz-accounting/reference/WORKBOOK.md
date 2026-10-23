@@ -55,6 +55,12 @@ band is frozen at `B4`. A table header is never frozen: the primary table's head
 row 4 describes that table alone, not the tables below it.
 
 - B1 the title, opening with the token (`q6 · Adjusted EBITDA reconciles to the ledger`).
+  On every tab, run-level and script-written tabs included, the title is what an
+  accountant writes at the head of a schedule: after the name, a short phrase or one
+  plain sentence saying what the tab holds or shows. It does not list the tab's columns
+  or explain how to read them; the headers and B3 do that. Example — not
+  `Tables · Every table the figures read: what one row is, how it was made, and what it
+  reads`, but `Tables · Tables and constants behind the figures`.
 - B2 the subtitle: entity · period set · basis · unit · tolerance. The unit carries the
   primary table's currency and scale (`$ in thousands`); a column header never carries the
   scale. A tab covering several entities names the group and its count (`13 bank
@@ -126,7 +132,9 @@ AutoFilter where a tab has a table.
    the reader must see. One per row: the id it qualifies in B, the sentence in C.
 6. **To reperform** — a `Section` heading, then a numbered list, one step per row in
    column B, `Body` style (a procedure is read, not glanced at): the read (file · sheet ·
-   range), the selection rule, the arithmetic. The last thing on the tab.
+   range), the selection rule, the arithmetic. A table the run made is read in SQL: the
+   step names `<check>.<table>` and the SELECT, never a file to open. The last thing on
+   the tab.
 
 **A schedule the recipe declares.** The recipe's `schedules` list names the tables the
 deck draws from a family's tab: `from` the family, `block` the `Section` heading the table

@@ -50,7 +50,7 @@ directory):
 A path that does not exist refuses the record, naming where the path came from.
 
 **`produced`** is the check's own files (`own_files`: `checks/<check>.md`,
-`checks/<check>-*.csv`, `tables/<check>/*.parquet`, `workpapers/figures-<check>.yaml`,
+`checks/<check>-*.parquet`, `tables/<check>/*.parquet`, `workpapers/figures-<check>.yaml`,
 `workpapers/evidence-<check>.yaml`, `out/tabs/<check>.xlsx`) that exist and changed since
 `step_start`, plus whatever the step passes (a plan, review or report step names its
 own), each of which must exist under the run directory. Changed means an mtime at or
@@ -157,7 +157,7 @@ def _check_id(check) -> str:
     if not isinstance(check, str) or not check_playbook.CHECK_ID.fullmatch(check):
         raise ValueError(f"check id {check!r} is not a check id ([a-z0-9][a-z0-9_]*, at most "
                          f"{check_playbook.CHECK_ID_MAX} characters, no `-`: "
-                         f"a check id names its files, and `checks/<check>-<table>.csv` "
+                         f"a check id names its files, and `checks/<check>-<table>.parquet` "
                          f"would read a `-` in it as another check's table)")
     return check
 
@@ -313,15 +313,14 @@ def place_tab(run_dir, seq_or_check) -> pathlib.Path:
 # --- consumed and produced ---------------------------------------------------------------
 def own_files(run_dir, check: str) -> list[pathlib.Path]:
     """The check's own files that exist, under `run_dir` as given, in this order:
-    `checks/<check>.md`, `checks/<check>-summary.md`, `checks/<check>-*.csv` and
-    `-*.parquet` (sorted), `tables/<check>/*.parquet` (sorted), `workpapers/figures-<check>.yaml`,
+    `checks/<check>.md`, `checks/<check>-summary.md`, `checks/<check>-*.parquet`
+    (sorted), `tables/<check>/*.parquet` (sorted), `workpapers/figures-<check>.yaml`,
     `workpapers/evidence-<check>.yaml`, `out/tabs/<check>.xlsx` and its cells map
     `out/tabs/<check>.cells.json`. Refuses a check id outside
     CHECK_ID."""
     rd = pathlib.Path(run_dir)
     check = _check_id(check)
     found = [rd / "checks" / f"{check}.md", rd / "checks" / f"{check}-summary.md"]
-    found += sorted((rd / "checks").glob(f"{check}-*.csv"))
     found += sorted((rd / "checks").glob(f"{check}-*.parquet"))
     found += sorted((rd / "tables" / check).glob("*.parquet"))
     found += [rd / "workpapers" / f"figures-{check}.yaml",

@@ -33,6 +33,7 @@ import zipfile
 
 COORD = re.compile(r"^\$?([A-Z]{1,3})\$?(\d+)$")
 _COPY = re.compile(r"^='((?:[^']|'')+)'!(\$?[A-Z]{1,3}\$?\d+)$")
+_CONSTANT = re.compile(r"^=(-?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)$")
 _SHEET = r"(?:'((?:[^']|'')+)'|([A-Za-z_][A-Za-z0-9_.]*))!"
 _CELL = r"\$?[A-Z]{1,3}\$?\d+"
 TOKEN = re.compile(
@@ -70,6 +71,19 @@ def quote(sheet: str) -> str:
 
 def reference(sheet: str, coord: str) -> str:
     return f"={quote(sheet)}!{coord}"
+
+
+def constant(value: float) -> str:
+    """A number as a formula of that one number (`=225500`), as link_workbook.py writes a
+    linked value."""
+    return f"={int(value)}" if float(value).is_integer() else f"={float(value)!r}"
+
+
+def constant_of(value) -> float | None:
+    """The number of a formula that is one number, as `constant` writes it; None for
+    anything else."""
+    m = _CONSTANT.match(value) if isinstance(value, str) else None
+    return float(m.group(1)) if m else None
 
 
 def copy_of(value) -> tuple[str, str] | None:

@@ -49,7 +49,7 @@ Match with SQL joins, one per pass; check the assignment with
 
 By identifier first (account number or masked suffix), then by name or label, then by
 corroborating facts (a balance and period that agree), each pass recorded, a loose-key
-match stating its key. Write `checks/<check>-roster.csv` — member, presence per source,
+match stating its key. Write `checks/<check>-roster.parquet` — member, presence per source,
 match key, classification, exception id where one is minted — with its manifest block in
 `checks/<check>.md` per EVIDENCE.md § 5. The roster accounting must close in both
 directions: matched plus explained absences plus exceptions equals each roster's count.
@@ -66,7 +66,7 @@ differ.
 
 - `checks/<check>.md` — the definition, the rosters, the passes, the classifications and
   the exceptions.
-- `checks/<check>-roster.csv` — the roster table of § 3, with its manifest block.
+- `checks/<check>-roster.parquet` — the roster table of § 3, with its manifest block.
 - `out/tabs/<check>.xlsx` — your tab, blocks per `WORKBOOK.md` § 4, with the roster
   schedule as the primary table and the exceptions.
 

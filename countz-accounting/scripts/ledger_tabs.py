@@ -199,7 +199,7 @@ def _sources(ws, subtitle, figs, evs, roots, tabs, known) -> None:
               + [f"reads {i}" for i in range(2, max_reads + 1)]
               + ["root source"] + [f"root source {i}" for i in range(2, max_roots + 1)]
               + ["To reperform", "population", "caveats and carry-forwards", "from check"])
-    band(ws, "Sources · Every figure, the statement that computed it and what it reads",
+    band(ws, "Sources · How each figure was computed",
          f"{subtitle} · {len(figs):,} figures and populations")
     for i, label in enumerate(labels, start=2):
         ws.cell(row=4, column=i, value=label).style = S["Header"]
@@ -282,8 +282,7 @@ def _tables(ws, subtitle, run_dir, evs, tabs, order, known) -> int:
     max_reads = max([len(reads.get(t["table_name"], [])) for t in rows] + [1])
     labels = (["table", "what one row is", "made by", "rows", "totals", "result hash",
                "SQL or read", "evidence", "reads"] + [f"reads {i}" for i in range(2, max_reads + 1)])
-    band(ws, "Tables · Every table the figures read: what one row is, how it was made, "
-             "and what it reads",
+    band(ws, "Tables · Tables and constants behind the figures",
          f"{subtitle} · {len(rows):,} tables")
     for i, label in enumerate(labels, start=2):
         ws.cell(row=4, column=i, value=label).style = S["Header"]
@@ -354,7 +353,7 @@ def _evidence(ws, subtitle, evs, order, run: dict) -> None:
     labels = ["id", "kind", "file", "source", "role", "sheet", "anchor", "rows", "columns",
               "filter", "row count", "control total", "value", "value basis", "read date",
               "note, quote or label"]
-    band(ws, "Evidence · Every read against the data room and against the checks' own tables",
+    band(ws, "Evidence · Files and tables we read",
          f"{subtitle} · {len(evs):,} reads")
     for i, label in enumerate(labels, start=2):
         ws.cell(row=4, column=i, value=label).style = S["Header"]
@@ -364,7 +363,9 @@ def _evidence(ws, subtitle, evs, order, run: dict) -> None:
         role = str(e.get("file_role") or "").replace("_", " ")
         if e.get("file_role") == "run_artifact":
             role = f"derived — from {(e.get('from_check') or chk).replace('_', ' ')}"
-        columns = "; ".join(f"{c.get('at')} {c.get('name')} ({c.get('holds')})"
+        # an item table's column is located by its name; print it once
+        columns = "; ".join((f"{c.get('at')} " if c.get("at") != c.get("name") else "")
+                            + f"{c.get('name')} ({c.get('holds')})"
                             for c in e.get("columns") or [])
         ct = e.get("control_total")
         if isinstance(ct, dict):

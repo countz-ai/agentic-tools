@@ -88,7 +88,7 @@ listing and lookup.
    `scripts/run_state.py bind-playbook <run_dir> --path <definition> --bound
    '{"slot": "source_id", ...}'` (its `DROPPED:` lines are the unbound-fed steps). Then
    loop: run
-   `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/playbook_next.py <run_dir> <definition path>`
+   `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/playbook_next.py <run_dir> <definition path>`
    and execute the lines it prints in their order — `RECORD:`, `LAUNCH:`, `NEXT:`, then
    the `THEN:` lines (`record`, launch any `RETRY:`, the script again); with SendMessage
    available, assign holder lanes first and run the loop as `RUN_CONTRACT.md § Holder

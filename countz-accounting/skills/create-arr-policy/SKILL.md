@@ -67,7 +67,7 @@ slug lowercase with hyphens. Look it up with `uv run --project ${CLAUDE_PLUGIN_R
     ```
 
   Then dispatch the fork as a wave of one:
-  `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/run_state.py dispatch <workspace> --step arr_policy --args '{"out": "<workspace>/arr_policy/stated.yaml", "company": "<company>"}'`,
+  `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/run_state.py dispatch <workspace> --step arr_policy --args '{"out": "<workspace>/arr_policy/stated.yaml", "company": "<company>"}'`,
   execute the `NEXT:` line it prints, then `run_state.py record <workspace>`. Its return
   names the documents that state rules and how many decisions they settle. Say that to
   the user in one line.

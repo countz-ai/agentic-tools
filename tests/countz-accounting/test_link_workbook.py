@@ -106,6 +106,8 @@ def main() -> int:
         h = f["m1 Producer"]["D5"].hyperlink
         if h is None or h.location != "'Sources'!B5":
             bad.append(f"a figure's cell links to its Sources row, got {h and h.location!r}")
+        if f["m1 Producer"]["D5"].value != "=500.25" or v["m1 Producer"]["D5"].value != 500.25:
+            bad.append(f"a linked number is a formula of itself, cached: {f['m1 Producer']['D5'].value!r}")
         h = f["Sources"]["B5"].hyperlink
         if h is None or h.location != "'m1 Producer'!B5":
             bad.append(f"the id links back to the cell citing it, got {h and h.location!r}")
@@ -120,6 +122,15 @@ def main() -> int:
         if (rep["copies_wired"], rep["copies_retrofitted"], rep["totals_made_live"]) != (1, 1, 2):
             bad.append(f"counts: {rep['copies_wired']} wired, {rep['copies_retrofitted']} retrofitted, "
                        f"{rep['totals_made_live']} totals")
+        again = subprocess.run([sys.executable, str(SCRIPTS / "link_workbook.py"), str(path), "--run-dir",
+                                str(rd), "--json"], capture_output=True, text=True)
+        f2 = load_workbook(path)
+        changed = [f"{ws.title}!{c.coordinate}" for ws in f.worksheets for row in ws.iter_rows() for c in row
+                   if c.value != f2[ws.title][c.coordinate].value
+                   or (c.hyperlink and c.hyperlink.location) != (f2[ws.title][c.coordinate].hyperlink
+                                                                  and f2[ws.title][c.coordinate].hyperlink.location)]
+        if again.returncode != 0 or changed:
+            bad.append(f"a second pass changes nothing: {changed[:5]}")
         gate = subprocess.run([sys.executable, str(SCRIPTS / "check_workbook.py"), str(path), "--run-dir",
                                str(rd), "--json"], capture_output=True, text=True)
         g = json.loads(gate.stdout[gate.stdout.index("{"):])

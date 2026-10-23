@@ -69,9 +69,9 @@ def test_lifecycle(d: pathlib.Path, bad: list) -> None:
         "  file_role: system_export\n- id: E.k1.a0\n  kind: span\n"
         "  file: checks/k0.md\n  source: null\n  file_role: run_artifact\n", encoding="utf-8")
     (run / "checks" / "k0.md").write_text("k0", encoding="utf-8")
-    (run / "checks" / "k1-old.csv").write_text("x", encoding="utf-8")
+    (run / "checks" / "k1-old.parquet").write_text("x", encoding="utf-8")
     old = time.time() - 3600
-    for f in ("checks/k1-old.csv", "workpapers/evidence-k1.yaml"):
+    for f in ("checks/k1-old.parquet", "workpapers/evidence-k1.yaml"):
         os.utime(run / f, (old, old))
 
     b = brief(run, 7)
@@ -81,7 +81,7 @@ def test_lifecycle(d: pathlib.Path, bad: list) -> None:
     _refuses(bad, "a finish with no step_start", finish, run, 7, conclusion="x")
     start(run, 7)
     (run / "checks" / "k1.md").write_text("record", encoding="utf-8")
-    (run / "checks" / "k1-ties.csv").write_text("t", encoding="utf-8")
+    (run / "checks" / "k1-ties.parquet").write_text("t", encoding="utf-8")
     (run / "out" / ".staging" / "k1.xlsx").write_text("not a workbook", encoding="utf-8")
     _refuses(bad, "a finish with the tab still staged", finish, run, 7, conclusion="x")
     _refuses(bad, "a tab the gates refuse", place_tab, run, 7, errors=(GateRefused,))
@@ -93,7 +93,7 @@ def test_lifecycle(d: pathlib.Path, bad: list) -> None:
         _refuses(bad, kw, finish, run, 7, errors=(ValueError, FileNotFoundError), **kw)
     rec = finish(run, 7, conclusion="Tied.", consumed={"checks/k0.md": "roster_from"},
                  notes="n")
-    if rec["produced"] != ["checks/k1.md", "checks/k1-ties.csv"]:
+    if rec["produced"] != ["checks/k1.md", "checks/k1-ties.parquet"]:
         bad.append(f"produced: {rec['produced']}")
     got = {pathlib.Path(c["path"]).name: c["used_for"] for c in rec["consumed"]}
     want = {"0007-tie.md": "dispatch brief", "p.json": "step params",
@@ -167,12 +167,12 @@ def test_check_ids(d: pathlib.Path, bad: list) -> None:
              "a5-bridge")
     _refuses(bad, "own_files('a5-bridge')", own_files, run, "a5-bridge")
     run = _run(d, "ids-ok", check="k1_b")
-    for f in ("checks/k1_b.md", "checks/k1_b-items.csv", "workpapers/figures-k1_b.yaml",
+    for f in ("checks/k1_b.md", "checks/k1_b-items.parquet", "workpapers/figures-k1_b.yaml",
               "workpapers/evidence-k1_b.yaml", "workpapers/notes-k1_b.yaml",
-              "workpapers/figures-x_k1_b.yaml", "checks/k1_b_2-items.csv"):
+              "workpapers/figures-x_k1_b.yaml", "checks/k1_b_2-items.parquet"):
         (run / f).write_text("[]\n" if f.endswith(".yaml") else "x", encoding="utf-8")
     got = [str(p.relative_to(run)) for p in own_files(run, "k1_b")]
-    if got != ["checks/k1_b.md", "checks/k1_b-items.csv", "workpapers/figures-k1_b.yaml",
+    if got != ["checks/k1_b.md", "checks/k1_b-items.parquet", "workpapers/figures-k1_b.yaml",
                "workpapers/evidence-k1_b.yaml"]:
         bad.append(f"own_files: {got}")
     start(run, 7)
@@ -307,11 +307,11 @@ def test_produced_mtime(d: pathlib.Path, bad: list) -> None:
     ts = step_record._parse(start(run, 7)).timestamp()
     for name, t in (("before", ts - 0.5), ("after", ts + 0.2), ("second", float(int(ts))),
                     ("old_second", float(int(ts) - 3))):
-        p = run / "checks" / f"k1-{name}.csv"
+        p = run / "checks" / f"k1-{name}.parquet"
         p.write_text("x", encoding="utf-8")
         os.utime(p, (t, t))
     rec = finish(run, 7, conclusion="x")
-    if rec["produced"] != ["checks/k1-after.csv", "checks/k1-second.csv"]:
+    if rec["produced"] != ["checks/k1-after.parquet", "checks/k1-second.parquet"]:
         bad.append(f"produced by mtime: {rec['produced']}")
 
 

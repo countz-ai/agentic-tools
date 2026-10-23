@@ -88,7 +88,7 @@ ask, on a catalog miss only, scrubbed by an agent under [SCRUB.md](SCRUB.md)
 | `<run_dir>/plan.md` + `<run_dir>/plan/<name>.json` | the plan step, once per draft; a revised draft rewrites both | the user (via preview), the relay, the playbook engine (the definition it executes) |
 | `<run_dir>/steps/<NNNN>-<step>.json` | the step that produced it, once, at its end | the relay (`run_state.py record`), the playbook engine, the review step |
 | `<run_dir>/workpapers/<check>.tpl.md` | the check step that owns that check id: its page, one template (`WORKBOOK.md` § 7) | `scripts/render.py` |
-| `<run_dir>/checks/<check>.md` (and `<check>-*.csv`, `<check>-*.parquet`) | the check step that owns that check id; the md rendered from its template | the review and report steps; SQL as `<check>.<table>` |
+| `<run_dir>/checks/<check>.md` (and `<check>-*.parquet`, its item tables) | the check step that owns that check id; the md rendered from its template | the review and report steps; SQL as `<check>.<table>` |
 | `<run_dir>/checks/<check>-summary.md` | a plan-driven check step, rendered from its template's `## Summary`: whether its procedure worked and where it stands, in an accountant's words (`agents/worker.md` § Files) | `scripts/family_artifacts.py` |
 | `<run_dir>/out/families/<NN>-<title>.md` + `.xlsx` | `scripts/family_artifacts.py`, after every wave, for each family whose checks are all terminal: the family's summary and its workbook, its check tabs in one file | the user, via preview |
 | `<run_dir>/workpapers/*.yaml` | the step named in the file's suffix | the review and report steps, `scripts/check_prose.py` |
@@ -160,7 +160,7 @@ next_seq: 8                         # the next unused seq; seqs are never reused
 
 `checks[].id` is an id the run mints (`tie_gl_tb`, `recon_cash`), `[a-z0-9][a-z0-9_]*`;
 it names the check's files and its tab. It takes no `-`, which separates the check id
-from the table name in `checks/<check>-<table>.csv`. It is at most 31 characters, the
+from the table name in `checks/<check>-<table>.parquet`. It is at most 31 characters, the
 longest tab name Excel holds: the check's tab opens with the id, and the workbook gate
 traces each tab to its check by that opening. `checks[].goal` is kept verbatim;
 `playbook-save` distills it into the saved playbook.
@@ -383,7 +383,7 @@ read and wrote; the lanes run in parallel. Without SendMessage, the run moves in
 
 1. **Assign the lanes once**, after the plan is approved (a saved playbook: after
    `bind-playbook`) and before the first `playbook_next.py` call:
-   `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py assign <run_dir> <definition path>`.
+   `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py assign <run_dir> <definition path>`.
    It maps the approved plan's steps (only those, so a partial run's scope is what runs)
    onto at most three lanes and writes `<run_dir>/lanes.json`. Say nothing about it.
 2. **Run the loop as before**: `playbook_next.py`, then the lines it prints in order. On a
@@ -395,16 +395,16 @@ read and wrote; the lanes run in parallel. Without SendMessage, the run moves in
      (general-purpose where that type is not available), in the background, prompted
      exactly: `Read <brief> and do what it says. It is your entire instruction for this
      step.` Then record its agentId:
-     `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py holder <run_dir> --lane <L> --agent <agentId>`.
+     `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py holder <run_dir> --lane <L> --agent <agentId>`.
    - `holder=<agentId>`: SendMessage to that agentId, the message exactly: `Next step:
      read <brief> and do what it says. It is your entire instruction for this step.`
      If SendMessage refuses or fails, run
-     `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py fallback <run_dir> --lane <L>` and
+     `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py fallback <run_dir> --lane <L>` and
      execute the `LANE:` line it prints (a new holder for the same brief).
 3. **When a lane's agent reports back** — the Agent call's result, a task notification,
    or the SendMessage call's own result (where SendMessage waits for the worker, as in a
    cloud session, the reply is in the call's result) — run
-   `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py done <run_dir> --agent <its agentId>`.
+   `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py done <run_dir> --agent <its agentId>`.
    It closes that step alone (`run_state.py record --seqs`), so the steps still running in
    other lanes stay open; put its `OK:`, `BLOCKED:` and `FAILED:` lines to the user as
    § Classification and retries states, execute a `LANE:` line it prints (the failed
@@ -449,7 +449,7 @@ every finding in the review record by its `fix_kind`, without waiting for a ruli
 On a holder-lanes run (§ Holder lanes), every re-dispatch this section calls for — a fix
 of a review finding, a re-extract for a cache defect and the re-runs after it, a check
 re-dispatched with an answer — goes through
-`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py fix <run_dir> --checks <ids> --mode fix
+`uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py fix <run_dir> --checks <ids> --mode fix
 [--extra '<one-line JSON>']` instead of `run_state.py dispatch --checks`, with the same
 checks, mode and extra. It sends each re-run to the lane that ran its check, warm on
 that lane's holder, one at a time per lane. Execute its `LANE:` lines and each report

@@ -82,7 +82,7 @@ FAMILY_STEP_MAX = 4
 
 SCHEMA = "countz-accounting/playbook@1"
 SLUG = re.compile(r"[a-z0-9][a-z0-9_-]*")
-# A step id is the check id its files are named by (`checks/<check>-<table>.csv`,
+# A step id is the check id its files are named by (`checks/<check>-<table>.parquet`,
 # `workpapers/figures-<check>.yaml`). `-` separates check and table, so a check id takes
 # none (e.g. `a5` + `bridge-items` would read as `a5-bridge` + `items`). It is at most 31
 # characters: the check's tab opens with it, and Excel holds a tab name to 31, so a longer id

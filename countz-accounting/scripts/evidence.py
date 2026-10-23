@@ -24,9 +24,10 @@ names it: bare (`invoice_amount`, `Débit`) or double-quoted where it carries pu
 The span's `rows` are the metadata's — the block as cut, never recomputed from a count.
 
 `span()` is the same citation for a read the cache did not serve. `what` is a cache id
-(with `run_dir`), or a run artifact under `checks/` — the run's own CSV item tables, read
-by polars as written (`file_role: run_artifact`, `from_check` from the file name unless
-given). A data-room file is never parsed here: a step that parses one itself passes the
+(with `run_dir`), or a run artifact under `checks/` — the run's own item tables,
+`checks/<check>-<table>.parquet`, read as written (`file_role: run_artifact`, `from_check`
+from the file name unless given), each column located by its name and the rows as `1:N`.
+A data-room file is never parsed here: a step that parses one itself passes the
 frame and the coordinates it read it at — `span(frame=df, file=..., source=...,
 file_role=..., sheet=..., header_at=..., rows=..., columns={name: {"at": ..., "parse":
 ...}})` — and the entry is measured over that frame. With `run_dir`, the cited columns
@@ -67,6 +68,7 @@ import cache  # noqa: E402  sibling: the cache and its metadata
 
 ROLES = cache.FILE_ROLES | {"run_artifact"}
 AS_WRITTEN = "as written"
+ARTIFACT_HEADER = "none - parquet columns by name"
 NO_FILTER = "none - full sheet consumed"
 
 
@@ -118,27 +120,19 @@ def _artifact(run_dir: pathlib.Path | None, what) -> pathlib.Path | None:
 
 def _from_artifact(run_dir: pathlib.Path, path: pathlib.Path) -> tuple[dict, "object", dict[str, dict]]:
     """A run artifact: the run's own item table (`items.py`), read as it was written -
-    ids and extensions as text, `amount` as a number."""
+    ids and extensions as text, `amount` as a number. A column is located by its name and
+    a row by its position in the table, from 1."""
     import items
     check, _, name = path.stem.partition("-")
-    if path.suffix.lower() != ".csv" or not name:
+    if path.suffix.lower() != ".parquet" or not name:
         raise ValueError(f"{path.name}: a run artifact span reads an item table "
-                         f"`checks/<check>-<table>.csv`; cite any other read with `frame=`")
+                         f"`checks/<check>-<table>.parquet`; cite any other read with `frame=`")
     df = items.read_items(run_dir, check, name, frame=True)
-    cols = {c: {"at": _col_letter(i + 1), "parse": AS_WRITTEN}
-            for i, c in enumerate(df.columns)}
+    cols = {c: {"at": c, "parse": AS_WRITTEN} for c in df.columns}
     e = {"id": None, "source": None, "file": str(path.relative_to(run_dir)),
-         "file_role": "run_artifact", "sheet": None, "header_at": "A1",
-         "rows": f"2:{df.height + 1}" if df.height else cache.NO_ROWS}
+         "file_role": "run_artifact", "sheet": None, "header_at": ARTIFACT_HEADER,
+         "rows": f"1:{df.height}" if df.height else cache.NO_ROWS}
     return e, df, cols
-
-
-def _col_letter(i: int) -> str:
-    s = ""
-    while i > 0:
-        i, r = divmod(i - 1, 26)
-        s = chr(65 + r) + s
-    return s
 
 
 def _from_frame(frame, run_dir: pathlib.Path | None, file, source, file_role, sheet,

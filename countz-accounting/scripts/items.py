@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A check's item table (EVIDENCE.md § 5) — `checks/<check>-<table>.csv` and the manifest
+"""A check's item table (EVIDENCE.md § 5) — `checks/<check>-<table>.parquet` and the manifest
 block that records what built it — as one importable module.
 
 Every step that writes item-level work imports this rather than hand-rolling a CSV writer
@@ -30,12 +30,12 @@ currencies states each row's) are always columns but may be empty where the item
 none (e.g. a roster member with no amount); `amount` and `unit` are filled together or
 not at all. Everything else is an **extension**, declared
 by name when the table is written; a column the call did not declare is refused, and a
-declared one missing from a row is written empty. Every cell is written as text (a float
-as its shortest round-trip form, numpy scalars included) and read back as text, except
-`amount`, read back as a float. Beside the CSV, `write_items` writes
+declared one missing from a row is written empty. `write_items` writes
 `checks/<check>-<name>.parquet` with each column typed as the rows gave it (all ints an
-integer, all numbers a float, all dates a date, anything else text) and, for a table
-written from `sql=`, its statement; SQL reads it as `<check>.<name>` (`scripts/sql.py`).
+integer, all numbers a float, all dates a date, anything else text) and, in its metadata,
+the manifest and, for a table written from `sql=`, its statement; SQL reads it as
+`<check>.<name>` (`scripts/sql.py`). `read_items` returns every cell as text (a float as
+its shortest round-trip form), except `amount`, a float.
 
 **The path is unambiguous.** `check` is a check id (`check_playbook.CHECK_ID`:
 `[a-z0-9][a-z0-9_]*`, no `-`) and the table name a lower-case slug
@@ -63,15 +63,13 @@ FX-translated or allocated item keeps the figure it closes to) and each total is
 correctly rounded sum of those floats (`math.fsum`); only `manifest_md` rounds, for
 display.
 
-Stdlib and sibling modules only, except polars for the parquet and for
-`read_items(..., frame=True)`, which returns a polars DataFrame.
+Stdlib, sibling modules and polars, which writes and reads the parquet;
+`read_items(..., frame=True)` returns a polars DataFrame.
 """
 from __future__ import annotations
 
-import csv
 import datetime
 import decimal
-import io
 import math
 import os
 import pathlib
@@ -100,7 +98,7 @@ class ItemsError(ValueError):
 
 
 def table_path(run_dir, check: str, name: str) -> pathlib.Path:
-    """`checks/<check>-<name>.csv` under the run directory. `check` must be a check id
+    """`checks/<check>-<name>.parquet` under the run directory. `check` must be a check id
     (`[a-z0-9][a-z0-9_]*`, no `-`) and `name` a lower-case slug (`[a-z0-9][a-z0-9_-]*`),
     each the whole string; anything else is refused."""
     if not isinstance(check, str) or not CHECK_ID.fullmatch(check):
@@ -109,7 +107,7 @@ def table_path(run_dir, check: str, name: str) -> pathlib.Path:
     if not isinstance(name, str) or not TABLE.fullmatch(name):
         raise ItemsError(f"table {name!r}: a lower-case slug, [a-z0-9][a-z0-9_-]* - no "
                          f"spaces, path separators or upper case")
-    return pathlib.Path(run_dir) / "checks" / f"{check}-{name}.csv"
+    return pathlib.Path(run_dir) / "checks" / f"{check}-{name}.parquet"
 
 
 def _rows(rows) -> list[dict]:
@@ -332,7 +330,7 @@ def write_items(run_dir, check: str, name: str, rows=None, *, about: str | None 
                 sql: str | None = None, extensions=(), classes=None,
                 class_column: str = "class", sides=None, keys=None, citations=None,
                 closes=None) -> dict:
-    """Write `checks/<check>-<name>.csv` atomically and return its manifest (EVIDENCE.md
+    """Write `checks/<check>-<name>.parquet` atomically and return its manifest (EVIDENCE.md
     § 5): `table`, `columns`, `row_count`, `sides` (rows per side), `control_total`
     (`{side: {unit: total}}`), and `keys`, `citations` (`{side: [E. ids]}`) and `closes`
     (what the table closes to: a figure id or a sentence) as the call states them. `about`
@@ -390,20 +388,7 @@ def write_items(run_dir, check: str, name: str, rows=None, *, about: str | None 
     if not isinstance(about, str) or not about.strip():
         raise ItemsError("give `about`: one sentence on what a row of the table is "
                          "('One row per ...')")
-    buf = io.StringIO()
-    w = csv.DictWriter(buf, fieldnames=columns, lineterminator="\n")
-    w.writeheader()
-    for c in clean:
-        w.writerow({k: _cell(v) for k, v in c.items()})
     path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmpname = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
-    os.close(fd)
-    tmp = pathlib.Path(tmpname)
-    try:
-        tmp.write_text(buf.getvalue(), encoding="utf-8")
-        tmp.replace(path)
-    finally:
-        tmp.unlink(missing_ok=True)
     counts, totals = _totals(clean)
     rel = path.relative_to(pathlib.Path(run_dir)).as_posix()
     manifest = {"table": rel, "columns": columns, "row_count": len(clean), "sides": counts,
@@ -415,7 +400,7 @@ def write_items(run_dir, check: str, name: str, rows=None, *, about: str | None 
             "name": name, "kind": "item", "description": about.strip(),
             "sql": manifest["sql"], "reads": reads,
             "row_count": len(clean), "manifest": manifest}
-    _write_typed(path.with_suffix(".parquet"), columns, clean, meta)
+    _write_typed(path, columns, clean, meta)
     import sql as sqlmod
     sqlmod.write_catalog(run_dir)
     return manifest
@@ -423,7 +408,7 @@ def write_items(run_dir, check: str, name: str, rows=None, *, about: str | None 
 
 def read_items(run_dir, check: str, name: str, *, extensions=None, classes=None,
                class_column: str = "class", sides=None, frame: bool = False):
-    """The rows of `checks/<check>-<name>.csv`, validated as `write_items` writes them:
+    """The rows of `checks/<check>-<name>.parquet`, validated as `write_items` writes them:
     the core columns present once each, `item_id` and `side` filled, `item_id` unique,
     amounts numbers, periods period keys or ISO dates. `extensions`, when given, must be
     the table's other columns (in any order, each once); `classes` / `sides` re-check the
@@ -433,12 +418,9 @@ def read_items(run_dir, check: str, name: str, *, extensions=None, classes=None,
     path = table_path(run_dir, check, name)
     if not path.is_file():
         raise ItemsError(f"{path}: no such item table")
-    with path.open(encoding="utf-8", newline="") as fh:
-        rd = csv.DictReader(fh)
-        header = list(rd.fieldnames or [])
-        raw = list(rd)
-    if len(set(header)) != len(header):
-        raise ItemsError(f"{path.name}: the header repeats a column: {header}")
+    import polars as pl
+    table = pl.read_parquet(path)
+    header = table.columns
     missing = [c for c in CORE if c not in header]
     if missing:
         raise ItemsError(f"{path.name}: core column(s) {missing} missing - not an item table")
@@ -447,13 +429,13 @@ def read_items(run_dir, check: str, name: str, *, extensions=None, classes=None,
         want = list(extensions)
         if len(set(want)) != len(want) or set(want) != set(ext):
             raise ItemsError(f"{path.name}: extensions {ext} are not the declared {want}")
-    rows = [{k: (v if v != "" else None) for k, v in r.items()} for r in raw]
+    rows = [{k: v if v is None or k == "amount" else _cell(v) for k, v in r.items()}
+            for r in table.iter_rows(named=True)]
     _check(rows, ext, classes, class_column, sides)
     for i, r in enumerate(rows, 1):
         r["amount"] = _amount(r["amount"], r["unit"], f"{path.name} row {i}")
         r["unit"] = None if r["amount"] is None else r["unit"].lower()
     if frame:
-        import polars as pl
         return pl.DataFrame(rows, schema={c: pl.Float64 if c == "amount" else pl.String
                                           for c in header})
     return rows

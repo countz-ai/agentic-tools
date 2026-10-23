@@ -154,6 +154,19 @@ def main() -> int:
             bad.append(f"write_items(sql=): {m}")
         refused("write_items with rows and sql", lambda: write_items(
             rd, "t0", "x", [{"item_id": "a", "side": "s"}], sql="SELECT 1"), "exactly one")
+        # a read of it cites the parquet: columns by name, rows by position
+        sp = evidence.span("checks/t0-pairs.parquet", run_dir=rd, id="E.t9.pairs",
+                           control="amount")
+        if (sp["file"], sp["file_role"], sp["from_check"], sp["rows"], sp["row_count"]) != \
+                ("checks/t0-pairs.parquet", "run_artifact", "t0", "1:3", 3) \
+                or [c["at"] for c in sp["columns"]] != [c["name"] for c in sp["columns"]] \
+                or sp["header_at"] != evidence.ARTIFACT_HEADER:
+            bad.append(f"an item-table span: {sp}")
+        import handoff  # noqa: PLC0415 - standard library only, as the relay runs it
+        if handoff._item_head(rd / "checks" / "t0-pairs.parquet") != \
+                (["item_id", "side", "period", "amount", "unit"], 3):
+            bad.append(f"handoff's item-table head: "
+                       f"{handoff._item_head(rd / 'checks' / 't0-pairs.parquet')}")
 
         # figures and populations are rows
         L = Ledger(rd, "t1")
@@ -376,8 +389,7 @@ def main() -> int:
                 or not any(f.startswith("F.t5.stated") and "const(" in f for f in fails) \
                 or len(fails) != 4:
             bad.append(f"the outside-SQL gate: {fails}")
-        for x in (rd / "workpapers" / "figures-t5.yaml", rd / "checks" / "t5-rows.csv",
-                  rd / "checks" / "t5-rows.parquet"):
+        for x in (rd / "workpapers" / "figures-t5.yaml", rd / "checks" / "t5-rows.parquet"):
             x.unlink()
         led = rd / "workpapers" / "figures-t1.yaml"
         doc = yaml.safe_load(led.read_text())

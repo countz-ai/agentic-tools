@@ -58,7 +58,7 @@ Pair with SQL joins, one per pass; check the assignment with
 - **bank → book**: every bank line in the window resolves to a book posting with its
   period.
 
-Write `checks/<check>-window.csv` with `write_items(..., about=, sql=)` — side, date, amount,
+Write `checks/<check>-window.parquet` with `write_items(..., about=, sql=)` — side, date, amount,
 reference, matched-to, book period, bank date, classification — with its manifest block
 in `checks/<check>.md` per EVIDENCE.md § 5. Matched plus unmatched per side must equal
 that side's population.
@@ -82,7 +82,7 @@ reassign an item's period to make the window close.
 
 - `checks/<check>.md` — the window and who declared it, both populations, the tracing in
   each direction, the transfer pairing where one ran, and the classifications.
-- `checks/<check>-window.csv` — the window table of § 2, with its manifest block.
+- `checks/<check>-window.parquet` — the window table of § 2, with its manifest block.
 - `out/tabs/<check>.xlsx` — your tab, blocks per `WORKBOOK.md` § 4, with the window
   schedule as the primary table, the transfer pairing where one ran, and the exceptions.
 

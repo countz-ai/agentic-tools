@@ -1337,7 +1337,8 @@ def audit_formulas(z: zipfile.ZipFile, mapped: dict[str, set[str]]) -> list[str]
         formulas: set[str] = set()
         for m in FORMULA_EL.finditer(xml):
             ref, text_, cached = m.group(1), html.unescape(m.group(2)), m.group(3)
-            formulas.add(ref)
+            if fx.constant_of("=" + text_) is None:      # a linked number (link_workbook.py § 8) is a value
+                formulas.add(ref)
             if cached in (None, ""):
                 continue                        # GATE 1 refuses an empty result
             try:

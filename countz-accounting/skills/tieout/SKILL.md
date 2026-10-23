@@ -60,7 +60,7 @@ Register one check — `kind: tieout`, the sources, the goal verbatim, `params` 
 tolerance the user declared:
 
 ```
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/run_state.py add-checks <run_dir> \
+uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/run_state.py add-checks <run_dir> \
     --checks '[{"id": "tie_gl_tb", "kind": "tieout", "sources": ["gl", "tb"],
                 "goal": "<verbatim>", "params": {}}]'
 ```

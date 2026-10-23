@@ -126,7 +126,7 @@ which for this skill runs as:
    4. Record it — the removal lists, the verdicts and the text sent:
 
       ```
-      python3 ${CLAUDE_PLUGIN_ROOT}/scripts/run_state.py record-scrub <run_dir> --json @<run_dir>/scrub-draft.json
+      uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/run_state.py record-scrub <run_dir> --json @<run_dir>/scrub-draft.json
       ```
 
       where the file (written with the Write tool, so no quoting touches the text) holds `{"send": "<SEND text>", "rounds": [{"removed": [{"category": "...", "replacement": "..."}], "verdict": "clean|flagged", "flags": [{"category": "...", "where": "..."}]}, ...]}`.

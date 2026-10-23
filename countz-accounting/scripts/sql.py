@@ -901,7 +901,7 @@ class Db:
         key = f"{check}.{name}"
         have = self.tables.get(key)
         if have and have["kind"] == "item":
-            raise ValueError(f"{key} is an item table (checks/{check}-{name}.csv); name the "
+            raise ValueError(f"{key} is an item table (checks/{check}-{name}.parquet); name the "
                              f"table another way")
         if have and not replace:
             raise ValueError(f"{key} exists; CREATE OR REPLACE TABLE replaces it")
@@ -1038,7 +1038,7 @@ def _inputs(L, d: Db, lin: dict) -> list[dict]:
         check, _, name = t.partition(".")
         cid = f"E.{L.check}.{check}-{name}"
         if cid not in done:
-            L.cite(evidence.span(f"checks/{check}-{name}.csv", run_dir=L.run_dir, id=cid,
+            L.cite(evidence.span(f"checks/{check}-{name}.parquet", run_dir=L.run_dir, id=cid,
                                  note="Rows selected by the SQL of each figure that cites it."))
             done.add(cid)
         out.append(check_output(f"{check}-{name}", cid))

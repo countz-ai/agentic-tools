@@ -93,8 +93,10 @@ line ranges of its text layer (`p1:L5-7,p2:L4-5`). A re-performer opens the page
 
 A read of a file the run wrote, e.g. another check's item table under `checks/`, is
 `file_role: run_artifact` with `from_check: <check id>`, never `system_export` or any
-data-room role. Its basis is the producing check's own citations, and the deliverable
-presents the read as derived.
+data-room role. An item table is cited at `checks/<check>-<table>.parquet` with
+`header_at: none - parquet columns by name`, `rows: 1:N` (its rows by position) and each
+column's `at` its name; `evidence.span` writes these. Its basis is the producing check's
+own citations, and the deliverable presents the read as derived.
 
 **A span is measured.** Every table a step reads is parsed once into the run's cache
 (`scripts/cache.py`), with its file coordinates and each column's parse, description and
@@ -243,13 +245,13 @@ columns.
 ## 5. Item tables
 
 Item-level work is written down, not only summarized. A check that matches, traces or
-pairs rosters at item grain writes one CSV per item table at `checks/<check>-<table>.csv`
+pairs rosters at item grain writes each item table at `checks/<check>-<table>.parquet`
 (each kind's SKILL.md names its own tables and columns) plus a manifest block in
 `checks/<check>.md` recording what built it: the citations behind each side, the keys
 used, `row_count`, and a control total per side. `{manifests}` in the template renders
-it from what `write_items` stored. The report and a re-performer read the
-table; the ledger's figures cite the citations; the manifest block is the hop between
-them. A fix re-run that moves the check's figures rewrites its own tables in the same
+it from what `write_items` stored. The report and a re-performer read the table in SQL
+as `<check>.<table>`; the ledger's figures cite the citations; the manifest block is the
+hop between them. A fix re-run that moves the check's figures rewrites its own tables in the same
 pass; no other step edits them.
 
 Write them with `items.write_items(..., about="One row per ...", sql=<SELECT>)`, and read them in SQL as

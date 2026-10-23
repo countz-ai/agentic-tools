@@ -349,7 +349,7 @@ def corner_cases(bad: list[str], expect_error) -> None:
         K = Ledger(run, "k1")
         K.fig("F.k1.x", "x", 3, "usd", "sum over E.k1.out", [("rows", "E.k1.out")])
         K.cite({"id": "E.k1.out", "kind": "span", "file_role": "run_artifact",
-                "file": "checks/c1-items.csv"})
+                "file": "checks/c1-items.parquet"})
         K.write()
         if Ledger(run, "k1").entries["F.k1.x"]["inputs"][0]["source_type"] != "check_output":
             bad.append("a tuple input cited later as a run artifact stayed room_file")

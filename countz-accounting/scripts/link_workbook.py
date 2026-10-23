@@ -57,9 +57,11 @@ What gets wired, in this order:
      those rows adds to it exactly; a figure becomes a reference when its value, to the
      cent, sits in exactly one cell of an earlier check's tabs under a header naming the
      same period. Anything less certain stays a value and is listed. Every copy also
-     links to the cell it reads, and each figure's own cell to its Sources row. Last,
-     every formula's result is computed (scripts/formula.py) and cached, since a load and
-     save by openpyxl stores none.
+     links to the cell it reads, and each figure's own cell to its Sources row. A linked
+     number is written as a formula of that number (`=225500`): Google Sheets imports a
+     linked plain number as text, and a formula reading it then skips it. Last, every
+     formula's result is computed (scripts/formula.py) and cached, since a load and save
+     by openpyxl stores none.
 
   7. On a match summary (scripts/match_tabs.py), each line's status words link to that
      status's rows on its match schedule: the link selects the block, which the schedule
@@ -709,6 +711,15 @@ def main() -> int:
 
     wb = openpyxl.load_workbook(a.workbook)
     cached = openpyxl.load_workbook(a.workbook, data_only=True)   # a re-run reads its own formulas' results
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+    import formula as fx
+    # A linked number an earlier pass wrote as a formula (`=225500`, below) is a value again
+    # until this pass links it.
+    for ws in wb.worksheets:
+        for row in ws.iter_rows():
+            for cell in row:
+                if (n := fx.constant_of(cell.value)) is not None:
+                    cell.value = int(n) if n.is_integer() else n
     if SOURCES not in wb.sheetnames:
         print(f"{a.workbook.name}: no '{SOURCES}' tab — assemble the workbook first",
               file=sys.stderr)
@@ -791,8 +802,6 @@ def main() -> int:
     if not a.dry_run:
         # § 8: the arithmetic made live, before the links (an Exec Summary amount reads a
         # cell that may itself have just become a reference).
-        sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-        import formula as fx
         known = fx.compute_results(wb, fallback=cached)   # the formulas the tabs arrived with
 
         def get(sh, co):
@@ -868,6 +877,10 @@ def main() -> int:
             if (sheet, coord) not in walk and not amount:
                 font.underline = "single"
             cell.font = font
+            # Google Sheets imports a linked number as HYPERLINK(url, "225500"), text that
+            # every formula reading it skips; a linked formula keeps its number.
+            if isinstance(cell.value, (int, float)) and not isinstance(cell.value, bool):
+                cell.value = fx.constant(cell.value)
         # Every table an Excel table of its own (wbkit.excel_tables): a tab copied cell by
         # cell arrives without its table objects, and names must be unique workbook-wide.
         sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))

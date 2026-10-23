@@ -165,7 +165,7 @@ def main() -> int:
         for want in ("Billing is $350.", "| 2025-05 | Billed in 2025-05 | $150 | Billed |",
                      "| **Billed, both months** | **$350** |", "Statement:\n\n```sql", "| I-1 | INV | $100 | Jan 1, 2025 |",
                      "T.t1.ledger Billing to the ledger", "| T.t1.ledger | pass | $0 |",
-                     "**Item table** `checks/t1-invoices.csv`", "Closes to: F.t1.billed.total",
+                     "**Item table** `checks/t1-invoices.parquet`", "Closes to: F.t1.billed.total",
                      "- `F.t1.billed.total`: Both months, $350.", "1. Sum the invoice amounts"):
             if want not in md:
                 bad.append(f"md lacks {want!r}")

@@ -28,8 +28,7 @@ def _fixture(rd: pathlib.Path) -> None:
     (rd / "checks" / "c1.md").write_text(
         "# c1\n\n## Conclusion\n\nLogo churn was measured on the in-force basis.\n\n"
         "## Exceptions\n\nNone.\n", encoding="utf-8")
-    (rd / "checks" / "c1-items.csv").write_text(
-        "id,class,amount\nX.c1.1,logo churn,100\n", encoding="utf-8")
+    (rd / "checks" / "c1-items.parquet").write_bytes(b"PAR1 stand-in for an item table")
     (rd / "workpapers" / "figures-c1.yaml").write_text(yaml.safe_dump([
         {"id": "F.c1.churn.fy2025", "label": "Logo churn FY2025", "value": 12.0, "unit": "count"},
         {"id": "F.c1.arr.fy2025", "label": "ARR", "value": 1000.5, "unit": "usd"}],
@@ -69,7 +68,7 @@ def main() -> int:
         rd = td / "run"
         _fixture(rd)
         if [str(p) for p in check_files(rd, "c1")] != [
-                "checks/c1.md", "checks/c1-items.csv", "workpapers/figures-c1.yaml",
+                "checks/c1.md", "checks/c1-items.parquet", "workpapers/figures-c1.yaml",
                 "out/tabs/c1.xlsx"]:
             bad.append(f"check_files: {check_files(rd, 'c1')}")
         snap = snapshot(rd, "c1")

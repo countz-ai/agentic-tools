@@ -54,7 +54,7 @@ def main() -> int:
         if m["row_count"] != 4 or m["sides"] != {"book": 1, "bank": 3} \
                 or m["control_total"] != want_tot:
             bad.append(f"manifest {m}")
-        if m["table"] != "checks/c4_lockbox-matches.csv":
+        if m["table"] != "checks/c4_lockbox-matches.parquet":
             bad.append(f"table path {m['table']}")
         back = read_items(td, "c4_lockbox", "matches", **kw)
         if [r["amount"] for r in back] != [1204.404, -50.0, 5000.0, 120000.0] \
@@ -78,7 +78,7 @@ def main() -> int:
         for what, rs in cases.items():
             if not refuses(write_items, td, "c4_bad", "matches", rs, **kw):
                 bad.append(f"write_items did not refuse: {what}")
-        if (pathlib.Path(td) / "checks" / "c4_bad-matches.csv").exists():
+        if (pathlib.Path(td) / "checks" / "c4_bad-matches.parquet").exists():
             bad.append("a refused table was written")
         # an allocation in thirds closes to its full-precision figure, not to cents
         third = [{"item_id": f"A.{i}", "side": "alloc", "period": None, "amount": 100 / 3,
@@ -149,9 +149,10 @@ def _hardening(td, bad: list[str], refuses) -> None:
     takes("numpy cells", write_items, td, "c6", "np",
           [_row(1, amount=np.float64(2.5), days=np.float64(12.5), n=np.int64(3))],
           extensions=["days", "n"])
-    text = (pathlib.Path(td) / "checks" / "c6-np.csv").read_text()
-    if "np." in text or "I.1,book,fy2025,2.5,usd,12.5,3" not in text:
-        bad.append(f"numpy cells written as {text!r}")
+    back = read_items(td, "c6", "np")
+    if back != [{"item_id": "I.1", "side": "book", "period": "fy2025", "amount": 2.5,
+                 "unit": "usd", "days": "12.5", "n": "3"}]:
+        bad.append(f"numpy cells read back as {back}")
 
     # a zero-row table read as a frame keeps its columns; the types do not depend on the rows
     write_items(td, "c6", "empty", [], extensions=["class"])
@@ -229,9 +230,19 @@ def _hardening(td, bad: list[str], refuses) -> None:
               closes="F.c11.total")
     if m is not None and (m["keys"] != ["deposit_id"] or m["citations"] != {"bank": ["E.c11.b"]}):
         bad.append(f"stated fields recorded as {m['keys']} {m['citations']}")
+    # a SQL DECIMAL extension keeps its value; the parquet holds it as a float
+    takes("a decimal extension", write_items, td, "c12", "dec",
+          [_row(1, billed=decimal.Decimal("14431.40")), _row(2, billed=decimal.Decimal("0.00"))],
+          extensions=["billed"])
+    if [float(r["billed"]) for r in read_items(td, "c12", "dec")] != [14431.4, 0.0]:
+        bad.append(f"a decimal extension read back as {read_items(td, 'c12', 'dec')}")
+
     left = [p.name for p in (pathlib.Path(td) / "checks").iterdir() if p.name.endswith(".tmp")]
     if left:
         bad.append(f"temporary files left in checks/: {left}")
+    csv = [p.name for p in (pathlib.Path(td) / "checks").iterdir() if p.suffix == ".csv"]
+    if csv:
+        bad.append(f"item tables written as CSV: {csv}")
 
 
 if __name__ == "__main__":

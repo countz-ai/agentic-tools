@@ -95,7 +95,7 @@ candidates a rule found. The exceptions are yours to clear with what the engine 
 read — names, memo text, the cash-application record, the cutoff statement — each one you
 clear recorded with its evidence. Report matched by rule, cleared by you, and still open
 as three separate counts.
-Write the match table `checks/<check>-matches.csv` (side, match key, date, amount,
+Write the match table `checks/<check>-matches.parquet` (side, match key, date, amount,
 matched-to, classification) with its manifest block in `checks/<check>.md` per
 EVIDENCE.md § 5: the citations behind each side, the keys used, `row_count` and a control
 total per side. The population accounting must close: matched plus unmatched per side
@@ -142,7 +142,7 @@ Files:
 
 - `checks/<check>.md` — the definition, the sides, the match summary by pass, the items
   with their evidence, the elections where any, and the statement.
-- `checks/<check>-matches.csv` — the match table of § 3, with its manifest block.
+- `checks/<check>-matches.parquet` — the match table of § 3, with its manifest block.
 - `out/tabs/<check>.xlsx` — your tabs. The file opens with the match tabs, one set per
   `res` of § 3, each set under its own token, written by
   `${CLAUDE_PLUGIN_ROOT}/scripts/match_tabs.py` from it and never by hand, whether it came

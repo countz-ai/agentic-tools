@@ -39,7 +39,7 @@ item left unmatched after the last round per § 3.
 
 Into the target source at item grain: the clearing or supporting line's citation, its
 date and amount. One-to-many is allowed and recorded (a deposit clearing as two credits).
-Write `checks/<check>-items.csv` — item, origin reference, amount, target citation,
+Write `checks/<check>-items.parquet` — item, origin reference, amount, target citation,
 cleared date, days outstanding where the origin carries its date, classification — with
 its manifest block in `checks/<check>.md` per EVIDENCE.md § 5.
 
@@ -56,7 +56,7 @@ exception.
 
 - `checks/<check>.md` — the item population and the record it came from, the tracing, and
   every item's classification.
-- `checks/<check>-items.csv` — the items table of § 2, with its manifest block.
+- `checks/<check>-items.parquet` — the items table of § 2, with its manifest block.
 - `out/tabs/<check>.xlsx` — your tab, blocks per `WORKBOOK.md` § 4, with the vouch
   schedule as the primary table and the exceptions.
 

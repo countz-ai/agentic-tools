@@ -275,7 +275,7 @@ on to the deliverable without asking again, except about the data room
 ### 5. Execute
 
 The `playbook` skill's run loop. Run
-`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/playbook_next.py <run_dir> <definition path>` and
+`uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/playbook_next.py <run_dir> <definition path>` and
 execute the lines it prints in order: `RECORD:`, `LAUNCH:`, `NEXT:`, then the `THEN:`
 lines (`record`, any `RETRY:`, the script again). On `ESCALATE:` (exit code 3) or any
 other failure, invoke the `playbook-next` skill with the same arguments, execute its

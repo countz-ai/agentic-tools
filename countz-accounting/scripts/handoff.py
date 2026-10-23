@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """What a step's inputs already hold, read from the run directory when its brief is written.
 
-    python3 handoff.py <run_dir> <brief.md>     print the handoff for that brief's arguments
+    uv run --project ${CLAUDE_PLUGIN_ROOT} python3 handoff.py <run_dir> <brief.md>
+        print the handoff for that brief's arguments
 
 A fresh worker otherwise spends its first turns finding out what its inputs are: which
 parsed tables exist and how to read their columns, which tables and figure ids each
@@ -9,8 +10,9 @@ parsed tables exist and how to read their columns, which tables and figure ids e
 `run_state.render_brief` appends this block to every check brief, so the worker starts
 with those facts instead of rediscovering them. It names only what the brief's own
 params name (`params.reads`, every `*_from`), as `agents/worker.md` § Your procedure
-bounds a step's inputs. Standard library only: the relay runs run_state with plain
-python3.
+bounds a step's inputs. An item table's columns and row count are read from its parquet
+with polars, so the relay runs run_state, lanes and playbook_next with
+`uv run --project ${CLAUDE_PLUGIN_ROOT} python3`.
 """
 from __future__ import annotations
 
@@ -78,12 +80,11 @@ def _record(run_dir: pathlib.Path, check: str) -> dict:
     return {}
 
 
-def _csv_head(path: pathlib.Path) -> tuple[list[str], int]:
-    import csv
-    with path.open(newline="", encoding="utf-8") as fh:
-        r = csv.reader(fh)
-        cols = next(r, [])
-        return cols, sum(1 for _ in r)
+def _item_head(path: pathlib.Path) -> tuple[list[str], int]:
+    """An item table's columns and row count, from the manifest `items.write_items` keeps
+    in the parquet's metadata."""
+    m = (sql.table_metadata(path) or {}).get("manifest") or {}
+    return list(m.get("columns") or []), int(m.get("row_count") or 0)
 
 
 def _figure_ids(path: pathlib.Path) -> list[str]:
@@ -159,12 +160,12 @@ def checks_block(run_dir: pathlib.Path, froms: dict[str, list[str]]) -> list[str
             out.append(f"Conclusion: {rec['conclusion']}")
         if rec.get("notes"):
             out.append(f"Notes: {rec['notes']}")
-        tables = sorted((run_dir / "checks").glob(f"{check}-*.csv"))
+        tables = sorted((run_dir / "checks").glob(f"{check}-*.parquet"))
         derived = sorted((run_dir / "tables" / check).glob("*.parquet"))
         if tables or derived:
             out.append("Tables (read in SQL by these names; `countz.columns` describes them):")
             for t in tables:
-                cols, n = _csv_head(t)
+                cols, n = _item_head(t)
                 out.append(f"- `{check}.{t.stem[len(check) + 1:]}` (item table): {n} rows; "
                            f"{', '.join(cols)}")
             out += [f"- `{check}.{t.stem}`" for t in derived]

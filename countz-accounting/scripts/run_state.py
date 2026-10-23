@@ -558,6 +558,12 @@ def _q(p) -> str:
     return shlex.quote(str(p))
 
 
+def relay_python() -> str:
+    """The interpreter a printed relay command runs a plugin script with: the plugin's own
+    environment, where polars is (handoff.py reads item tables with it)."""
+    return f"uv run --project {_q(PLUGIN_ROOT)} python3"
+
+
 def _plain(s: str) -> bool:
     """A string an argument line carries bare: it reads back as written."""
     return (s == s.strip() and not s.startswith('"') and s != "(none)"
@@ -1073,7 +1079,7 @@ def cmd_record(a) -> int:
               next_line(run_dir, line, run_dir / line["brief"] if briefed else None,
                         label="RETRY"))
     if retries:
-        print(f"THEN: python3 {_q(pathlib.Path(__file__).resolve())} record {_q(run_dir)}")
+        print(f"THEN: {relay_python()} {_q(pathlib.Path(__file__).resolve())} record {_q(run_dir)}")
     return 0
 
 
