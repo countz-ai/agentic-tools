@@ -124,11 +124,20 @@ def cache_block(run_dir: pathlib.Path, reads: list[str]) -> list[str]:
     out = ["### The parsed tables your params read", ""]
     if names:
         listed = ", ".join("'" + n + "'" for n in names)
-        out += ["Their columns, with type, description, unit and where each sits in the file:",
-                "", "    " + _sql_command(run_dir, "SELECT table_name, column_name, type, "
+        out += ["Each column's description, unit and place in the file:", "",
+                "    " + _sql_command(run_dir, "SELECT table_name, column_name, type, "
                 "description, unit FROM countz.columns WHERE table_name IN (" + listed
                 + ") ORDER BY table_name, ordinal"), ""]
-        out += [f"- `{n}`" for n in names]
+        for r in reads:
+            if r not in held:
+                continue
+            e = sql.cache.entry(run_dir, r)
+            ct = e.get("control_total") or {}
+            tot = f"; control total {ct['column']} = {ct.get('value')}" if ct.get("column") else ""
+            cols = ", ".join(f"{c['name']} ({c.get('dtype', '?')})" for c in e.get("columns", []))
+            out.append(f"- `room.{r}` — {e.get('grain', '')}. `{e.get('file', '')}`"
+                       f"{' sheet ' + str(e['sheet']) if e.get('sheet') else ''}; "
+                       f"{e.get('row_count', '?')} rows{tot}. Columns: {cols}")
     for r in reads:
         if r not in held:
             out.append(f"- `room.{r}` — not parsed (the cache holds "

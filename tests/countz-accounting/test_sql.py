@@ -162,11 +162,15 @@ def main() -> int:
                 or [c["at"] for c in sp["columns"]] != [c["name"] for c in sp["columns"]] \
                 or sp["header_at"] != evidence.ARTIFACT_HEADER:
             bad.append(f"an item-table span: {sp}")
-        import handoff  # noqa: PLC0415 - standard library only, as the relay runs it
+        import handoff  # noqa: PLC0415
         if handoff._item_head(rd / "checks" / "t0-pairs.parquet") != \
                 (["item_id", "side", "period", "amount", "unit"], 3):
             bad.append(f"handoff's item-table head: "
                        f"{handoff._item_head(rd / 'checks' / 't0-pairs.parquet')}")
+        # the brief lists a parsed table's columns inline, so a worker sees each one
+        cb = "\n".join(handoff.cache_block(rd, ["inv"]))
+        if "- `room.inv` — " not in cb or "Columns: id (" not in cb or "start (" not in cb:
+            bad.append(f"handoff's parsed-table block: {cb}")
 
         # figures and populations are rows
         L = Ledger(rd, "t1")
