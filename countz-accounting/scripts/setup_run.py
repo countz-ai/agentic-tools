@@ -31,7 +31,8 @@ refused — nothing but a mint creates a run directory.
 `--params` is the run-level parameters the relay collected, verbatim, as one JSON
 object (period end, declared options, materiality, ...). Stored at
 `run.json.inputs.params`; a later call merges keys in, and a changed value appends a
-`params_set` event.
+`params_set` event. Every call leaves `accounting_standard` set, to DEFAULT_STANDARD
+where the user named none.
 
 Every successful call also rewrites `<run_dir>/engagement-preview.md` — the collected
 parameters, each source's location, and a directory summary of every folder source
@@ -106,6 +107,7 @@ STAMP = "%Y%m%d-%H%M%S"       # the run directory's stamp: the minting machine's
 SKILLS_DIR = pathlib.Path(__file__).resolve().parent.parent / "skills"
 WALK_DEPTH = 3                # directory levels shown below each folder source's root
 WALK_DIR_CAP = 200            # directory rows per source; the cut is stated
+DEFAULT_STANDARD = "US GAAP"  # accounting_standard when the user names none
 
 
 
@@ -257,6 +259,9 @@ def parse_params(raw: str | None) -> dict | str:
         return f"--params is not JSON: {exc}"
     if not isinstance(obj, dict):
         return "--params must be a JSON object"
+    if "accounting_standard" in obj and not (isinstance(obj["accounting_standard"], str)
+                                             and obj["accounting_standard"].strip()):
+        return "--params accounting_standard must name a framework, e.g. \"US GAAP\" or \"IFRS\""
     return obj
 
 
@@ -666,6 +671,9 @@ def main() -> int:
         params = run.setdefault("inputs", {}).setdefault("params", {})
         params_changed = [k for k, v in incoming_params.items() if params.get(k) != v]
         params.update(incoming_params)
+        if not str(params.get("accounting_standard") or "").strip():
+            params["accounting_standard"] = DEFAULT_STANDARD
+            params_changed.append("accounting_standard")
         pinned = None
         if a.recipe is not None:
             pinned = pin_recipe(run_dir, run, a.recipe.resolve(), a.recipe_version)
@@ -751,7 +759,8 @@ def main() -> int:
                    "run_dir": str(run_dir),
                    "skill": a.skill,
                    "company": a.company,
-                   "params": incoming_params,
+                   "params": {"accounting_standard": DEFAULT_STANDARD,
+                              **incoming_params},
                    "sessions": []},
         "sources": [_entry(s) for s in incoming],
         "checks": [],

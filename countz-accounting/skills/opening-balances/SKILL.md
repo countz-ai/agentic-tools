@@ -27,16 +27,4 @@ You are the relay and overseer. You do no analysis and you open no client file. 
 `--skill` is `opening-balances`: the run directory is
 `<output_root>/opening-balances-<company>.<YYYYMMDD-HHMMSS>`.
 
-**Ask for what each prior period reported.** The run compares the ledger with every
-record the company handed a reader: the trial balances it delivered, the financial
-statements it issued with any accountant's report, and the tax returns as filed. Ask for
-them with the ledger, for the periods presented and the year before the earliest one, and
-in the same pass for the ledger's audit log, any system migration's mapping and cutover
-trial balances, the outside accountant's adjusting entries, the policy memos and
-management's list of known errors. Their absence degrades families; it does not stop the
-run.
-
-**Name the periods presented.** Ask which fiscal years the audit or the registration
-statement will present. When you present the plan, show each period boundary with the
-records as last reported for it, the basis each period's ledger shows, and the accounts
-routed to their owners.
+The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.

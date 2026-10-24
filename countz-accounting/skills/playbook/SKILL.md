@@ -32,9 +32,11 @@ shape; run `scripts/preview.py <run_dir>` and send what it prints per
 ## Interactive session
 
 1. Ask, in one message, for the data sources (short id each, and what each one is), the
-   company whose books they are, and an output folder. Register the workspace and the
+   company whose books they are, the accounting standard if the user names one, and an
+   output folder. Register the workspace and the
    sources with `scripts/setup_run.py` (`--skill playbook`, the company, `--goal checks`,
-   the sources as one-line JSON)
+   the sources as one-line JSON, `--params '{"accounting_standard": "<as named>"}'` if the
+   user named one)
    — mechanical, no dispatch, no client file read.
    More sources can join at any time: each batch is another run of the script.
 2. As the user asks for checks, register each with `scripts/run_state.py add-checks`,

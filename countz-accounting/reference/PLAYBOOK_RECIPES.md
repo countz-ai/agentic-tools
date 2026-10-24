@@ -151,13 +151,15 @@ Once the user has picked what to run (§ 1), ask the rest in one message:
   missing record costs. Do not press.
 - **The period end** covered, and **the period under review** in the user's words where
   they give one: a fiscal year, a quarter, the months of a close.
-- **Each option the recipe `declares`**: put its line to the user and record the choice.
+- **Each option the recipe `declares`**: put it to the user in plain words (what it
+  controls, its default, what changing it does) and record the choice.
   Where they do not choose, take the answer its line carries (`RUN_CONTRACT.md`
   § Parameters). `arr_policy` is the exception: it is a file, not a one-line choice. Ask
   whether the company has an approved ARR policy (`ARR_POLICY.md` § Where a policy
   lives). A policy in the library for this company (`arr_policy.py library`, its
   `MATCH:` line) is offered by name. The rest is
   settled after registration (§ 3).
+- **The accounting standard** (`accounting_standard`), if the user names one.
 - **The company** whose books the run is over, in the user's words. It names the run
   folder.
 - **Where the output goes**: a folder you may write into. Do not guess paths.
@@ -202,6 +204,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/setup_run.py \
     --goal <the recipe's name> --session ${CLAUDE_SESSION_ID} \
     --sources '[{"id": "gl", "path": "<abs>", "name": "<the user's words>"}, ...]' \
     --params '{"period_end": "<as collected>", "period": "<as collected, where given>",
+               "accounting_standard": "<if the user named one>",
                "instructions": "<the ask, verbatim>", "<declared key>": "<the choice>", ...}' \
     --recipe-result <the saved result> \
     --scope <the picks: row numbers, or all>

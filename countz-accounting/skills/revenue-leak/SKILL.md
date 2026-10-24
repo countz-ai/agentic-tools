@@ -28,28 +28,4 @@ You are the relay and overseer. You do no analysis and you open no client file; 
 `revenue-leak`: the run directory is
 `<output_root>/revenue-leak-<company>.<YYYYMMDD-HHMMSS>`.
 
-Four things this recipe needs from you that a plain relay pass would miss:
-
-**Ask for more than the review period.** The recipe's § The period set requires at least
-one full prior period of billing files, because receipts in the review period settle
-invoices issued before it. Say so when collecting, so the user gathers it in one pass rather than
-two.
-
-**Ask for the collections record as a source.** Anything stating why items are late, who
-owns the next action and what was promised — an activity log, a dispute log, promises to
-pay, an escalation list, the collections policy with its ladder. Say what it adds: a
-cause the record states stands as documented, where a cause drawn from behavior alone
-stands as indicative with the question that would settle it. Its absence changes no
-check; do not press for it.
-
-**Do not let the plan flatten R3's sequencing.** R3 settles what population the files
-describe, and every family from R4 on reads it (`params.scope_from`). If the drafted
-plan runs R3 in the same wave as a dependent, send it back: that check would ship
-asserting a scope its sibling was concurrently disproving, and the defect is invisible
-in the check records themselves — only the plan can prevent it.
-
-**Put the lines of inquiry in front of the user.** When you present the plan, show the
-R6 lines of inquiry the planner chose, the leak bucket each tests, the patterns it
-skipped with its reason, any list values it added, and each bucket no line or family
-measures with its `D.`. Send back a plan with a bucket that has neither a line nor a
-`D.`.
+The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.

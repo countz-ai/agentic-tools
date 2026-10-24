@@ -13,6 +13,8 @@ user-invocable: false
 
 # Review the checks
 
+The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.
+
 Arguments: `run_dir`, `seq`, `checks` (comma-joined check ids to review), and optionally
 `carry_from` (a prior review record whose findings on checks outside this list are
 carried forward). The `checks` list narrows the surface, not the standard — each named

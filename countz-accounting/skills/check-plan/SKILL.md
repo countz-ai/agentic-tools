@@ -13,6 +13,8 @@ user-invocable: false
 
 # Draft the plan
 
+The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.
+
 Arguments: `run_dir`, `seq`, `recipe` (absolute path to the playbook recipe, the run's
 pinned copy under `<run_dir>/recipes/`), `name` (kebab-case; names the drafted
 playbook), `objective` (the run's goal, verbatim), `instructions` (the user's ask in

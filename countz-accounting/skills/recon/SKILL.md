@@ -28,6 +28,7 @@ not reconciliation-specific behaves exactly as that skill describes.
 - **the goal** — optional, verbatim ("reconcile the operating account to the March
   statement").
 - **the company** — whose books these are, in the user's words. It names the run folder.
+- **the accounting standard** — if the user names one.
 - **where the output goes** — a folder you may write into.
 
 Do not guess paths. If the sources are two records of the same quantity that should
@@ -38,7 +39,8 @@ to the `tieout` skill.
 
 Register the workspace and sources with `scripts/setup_run.py` exactly as the `tieout`
 skill states it (`--skill recon`, the company, `--goal checks`, the sources as one-line
-JSON). The script mints `<output_root>/recon-<company>.<YYYYMMDD-HHMMSS>` and prints it
+JSON, and the accounting standard in `--params` if the user named one). The script
+mints `<output_root>/recon-<company>.<YYYYMMDD-HHMMSS>` and prints it
 as `RUN_DIR:` — that path is `<run_dir>` below; never compose it yourself. It creates,
 folds into an existing run named by its path, or refuses a path that is not one; it
 reads no client file; each check binds its own sources.

@@ -157,6 +157,22 @@ def test_brief_arguments(d: pathlib.Path, bad: list) -> None:
                  "check-tie", "k1", {key: "x"}, errors=(run_state.Refuse,))
 
 
+def test_accounting_standard(d: pathlib.Path, bad: list) -> None:
+    """Every brief states the run's accounting standard, US GAAP when none is held."""
+    run = _run(d, "std", step="plan", check=None, text="x")
+    if "we use is US GAAP;" not in run_state.render_brief(
+            run, 7, "plan", "check-plan", None, {}):
+        bad.append("a run holding no accounting_standard is not briefed US GAAP")
+    held = json.loads((run / "run.json").read_text(encoding="utf-8"))
+    held["inputs"] = {"params": {"accounting_standard": "IFRS"}}
+    (run / "run.json").write_text(json.dumps(held), encoding="utf-8")
+    text = run_state.render_brief(run, 7, "plan", "check-plan", None, {})
+    if "we use is IFRS;" not in text or "US GAAP" in text:
+        bad.append("the brief does not state the run's own accounting_standard")
+    if run_state.parse_brief_args(text) != {"run_dir": str(run), "seq": "7"}:
+        bad.append("the standard line leaks into the argument block")
+
+
 def test_check_ids(d: pathlib.Path, bad: list) -> None:
     """A check id is CHECK_ID; a check's files are named, never globbed by suffix."""
     run = _run(d, "ids", check="a5-bridge")
@@ -355,8 +371,9 @@ def main() -> int:
     bad: list[str] = []
     with tempfile.TemporaryDirectory() as td:
         d = pathlib.Path(td).resolve()
-        for t in (test_lifecycle, test_brief_arguments, test_check_ids, test_events,
-                  test_finish_inputs, test_paths, test_produced_mtime, test_fallback_ledger):
+        for t in (test_lifecycle, test_brief_arguments, test_accounting_standard,
+                  test_check_ids, test_events, test_finish_inputs, test_paths,
+                  test_produced_mtime, test_fallback_ledger):
             try:
                 t(d, bad)
             except Exception as exc:  # noqa: BLE001

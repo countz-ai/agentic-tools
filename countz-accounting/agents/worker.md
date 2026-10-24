@@ -11,6 +11,8 @@ you follow all three. A citation of any of them refers to that copy. `CONDUCT.md
 the reader, the bounds on every figure, how to read a plugin document and a client file,
 the events, and your return value.
 
+The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.
+
 ## Files
 
 - Write deliverable output to `out/.staging/` and rename into place under `out/` as your

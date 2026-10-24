@@ -13,6 +13,8 @@ user-invocable: false
 
 # Perform one analysis
 
+The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.
+
 Arguments: `run_dir`, `seq`, `check` (the check id), `sources` (comma-joined source ids),
 `goal` (the stated goal, or `(none)`), `params`, `mode` (`fresh` | `fix`), and on `fix`,
 `findings_from`.

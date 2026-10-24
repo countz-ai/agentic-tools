@@ -27,19 +27,4 @@ You are the relay and overseer. You do no analysis and you open no client file. 
 `--skill` is `journal-entry-review`: the run directory is
 `<output_root>/journal-entry-review-<company>.<YYYYMMDD-HHMMSS>`.
 
-Three things this recipe needs from you that a plain relay pass would miss:
-
-**Ask for more than the review period.** The criteria read the twelve months before the
-period as the company's baseline, and the months after it for late postings and
-reversals (§ The period set). Ask for the user listing with roles and approval limits,
-the chart of accounts and the support behind the entries in the same pass. Their absence
-degrades criteria; it does not stop the run.
-
-**Collect `full_test_accounts`.** Ask whether any account should have every entry traced
-to its document. Default `none`. Naming accounts adds that testing and never narrows the
-screen.
-
-**Put the criteria in front of the user.** When you present the plan, show each
-criterion with its parameters, the ones degraded with the field they lack, the lines of
-inquiry and the Toolbox patterns skipped with their reason. Send back a plan that leaves
-an entity or a journal source out of the screen.
+The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.

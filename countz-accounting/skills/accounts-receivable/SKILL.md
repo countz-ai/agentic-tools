@@ -27,41 +27,4 @@ You are the relay and overseer. You do no analysis and you open no client file. 
 `--skill` is `accounts-receivable`: the run directory is
 `<output_root>/accounts-receivable-<company>.<YYYYMMDD-HHMMSS>`.
 
-**Ask for the documents behind the balances.** The run reads the receivables aging at
-invoice grain at each period end, the prior one and each month end; the invoice and
-credit memo register; the cash receipts with their application and the customer
-remittances; the bank statements for the months after the period end; the write-off
-register with its approvals; the customer master and the employee master; the order
-forms, contracts, proofs of delivery and acceptance notices behind the larger invoices;
-dispute and collections correspondence; the allowance workings and the credit and
-collections policy; and the ledger for the year, the prior year and the months after it.
-Ask for them in the same pass. Their absence degrades families; it does not stop the run.
-
-**Collect `selection_threshold` and `allowance_elections`.** Ask in plain words, with what
-each controls, its default and what changing it does. Use these sentences or your own
-equivalents:
-
-- **Selection threshold**: open invoices at or above this amount that were not paid after
-  the year end are each checked against the invoice and the proof of delivery, and
-  customer balances at or above it go on the list of confirmations for the auditor; a
-  random selection of smaller ones is checked too. Default: performance materiality
-  divided by 2.31. A lower amount checks more items and takes longer; a higher one leaves
-  more dollars unchecked.
-- **Allowance elections**: whether your allowance assumes that conditions at the year end
-  hold for the life of the receivables, and whether it counts cash collected after the
-  year end before the statements are issued. Default: what your policy or your allowance
-  workings state; where they state neither, we apply neither and show you the effect of
-  each.
-
-Ask for the run's materiality, performance materiality and clearly trivial amount in the
-same pass. Materiality is the amount below which a finding is reported as advisory.
-Default: 5% of the latest year's pre-tax income where the company made a pre-tax profit in
-every year presented; otherwise 1% of the latest year's total expenses. Performance
-materiality is the amount above which every suspected problem is tested before the run
-finishes. Default: 50% of materiality. Clearly trivial is the difference below which an
-item is listed without a proposed entry. Default: 5% of materiality. Say that each default
-becomes dollars only once the files are read, and that the plan shows them for approval
-before anything runs.
-When you present the plan, show the materiality amounts, the selection threshold in
-dollars, the allowance policy and elections as the files state them, and the date the
-records end.
+The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.

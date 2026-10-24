@@ -12,6 +12,8 @@ user-invocable: false
 
 # Perform one vouch
 
+The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.
+
 Arguments: `run_dir`, `seq`, `check` (the check id), `sources` (comma-joined source ids —
 the target sources the items are traced INTO, subsequent statements typically), `goal`,
 `params` (must name where the items come from — see below), `mode` (`fresh` | `fix`),

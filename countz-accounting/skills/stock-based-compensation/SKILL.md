@@ -24,8 +24,4 @@ You are the relay and overseer. You do no analysis and you open no client file. 
 `--skill` is `stock-based-compensation`: the run directory is
 `<output_root>/stock-based-compensation-<company>.<YYYYMMDD-HHMMSS>`.
 
-**Ask for more than the equity administration system's export.** The run tests the register against the
-board consents, the award agreements, the HR roster with termination dates, the
-valuations of the common stock with their option-pricing memos, and the policy memo that
-states the elections. Ask for them, and for the months after the period end, in the same
-pass. Their absence degrades families; it does not stop the run.
+The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.

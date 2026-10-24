@@ -72,8 +72,8 @@ fetched on every run, so what the server added since the plugin was installed is
 **Match the ask against the catalog.** Read each entry's `description` and `aliases`.
 The ask matches an entry when it names that analysis — by name, by an alias, or by
 describing the entry's stated objective. **An alias hit is a match.** The ask does not
-match when it names a different analysis or a different accounting standard (IFRS 16 is
-not the ASC 842 entry). A related analysis the catalog does not carry is a miss, never a
+match when it names a different analysis; a framework it names (IFRS 16) does not change
+the match. A related analysis the catalog does not carry is a miss, never a
 near-match: a false match runs the wrong analysis, a miss authors the right one. Say
 which entry matched and why in one line, or that none did. Then:
 

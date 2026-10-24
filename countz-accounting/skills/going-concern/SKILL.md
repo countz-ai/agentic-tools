@@ -26,40 +26,4 @@ You are the relay and overseer. You do no analysis and you open no client file. 
 `--skill` is `going-concern`: the run directory is
 `<output_root>/going-concern-<company>.<YYYYMMDD-HHMMSS>`.
 
-**Ask for the forecast and the records behind it.** The run reads the cash flow forecast
-with its assumptions, every earlier forecast and budget, the bank statements for the year
-and every month after the period end, the trial balances and GL detail, the loan
-agreements with their amendments, waivers and lender notices, the leases and contracts with
-minimum commitments, the convertible notes, SAFEs, warrant and preferred stock terms, the
-payables aging and payment register, the payroll register and payroll tax filings, board
-minutes and investor decks, and the documents behind each plan (term sheets, purchase
-agreements, commitment or support letters, approvals, reduction-in-force lists). Ask for
-them in the same pass. Their absence degrades families; it does not stop the run.
-
-**Collect `issuance_date`.** Ask in plain words, with what it controls, its default and
-what changing it does. Use this sentence or your own equivalent:
-
-- **Issuance date**: the date your audited statements are expected to be issued or ready
-  to be issued. The run tests your liquidity over the twelve months after it. Default: the
-  last date your records cover. A later date moves the end of the twelve months later and
-  brings more obligations into it.
-
-Offer two more options with their defaults; change them only when the user asks:
-
-- **Look-forward basis**: default `asc_205_40`, the twelve months after the issuance date,
-  the period GAAP requires management to evaluate. `as_2415` measures the twelve months
-  after the period end, the period a public company's auditor evaluates.
-- **Forecast extension**: where your forecast ends before the twelve months do, the run
-  extends it at your recent monthly burn. Default: the last three forecast months, with
-  one-off items such as an annual true-up removed and named. Alternatives: the last three
-  months with nothing removed, or the last six months with one-off items removed.
-
-Ask for the run's materiality and performance materiality in the same pass. Materiality is
-the amount below which a finding is reported as advisory. Default: 5% of the latest year's
-pre-tax income where the company made a pre-tax profit in every year presented; otherwise
-1% of the latest year's total expenses. Performance materiality is the amount above which
-every suspected problem is tested before the run finishes. Default: 50% of materiality.
-Say that each default becomes dollars only once the files are read.
-When you present the plan, show the materiality and the performance materiality in
-dollars, the assessment date and the end of the twelve months after it, the date the
-records end, the forecast extension with each one-off item it removes, the forecast the run treats as the base case, and every plan it registers.
+The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.

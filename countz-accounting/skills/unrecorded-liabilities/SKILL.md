@@ -26,37 +26,4 @@ You are the relay and overseer. You do no analysis and you open no client file. 
 `--skill` is `unrecorded-liabilities`: the run directory is
 `<output_root>/unrecorded-liabilities-<company>.<YYYYMMDD-HHMMSS>`.
 
-**Ask for the months after the period end.** The search reads the bank statements, the
-payment registers and the invoices received after the period end, the card statements,
-the received-not-invoiced report, vendor statements, the accrual schedule with its
-workings, the prior period end's accrual schedule, contracts, legal invoices and board
-minutes. Ask for them in the same pass. Their absence degrades families; it does not stop
-the run.
-
-**Collect `search_window`, `search_threshold` and `stale_accrual_days`.** Ask in plain
-words, one option at a time, each with what it controls, its default and what changing it
-does. Use these sentences or your own equivalent:
-
-- **Search window**: how long after year end we look at payments and incoming invoices
-  for bills that belong to the year. Default: 60 days, or longer if the company usually
-  takes longer than that to pay its bills. A longer window finds bills paid late and
-  takes longer to run; a shorter one misses them.
-- **Tracing threshold**: payments and invoices at or above this amount are each traced
-  to the bill behind them; a sample of smaller ones, weighted by amount, is traced too.
-  Default: performance materiality divided by 3. A lower amount traces more items and
-  takes longer; a higher one leaves more dollars untraced.
-- **Stale accrual age**: an accrual with no invoice, payment or true-up behind it after
-  this many days is tested as possibly no longer owed. Default: 90 days; an accrual
-  carried unsettled from one year end to the next is tested at any age. A shorter age
-  flags more accruals.
-
-Ask for the run's materiality and performance materiality in the same pass. Materiality is
-the amount below which a finding is reported as advisory. Default: 5% of the latest year's
-pre-tax income where the company made a pre-tax profit in every year presented; otherwise
-1% of the latest year's total expenses. Performance materiality caps the tracing
-threshold, and every suspected problem above it is tested before the run finishes.
-Default: 50% of materiality. Say that the defaults become days and dollars only once the
-files are read, and that the plan shows them for approval before anything runs. When you
-present the plan, show the materiality and the performance materiality in dollars, the
-payment cycle measured, the window's days and end date, the threshold in dollars, the
-cutoff window and every channel the search reaches or cannot reach.
+The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.

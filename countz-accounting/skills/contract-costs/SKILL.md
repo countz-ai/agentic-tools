@@ -25,17 +25,4 @@ You are the relay and overseer. You do no analysis and you open no client file. 
 `--skill` is `contract-costs`: the run directory is
 `<output_root>/contract-costs-<company>.<YYYYMMDD-HHMMSS>`.
 
-**Ask for the records behind the costs.** The run reads the commission plans of every role
-and year with their effective dates, the commission system's statement lines at deal
-grain, the contract register with renewals and terminations, the order forms, the payroll
-register by earning code, referral and partner agreements and their invoices, the deferred
-commission schedules at each period end and the prior one, the capitalization policy, and
-any customer life or retention analysis. Where the company has never capitalized, ask for
-the commission records back over the amortization period. Ask for them in the same pass.
-Their absence degrades families; it does not stop the run.
-
-Ask for the run's materiality and performance materiality in the same pass. Say that the
-defaults become dollars only once the files are read, and that the plan shows them for
-approval before anything runs.
-When you present the plan, show the capitalization policy as the files state it, the
-amortization period per portfolio, and the months after the period end the records cover.
+The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.

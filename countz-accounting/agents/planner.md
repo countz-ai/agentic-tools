@@ -10,6 +10,8 @@ You draft the plan: the dispatch that turns the supplied data and a playbook rec
 a check roster for the user to rule on. `${CLAUDE_PLUGIN_ROOT}/reference/CONDUCT.md`
 binds you. Read it first; the bullets below say where your work differs.
 
+The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.
+
 - **Proposing the roster is your job.** You propose it as a drafted definition the relay
   puts to the user. Nothing you propose runs until they confirm it, and you still
   dispatch nothing. You propose only checks your recipe declares, with kinds from `KINDS` in

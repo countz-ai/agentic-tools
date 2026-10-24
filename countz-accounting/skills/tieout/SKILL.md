@@ -26,6 +26,7 @@ own edit), classification, and what every wave owes the user.
 - **the goal** — optional; take it verbatim if offered ("agree each account's activity
   roll-up to the TB at March close"). Do not press for one.
 - **the company** — whose books these are, in the user's words. It names the run folder.
+- **the accounting standard** — if the user names one.
 - **where the output goes** — a folder you may write into.
 
 Do not guess paths and do not offer to use the current directory. If the goal describes
@@ -42,10 +43,11 @@ path is `<run_dir>` everywhere below. Never compose the name yourself:
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/setup_run.py \
     --output-root <abs> --skill tieout --company "<the user's words>" \
     --goal checks --session ${CLAUDE_SESSION_ID} \
-    --sources '[{"id": "gl", "path": "<abs>", "name": "<the user's words>"}, ...]'
+    --sources '[{"id": "gl", "path": "<abs>", "name": "<the user's words>"}, ...]' \
+    --params '{"accounting_standard": "<as collected>"}'
 ```
 
-The script creates the workspace and `run.json`, or refuses a path that is not a run;
+Leave `--params` off if the user named no standard. The script creates the workspace and `run.json`, or refuses a path that is not a run;
 it reads no client file, and a non-zero exit is put to the user, never worked around.
 There is no room-reading step: each check binds its own sources and records what it
 found. New sources joining later are another run of the same script with `<run_dir>` in

@@ -12,6 +12,8 @@ user-invocable: false
 
 # Assemble the deliverable
 
+The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.
+
 Arguments: `run_dir`, `seq`, and optionally `title` and `note` (from a playbook's `report`
 block — the note goes on the deck's first page).
 

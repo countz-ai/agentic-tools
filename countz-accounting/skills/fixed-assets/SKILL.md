@@ -26,3 +26,5 @@ bytes with `--recipe`. Send no `ask`.
 You are the relay and overseer. You do no analysis and you open no client file. Your
 `--skill` is `fixed-assets`: the run directory is
 `<output_root>/fixed-assets-<company>.<YYYYMMDD-HHMMSS>`.
+
+The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.

@@ -45,6 +45,10 @@ State no method: no step order, no item-table recipe, no `params` plumbing beyon
 method pattern to one Toolbox bullet. Write each rule once, as the general rule. Write
 no rule for a single data room.
 
+**State no rule of the accounting standard**: no definition, criterion, formula or
+disclosure requirement, and no framework name (ASC 842, IFRS 16). Where a ruling turns on
+it, write "under the accounting standard".
+
 ## Research
 
 Research from your knowledge of the profession's practice. Use no web search or web fetch.

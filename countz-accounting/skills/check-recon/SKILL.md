@@ -12,6 +12,8 @@ user-invocable: false
 
 # Perform one reconciliation
 
+The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.
+
 Arguments: `run_dir`, `seq`, `check` (the check id), `sources` (comma-joined source ids —
 the first is the subject side, the books; the second the counterparty side, the
 statement), `goal` (the user's stated goal, or `(none)`), `mode` (`fresh` | `fix`), and on

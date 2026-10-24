@@ -13,6 +13,8 @@ user-invocable: false
 
 # Perform one cutoff check
 
+The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.
+
 Arguments: `run_dir`, `seq`, `check` (the check id), `sources` (comma-joined source ids —
 the books side first, the evidence side second), `goal`, `params` (the period end and the
 window — see below; `items_from` where in-transit items come from a reconciliation),

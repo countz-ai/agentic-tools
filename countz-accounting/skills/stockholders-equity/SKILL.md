@@ -26,8 +26,4 @@ You are the relay and overseer. You do no analysis and you open no client file. 
 `--skill` is `stockholders-equity`: the run directory is
 `<output_root>/stockholders-equity-<company>.<YYYYMMDD-HHMMSS>`.
 
-**Ask for the legal record with the books.** The run supports share counts with the stock
-ledger, the charter and every amendment, the board and stockholder consents, and the
-signed SAFEs, notes, warrants, purchase agreements and side letters. Ask for them, and
-for the valuation reports and the months after the period end, in the same pass. Their
-absence degrades families; it does not stop the run.
+The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.
