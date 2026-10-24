@@ -473,8 +473,7 @@ user.
 `scripts/sync_run.py` moves the run directory whole, never a subset: the run's own code
 and scripts, `dispatch/`, `events.jsonl`, `steps/*.json`, `out/usage.json`, and a
 gathered `debug/`. Excluded: `__pycache__/`, `*.pyc`, `*.tmp`, `.DS_Store`, and the
-archive itself. The sync lands the run on the user's own machine and nowhere else; no run
-artifact goes to a server (`OBSERVABILITY.md` § 4).
+archive itself. The sync lands the run on the user's own machine and nowhere else.
 
 Every mode lands the run under one folder `<short_name>.<datetime>`. The short name
 defaults to the run directory's own `<skill>-<company>`; set `--name` to the user's own

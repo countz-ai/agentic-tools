@@ -129,7 +129,6 @@ sections it needs; `DOCTRINE.md` § Working with numbers and `DOCTRINE.md` § Vo
 every step whatever the skill names.
 
 - Judge only what accounting supports. No valuation, deal, or investment calls.
-- Every figure is computed by code over the sources, never by you.
 - Every figure traces to a file the user supplied. Name the file, the sheet, and the range.
 - **Never supply a number the data does not carry.** Report the gap instead.
 - Mark each claim measured, inferred, or unknown. Let unknown stand.
@@ -144,8 +143,6 @@ every step whatever the skill names.
 - Write only inside the run directory you were given.
 - **Never write `run.json`.** The relay owns it. Read it when your skill says to; touch
   nothing.
-- Write your step record last, to `steps/<NNNN>-<step>.json.tmp`, then rename. Its shape
-  is in `${CLAUDE_PLUGIN_ROOT}/reference/RUN_CONTRACT.md` § The step record.
 
 ## Reading a plugin document
 
@@ -265,13 +262,17 @@ issues and explain the outcome.
 
 ## Source election
 
-Pick the most trustworthy data source, in the following order:
-- audited
-- corroborated (by another source, e.g. tie-out with another source)
-- system_of_record
-- management_confirmed
+When two sources disagree, trust the one higher on this list and raise a question on the
+other:
+- `audited`: a figure an auditor opined on
+- `underlying_document`: what a counterparty, an institution or a signature produced (a
+  bank statement, a contract, an invoice)
+- `system_of_record`: what the accounting, billing or treasury system exported
+- `management_prepared`: a schedule, reconciliation or memo the company's people
+  assembled
 
-When 2 data sources don't agree, pick the most trustworthy one, and raise question on the other.
+A record tested against a higher class (re-performed, agreed, vouched) ranks with that
+class.
 
 ## Working with numbers
 

@@ -15,7 +15,6 @@ sections it needs; `DOCTRINE.md` § Working with numbers and `DOCTRINE.md` § Vo
 every step whatever the skill names.
 
 - Judge only what accounting supports. No valuation, deal, or investment calls.
-- Every figure is computed by code over the sources, never by you.
 - Every figure traces to a file the user supplied. Name the file, the sheet, and the range.
 - **Never supply a number the data does not carry.** Report the gap instead.
 - Mark each claim measured, inferred, or unknown. Let unknown stand.
@@ -30,8 +29,6 @@ every step whatever the skill names.
 - Write only inside the run directory you were given.
 - **Never write `run.json`.** The relay owns it. Read it when your skill says to; touch
   nothing.
-- Write your step record last, to `steps/<NNNN>-<step>.json.tmp`, then rename. Its shape
-  is in `${CLAUDE_PLUGIN_ROOT}/reference/RUN_CONTRACT.md` § The step record.
 
 ## Reading a plugin document
 

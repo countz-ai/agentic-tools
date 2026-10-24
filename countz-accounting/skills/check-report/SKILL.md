@@ -146,35 +146,10 @@ Every sentence the plan and the pages carry — a `title`, `message`, `text`, `b
 Read `${CLAUDE_PLUGIN_ROOT}/reference/REPORT.md` § 3 for the words and § 4 for the
 numbers before writing pages; no other check reads either. Rules a finished deck got wrong:
 
-- Write to the company's own executives and operators unless the run declares a
-  transaction reader.
-- State the basis only where the user chose it, and in the reader's words: *as instructed*,
-  not *as the user declared*. Say nothing about a parameter the recipe set by default. Write
-  *this report*, not *this run*, and a category, not a *bucket*. Retitle a copied table with
-  `title:` where its own title carries one of these.
-- Call a measure what the workbook calls it: *best-possible days sales outstanding*, not
-  *the floor*.
-- Cut a line whose point is its phrasing; state the finding instead.
-- Name the population a share is of.
 - Write figures in US form, as `scripts/style.py` does: `$50.5M`, `$81K`, `$1.2B`, `57.8 days`,
   `September 30, 2025` — in the book's currency where it is not dollars (`€50.5M`), never a
   scaled number without one — and declare `scale: thousands` on a schedule of money; the
   builder states the scale once, in the table's title, so leave it out of the title you write.
-- Define an object where it first appears — the record it comes from, how many there are,
-  what they are called, the amount behind it — and carry that name on every page after.
-- Build the page on what is open from the Open Items tab: each item with its size, the
-  function that answers it, and what the answer decides.
-- Put on the `Executive summary` page every matter the recipe's `## Exec summary` names
-  beside the headline, and every open question or pattern whose amount is material to
-  the answer — a balance the ledger does not carry, an integrity pattern, a receipt with
-  no deposit — each with its amount. A late page may explain it; it may not be the only
-  place it appears.
-- Gloss the status words a table shows in a `note` under it; name counterparties as the
-  tab names them; lead an actions page with the actions carrying most of the cash
-  (REPORT.md § 3).
-- A table appears once. A narrative page that needs a schedule's figure references the
-  cell or states it in a stat tile; it does not copy the rows a schedule page already
-  shows.
 - Headline a total by what it rests on. Where most of an amount rests on causes inferred
   from behavior, the opening states the documented part first and the rest as subject to
   management's confirmation — never one "supported" figure.
@@ -182,56 +157,15 @@ numbers before writing pages; no other check reads either. Rules a finished deck
   undermines a trend, is stated on the page that shows the figure it limits, and on the
   Executive summary where it limits the answer. A trend the run could not rely on is not
   a finding.
-- One basis per measure. Where the workbook carries a measure on two bases (past due
-  gross and net of unapplied cash), the deck uses one and shows the walk to the other
-  once.
 - State each limitation once — on the page it limits, or on one limitations page — never
   again on each page it touches.
-- Size the headline: beside it, materiality and the figure it changes as reported, and
-  the corrected figure stated as their sum, computed with `{= [ref] + [ref] | $}` (REPORT.md
-  § 2, References) — never left to the reader to add. Split it by nature from the walk's cause
-  subtotals — between lines or periods, non-cash, misstatement — and never add amounts of
-  unlike kinds into one figure (REPORT.md § 1).
-- Amounts on one page add, or the page says which contains which; a list of pattern
-  amounts states, on that page, what is not already inside the headline. Pending
-  adjustments are gross, never netted.
-- An integrity pattern goes on `Matters for your attention`, in plain words of what it may
-  indicate, only where a record ties it to the person or the money; a resemblance alone (a
-  shared surname, a similar name) or a pattern the workbook rules benign is an open question
-  instead (REPORT.md § 1). On every page, a matter about a role's own entries, approvals, pay or dealings
-  is answered to the audit committee or the board; the role concerned supplies records.
-- A narrative list shows at most eight items, ranked by the amount each can move in the
-  reported figures, never by the Open Items tab's `Size`, and states the count of the rest
-  with the tab that lists them.
 - A walk charted as a waterfall carries `labels:` in plain words for its causes.
-- None of the run's working words on a slide: *minted*, *recipe*, *skill*, *rule 5*, a
-  step token, *this run* (REPORT.md § 3 Run vocabulary).
-- None of the working-paper terms in what you write on a slide (*walk*, *as supported*,
-  *candidate*, *boundary*, *ruled*, *routed*): say what happened to each item in the terms
-  practitioners of this area use, name the schedule what the area calls it, and write
-  *adjusted* for as supported (REPORT.md § 3 Working-paper terms).
-  No page states the count of expectations or patterns tested, the files read,
-  performance materiality or a testing threshold; state a limit as the amount left
-  untested and what it could change.
-- The `Executive summary` message states the headline figure, sized, and nothing else;
-  never join an integrity matter to it. The integrity matters follow directly under it,
-  each on its own line with its amount; then a covenant, liquidity or going-concern
-  consequence; then the balance arithmetic. State the consequence the workbook
-  establishes as a fact (REPORT.md § 1, The order and What it means).
-- The scope page states the date the records run to, referenced, and that events after it
-  were not examined.
 
 Before building, read `report.yaml` back as its reader, page by page, against the
 workbook: a measure stated on two pages is one figure; every list said to make a total
 adds to it; every *raise* or *lower* agrees with the tab's sign convention; every count in
 a headline equals the items under it; every ratio set against its threshold shows which
 side it falls (REPORT.md § 3, One figure, one meaning). Fix what does not hold, then build.
-
-After building, read the built deck's text back slide by slide (`REPORT.md` § 1, rule 4):
-list every item, count and total that appears on more than one page with the figure each
-page states. One item carries one figure from one cell everywhere, and an appendix total
-that differs from the headline is reconciled on its page. Fix `report.yaml` and rebuild
-until the list has no conflict.
 
 Then build:
 
