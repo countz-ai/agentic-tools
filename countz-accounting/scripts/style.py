@@ -246,7 +246,9 @@ def span_label(first: tuple[int, int], last: tuple[int, int]) -> str:
 
 
 # --- reading back: the token grammar the gates use ------------------------------------
-NUM = r"\d[\d,]*(?:\.\d+)?"
+# A number ends in a digit: the comma after `C10007` or `2025` in `C10007, days` is the
+# sentence's, not a thousands separator.
+NUM = r"\d(?:[\d,]*\d)?(?:\.\d+)?"
 # Read, never written: another way a currency's symbol is spelled.
 _ALIASES = {"US$": "usd"}
 _SYMBOLS = sorted({c.symbol for c in CURRENCIES.values() if c.symbol} | set(_ALIASES),

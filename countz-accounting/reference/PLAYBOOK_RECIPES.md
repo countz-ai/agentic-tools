@@ -53,9 +53,20 @@ never evidence that its own conclusion holds.
 `supported`: record evidence at the standing the ruling claims. A `supported` ruling
 whose evidence carries a lower standing is a `blocking` finding (VALIDATION.md § Severity).
 `candidate`: the evidence points one way and the data room lacks the document that
-settles it; carries the condition that would move it. `rejected`: examined and refused,
-with the test it failed. `modified`: a proposed figure and the run's, side by side. A
-recipe uses the subset it needs and says which.
+settles it; carries the condition that would move it. A document in the data room that
+settles the item rules it `supported` or `rejected`; a document that might exist and
+overturn it is not a condition. `rejected`: examined and refused, with the test it
+failed. `modified`: a proposed figure and the run's, side by side. A recipe uses the
+subset it needs and says which.
+
+### Hypotheses
+
+Fix each test and its threshold before reading its result. Record a pattern a check sees
+and does not test as a proposed hypothesis, with its size and the check best placed to
+test it; never hand it to another check in a sentence. Before the run seals, test every
+proposed hypothesis above the recipe's declared `performance_materiality` (its
+`materiality` where it declares none), and every one promoted under DOCTRINE.md
+§ Materiality. For one the data room cannot test, raise the `D.` that would.
 
 ### The subtraction runs before the verdict is chosen
 

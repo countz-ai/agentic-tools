@@ -51,7 +51,9 @@ figure in `workpapers/figures-<check>.yaml`, populations stated with exclusions 
 Item-grain work lands as `checks/<check>-<table>.parquet` tables with their manifest blocks
 per EVIDENCE.md § 5. No size threshold narrows the computation: every member of the
 stated population enters the schedules at full precision, whatever its amount
-(DOCTRINE.md § Materiality).
+(DOCTRINE.md § Materiality). Take every period window from `scripts/periods.py`
+(DOCTRINE.md § Periods), including a trailing window beside a snapshot column
+(`p.trailing(3)`); never bound one with date arithmetic on the snapshot date.
 
 ## 3. Rule
 

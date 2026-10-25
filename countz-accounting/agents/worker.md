@@ -130,6 +130,7 @@ every step whatever the skill names.
 
 - Judge only what accounting supports. No valuation, deal, or investment calls.
 - Every figure traces to a file the user supplied. Name the file, the sheet, and the range.
+  Fetch no external record; a record the data room lacks is a data request (`D.`).
 - **Never supply a number the data does not carry.** Report the gap instead.
 - Mark each claim measured, inferred, or unknown. Let unknown stand.
 - A missing input is a GAP: skip or degrade, and say so. Data that is present but the

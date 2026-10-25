@@ -205,8 +205,15 @@ tabs in the footer, every title a headline and every sentence complete, no worki
 term in what you wrote, the structure the recipe declares, and no table showing two rows that read alike — a copied tab's twin rows
 are the owning check's to name apart. **A non-zero exit is a stop — the deliverable does not
 seal (§ 6).** On a surface YOU wrote — a run-level tab, `report.yaml` — fix it and
-re-gate. On a copied tab you may not repair it: name the cell or the id,
-name the check that wrote it, and end the step `blocked` so the run re-runs that check. A
+re-gate. On a copied tab or a ledger tab, fix a defect of wording alone yourself: the words
+of a label, a heading, a sentence or a constant's basis, where every number, id, status
+and row stays as the check wrote it. Write each change to `out/.staging/wording.yaml` and
+run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/reword.py <run_dir> <run_dir>/out/.staging/wording.yaml`
+(its docstring gives the entry shape), then rebuild the deck and re-gate. Example: `check_prose.py`
+reads `Customer C10007, days beyond terms` as a typed day count; reword `, days` to
+`: days` on the tab. Any other defect on a copied tab — a figure, a population, a status
+or verdict, an id, a tab name, a row — you may not repair: name the cell or the id, name
+the check that wrote it, and end the step `blocked` so the run re-runs that check. A
 dead-end ledger id is the owning check's record to write even when the citation sits on
 the Sources, Tables or Evidence tab — those tabs are written from the run's records, so
 an id no record declares cannot be repaired here either. Also
@@ -228,8 +235,9 @@ answer, the Exec Summary and the deck say so.
 ## 5. The run summary — `out/RUN_SUMMARY.md`
 
 For the user, not the reader: the roster with statuses, findings that did not close
-(`fix_attempted`, withheld figures) and what would close each, data gaps, and how the run
-ended. Then paste, unedited, under `## What this run took`, the rendering of:
+(`fix_attempted`, withheld figures) and what would close each, data gaps, every wording
+change `reword.py` made (`out/wording.json`: tab, cell count, old, new, why), and how the
+run ended. Then paste, unedited, under `## What this run took`, the rendering of:
 
 ```
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/usage_report.py <run_dir>

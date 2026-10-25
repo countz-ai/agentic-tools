@@ -37,6 +37,9 @@ def main() -> int:
             ("Share is 17.4%; -17.4% is too.", 0),
             ("Share is 18.4%.", 1),
             ("Aging buckets 31-60 days and 90+ days.", 0),
+            # an id or a year before `, days` is not a day count (revenue_leak, 2026-10-24:
+            # 168 Sources labels like these blocked the seal)
+            ("Customer C10007, days beyond terms; June 30, 2025, days of DSO.", 0),
         ]
         # counts, with counts=True: a figure's value backs it, a typed one does not
         counts = [
