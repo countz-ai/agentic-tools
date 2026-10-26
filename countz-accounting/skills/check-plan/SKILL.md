@@ -299,6 +299,7 @@ outside `after`, and a `reads` id the extract step does not parse.
   that), how many steps each family runs as and which entities each covers — with, where
   a family runs as more than one, the measured fact that split it — the extraction
   (how many tables the extract step parses, and the waves the derived order gives), the
+  estimated spend under `## Estimated spend` (below), the
   declared options as recorded, and every proposed parameter awaiting their
   confirmation, windows first. State each declared option with its source — the user's
   words, or the recipe's default — and without a rationale you supplied for them. Example
@@ -319,6 +320,17 @@ outside `after`, and a `reads` id the extract step does not parse.
 
   A non-zero exit is yours to fix before you write your record; if you cannot, return
   the error and delete the file.
+- The spend estimate, once the definition validates:
+
+  ```
+  python3 ${CLAUDE_PLUGIN_ROOT}/scripts/spend_model.py estimate <run_dir> <run_dir>/plan/<name>.json
+  ```
+
+  It writes `plan/spend-estimate.json` and prints a table per family with the report,
+  the expected re-runs and the run total, then the elapsed time. Copy the table and its
+  notes into `plan.md` as printed; do not round, re-derive or comment on the figures. On
+  a non-zero exit, write the error under the heading in place of the table; the plan
+  goes to the user without an estimate.
 - The profiles' ledgers, gated where they are minted — you write
   `workpapers/evidence-profile-<source>.yaml` and no tab, so this is your gate for
   them:
@@ -331,7 +343,7 @@ outside `after`, and a `reads` id the extract step does not parse.
   (EVIDENCE.md § 0). A non-zero exit is yours to fix before you write your record:
   left standing, the first check's own gate reads every ledger and fails on yours.
 - `steps/<NNNN>-plan.json` per `RUN_CONTRACT.md` — `produced` naming the two plan files,
-  `file_index.json`, the profiles and the entities fragments; `consumed` every client
+  `plan/spend-estimate.json`, `file_index.json`, the profiles and the entities fragments; `consumed` every client
   file you opened, with its mtime. `conclusion` is two sentences: what the data room holds
   and what was set aside, then how many steps over how many entities and which families
   were dropped or degraded.
@@ -339,5 +351,5 @@ outside `after`, and a `reads` id the extract step does not parse.
 ## Return
 
 At most ten lines: the two plan paths, files indexed / set aside as counts, the step
-count by family, the entities covered, and each dropped or degraded family with its
-reason. The relay puts the plan to the user; nothing runs until they have seen it.
+count by family, the entities covered, each dropped or degraded family with its
+reason, and the estimate's run cost and elapsed time with their ranges. The relay puts the plan to the user; nothing runs until they have seen it.

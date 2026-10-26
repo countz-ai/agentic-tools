@@ -126,17 +126,19 @@ no file written, no folder made, no other question asked.
    request and without it on a broad one. For a bundled copy, pass its path:
    `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/recipe_scope.py ask <the RECIPE path>`. For a
    served body, pipe in only its family headers, the lines that open `### ` under
-   `## The families`, copied exactly:
+   `## The families`, copied exactly, and pass `--recipe <its name>` so the estimates
+   come from that recipe's earlier runs:
 
    ```
-   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/recipe_scope.py ask --suggest c4,c5 <<'EOF'
+   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/recipe_scope.py ask --recipe cash-substantiation --suggest c4,c5 <<'EOF'
    ### C0 — the population, drawn from the balance sheet (kind `analysis`, one check)
    ...
    EOF
    ```
 
 4. Send what the script prints between `SHOW:` and `END`, verbatim, as the whole
-   message: the recipe's steps as a numbered overview, and under it the prompt. On a
+   message: the recipe's steps as a numbered overview with each step's estimated time
+   and cost, the run's estimate, and under it the prompt. On a
    broad request the prompt asks what to run, *run 5, 6* or *run all*; on a specific
    one it proposes the steps the request bears on, *Based on your request, steps 5, 6
    are relevant, shall we run them?* Use no question tool: the user reads the whole
@@ -233,8 +235,8 @@ and pins the generated recipe afterwards (its SKILL.md).
 
 **The scope.** `--scope` resolves the picks with every family they read from into
 `run.json.inputs.scope`, and prints `SCOPE:` and `SAY:`. Put the `SAY:` text to the user
-in one line, verbatim: it names what runs and what was added because a pick depends on
-it. `all` registers no scope, and the run executes every family. To change the scope
+in one line, verbatim: it names what runs, what was added because a pick depends on
+it, and the estimated cost and time of that scope. `all` registers no scope, and the run executes every family. To change the scope
 before the plan is approved, run `setup_run.py <run_dir> --session ${CLAUDE_SESSION_ID}
 --sources '[]' --scope <picks>`, then re-dispatch `check-plan` with `revise=` naming the
 change.

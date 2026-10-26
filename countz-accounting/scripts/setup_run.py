@@ -419,7 +419,7 @@ def set_scope(run_dir: pathlib.Path, run: dict, picks: str) -> tuple[bool, list[
     else:
         inputs["scope"] = scope
     return changed, [f"SCOPE:\t{','.join(scope['families']) if scope else 'all'}",
-                     f"SAY:\t{recipe_scope.say(fams, scope)}"]
+                     f"SAY:\t{recipe_scope.say(fams, scope, recipe_scope.estimates(fams, recipe_scope.recipe_name(path)))}"]
 
 
 def _kb(n: int) -> str:

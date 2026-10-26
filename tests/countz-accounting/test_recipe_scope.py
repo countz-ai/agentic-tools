@@ -105,6 +105,21 @@ def main() -> int:
     expect(recipe_scope.resolve(fams, "run 3") == recipe_scope.resolve(fams, "3"),
            "`run 3` reads as the pick 3")
     expect(recipe_scope.resolve(fams, "run all") is None, "`run all` is a full run")
+    # with estimates: a time and a cost per row, the run's estimate above the prompt
+    est = {"families": {f["id"]: {"cost_usd": 4.4, "minutes": 75.0, "source": "history"} for f in fams},
+           "overhead": {"cost_usd": 15.0, "minutes": 40.0}, "runs": 3, "rerun_share": 0.0,
+           "elapsed_per_work": 0.5}
+    priced = "\n".join(recipe_scope.table(fams, None, est))
+    expect("| 3 | The cash ledger reconciled to the bank | 1h 15m | $4 |" in priced,
+           f"a row carries its time and cost:\n{priced}")
+    expect("about 40m and $15" in priced and "from 3 earlier runs" in priced, f"the notes:\n{priced}")
+    expect("about $33 and 3h 10m from start to report" in priced,
+           f"all steps: 4 x $4.40 + $15, max(300m x 0.5, 75m) + 40m:\n{priced}")
+    expect(priced.rstrip().endswith(recipe_scope.PROMPT), "the prompt stays last")
+    expect("_" not in priced and "D2" not in priced, "no id or underscore with estimates")
+    line = recipe_scope.say(fams, recipe_scope.resolve(fams, "3"), est)
+    expect(line.endswith("Estimated cost $24, about 1h 55m from start to report."),
+           f"the scope's estimate: 2 x $4.40 + $15, 75m + 40m: {line}")
     # the headers alone are enough to ask: the relay pipes them, writing no file
     heads = "\n".join(line for line in RECIPE.splitlines() if line.startswith("### "))
     expect([f["id"] for f in recipe_format.families(heads)] == ["d0", "d1", "d2", "d3"],
