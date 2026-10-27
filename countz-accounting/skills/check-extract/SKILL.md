@@ -60,7 +60,7 @@ sha256 when called: parse and write each table with the file unchanged in betwee
 The script is the run's record of how every file was read: a reviewer re-performing a
 citation reads the file as it says, and a fix pass edits it. Write it to be read.
 
-Type each column as what it holds, and write ids with `_`, not `-` (`aging_2025_06_30`).
+Cache each table under its entry's `id`, and type each column as what it holds.
 
 ## 3. Run and rule
 
@@ -92,5 +92,4 @@ Write `steps/<NNNN>-extract.json` per `RUN_CONTRACT.md`: `check_id` set, `produc
 naming every `cache/<id>.parquet`, `workpapers/extract-<check>.py` and
 `checks/<check>.md`; `consumed` every file the tables were read from, with its mtime;
 `blockers` one per unparsed table or unexplained disagreement. `conclusion` counts the
-tables cached and names each that did not land, in two sentences. Return at most ten
-lines.
+tables cached and names each that did not land, in two sentences.

@@ -112,7 +112,11 @@ its own tab, together, each summary before its schedule. Without `--run-dir` the
 holds the shape — Exec Summary first, the tail last. With `--run-dir` it reads
 `run.json` (the roster, each check's `params.family`, `plan.recipe`) and the recipe's
 frontmatter, and refuses any other strip, naming the one wanted. A check tab it cannot
-match to a rostered check is refused too: the name opens with the roster token.
+match to a rostered check is refused too: the name opens with the roster token. On a
+check's file staged before assembly (`out/.staging/<check>.xlsx`, `--run-dir`), the gate
+holds the names alone: every tab in the file pairs with that check, so a misnamed tab is
+refused at the check's own gate, not at the seal. Measured on two runs: 10 and 3 check
+tabs refused at the seal for names the map could not pair.
 
 GATE 6 — the match tabs (reference/WORKBOOK.md § 6, scripts/match_tabs.py), on any
 workbook that holds them. Every line of a match summary is its schedule filtered on the
@@ -279,7 +283,7 @@ def sheet_order(z: zipfile.ZipFile) -> list[tuple[str, str]]:
             continue
         target = rels.get(rid.group(1), "")
         part = "xl/" + target.lstrip("/").removeprefix("xl/")
-        out.append((part, name.group(1)))
+        out.append((part, html.unescape(name.group(1))))   # `&amp;` in the XML is `&`
     return out
 
 
@@ -354,7 +358,7 @@ def sheet_links(z: zipfile.ZipFile, part: str, xml: str):
         rid = ATTR("r:id").search(el)
         if ref:
             out.append((ref.group(1),
-                        loc.group(1) if loc else None,
+                        html.unescape(loc.group(1)) if loc else None,
                         rels.get(rid.group(1)) if rid else None))
     return out
 
@@ -1057,12 +1061,39 @@ def wanted_order(run_dir: pathlib.Path, tabs: list[str], pairs=()) -> tuple[list
     return want, lead, fails
 
 
-def audit_order(z: zipfile.ZipFile, run_dir: pathlib.Path | None = None) -> list[str]:
-    """GATE 5 — the map. Empty on a tab staged before assembly (no Exec Summary)."""
+def audit_staged_names(run_dir: pathlib.Path, check: str, tabs: list[str]) -> list[str]:
+    """GATE 5 on a check's file staged before assembly (`<check>.xlsx`): every tab in it
+    pairs with that check, as the map pairs it at the seal. Empty when `check` is not on
+    the roster (the assembled `workbook.xlsx`)."""
+    try:
+        run = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    checks = [c for c in run.get("checks") or [] if c.get("id")]
+    if check not in {c["id"] for c in checks}:
+        return []
+    family = next((c.get("params") or {}).get("family") for c in checks if c["id"] == check)
+    alone = family and sum((c.get("params") or {}).get("family") == family for c in checks) == 1
+    token = family if alone else check.replace("_", " ")
+    owner, fails = tab_owners(checks, tabs)
+    out = [f for f in fails if "names no check" not in f]
+    for tab in tabs:
+        if tab in RUN_LEVEL_TABS or owner.get(tab) == check:
+            continue
+        paired = f"pairs with {owner[tab]}" if owner.get(tab) else "pairs with no check in run.json"
+        out.append(f"{tab}: the name {paired}, and this file is {check}'s — the name opens "
+                   f"with `{token}` (WORKBOOK.md § 2)")
+    return out
+
+
+def audit_order(z: zipfile.ZipFile, run_dir: pathlib.Path | None = None,
+                check: str | None = None) -> list[str]:
+    """GATE 5 — the map. On a tab staged before assembly (no Exec Summary), the names
+    alone, when `run_dir` and the staged file's check are given."""
     order = sheet_order(z)
     tabs = [tab for _, tab in order]
     if EXEC not in tabs:
-        return []
+        return audit_staged_names(run_dir, check, tabs) if run_dir and check else []
     fails: list[str] = []
     strip = " · ".join(tabs)
     if tabs[0] != EXEC:
@@ -1335,7 +1366,6 @@ def audit_formulas(z: zipfile.ZipFile, mapped: dict[str, set[str]]) -> list[str]
     values: dict[str, dict[str, object]] = {}
     xmls: dict[str, str] = {}
     for part, tab in order:
-        tab = html.unescape(tab)
         xml = z.read(part).decode("utf-8", "replace")
         xmls[tab] = xml
         texts, _ = sheet_cells(xml, shared)
@@ -1431,7 +1461,7 @@ def audit(path: pathlib.Path, declared: set[str] | None = None,
                "tabs": list(names.values())}
         rep["links"] = audit_links(z, declared)
         rep["design"] = audit_design(z)
-        rep["order"] = audit_order(z, run_dir)
+        rep["order"] = audit_order(z, run_dir, path.stem)
         rep["match"] = audit_match(z)
         rep["recon"] = audit_recon(z, path.stem, run_dir)
         rep["formulas"] = audit_formulas(z, cell_maps(path, run_dir))

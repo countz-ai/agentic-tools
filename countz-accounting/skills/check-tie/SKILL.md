@@ -125,4 +125,4 @@ Write `steps/<NNNN>-tie.json` per `RUN_CONTRACT.md`: `check_id` set, `produced` 
 your files,
 `consumed` listing every file you opened with its mtime, `blockers` for anything you could
 not reach. `conclusion` names what tied and what did not, with the worst difference in
-dollars, in two sentences. Return at most ten lines.
+dollars, in two sentences.

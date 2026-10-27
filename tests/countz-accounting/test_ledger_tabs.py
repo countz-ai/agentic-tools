@@ -180,6 +180,39 @@ def main() -> int:
                                                                             "Evidence")]
         if g["links"]["link_failures"] or design:
             bad.append(f"the gate refuses the ledger tabs: {g['links']['link_failures']} {design}")
+
+        # dead ends at the check's own gate: ids its ledger rows cite that no tab states
+        # (accounts_receivable, 2026-10-22: `'(X.a7.'` in a table's statement; arr_analysis,
+        # 2026-10-20: a tie id in a figure's expression; both refused only at the seal)
+        run_sql("CREATE TABLE t1.flagged AS SELECT '(X.t1.' || id || ')' AS note FROM room.inv;"
+                "COMMENT ON TABLE t1.flagged IS 'One row per invoice, flagged.'", rd)
+        L.figures("SELECT 'F.t1.flagged' AS id, 'Flagged invoices' AS label, 'count' AS unit, "
+                  "count(*) AS value, ['S.t1.election', 'T.t1.nowhere'] AS caveats "
+                  "FROM t1.flagged")
+        L.write()
+        if got := ledger_tabs.dead_ends(rd, "t1"):
+            bad.append(f"dead ends before the check has a tab: {got}")
+        staged = rd / "out" / ".staging" / "t1.xlsx"
+        staged.parent.mkdir(parents=True)
+
+        def stage(*cells: str) -> list[str]:
+            wb = Workbook()
+            wb.active.title = "t1 Billing"
+            for i, v in enumerate(cells, 5):
+                wb.active.cell(i, 2, v)
+            wb.save(staged)
+            return ledger_tabs.dead_ends(rd, "t1")
+
+        got = stage("T.t1.again")
+        if sorted(x.split("`")[1] for x in got) != ["T.t1.nowhere", "X.t1"] \
+                or not any("statement of table t1.flagged" in x for x in got):
+            bad.append(f"dead ends on a staged tab stating neither: {got}")
+        if got := stage("T.t1.again", "X.t1", "T.t1.nowhere: the tie that holds nowhere"):
+            bad.append(f"dead ends once the tab states both: {got}")
+        stage("T.t1.again")
+        from sql import verify
+        if not any("X.t1" in f for f in verify(rd, "t1")["failures"]):
+            bad.append("sql.py verify --check does not hold the dead ends")
     if bad:
         for b in bad:
             print(f"FAIL {b}")

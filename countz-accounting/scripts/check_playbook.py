@@ -268,6 +268,10 @@ def check_files(kind: str, params: dict) -> list[str]:
         fid = f.get("id")
         if not isinstance(fid, str) or not SLUG.fullmatch(fid):
             bad.append(f"{at} has no valid `id` (a slug), got {fid!r}")
+        elif "-" in fid:
+            bad.append(f"{at}: id `{fid}` is written with `_`, not `-` "
+                       f"(`{fid.replace('-', '_')}`): the extract caches the table under it "
+                       f"and every reader names it `room.<id>` in SQL")
         elif fid in seen:
             bad.append(f"{at} repeats id `{fid}`")
         else:

@@ -138,10 +138,10 @@ def cache_block(run_dir: pathlib.Path, reads: list[str]) -> list[str]:
             out.append(f"- `room.{r}` — {e.get('grain', '')}. `{e.get('file', '')}`"
                        f"{' sheet ' + str(e['sheet']) if e.get('sheet') else ''}; "
                        f"{e.get('row_count', '?')} rows{tot}. Columns: {cols}")
-    for r in reads:
-        if r not in held:
-            out.append(f"- `room.{r}` — not parsed (the cache holds "
-                       f"{', '.join('`room.' + k + '`' for k in held)})")
+    missing = [r for r in reads if r not in held]
+    if missing:
+        out.append(f"- not parsed: {', '.join('`room.' + r + '`' for r in missing)}. The cache "
+                   f"holds {', '.join('`room.' + k + '`' for k in held)}")
     try:
         notx = json.loads((run_dir / "cache" / "not_extracted.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):

@@ -273,13 +273,13 @@ You derive the order; the recipe states none. Three declarations per step:
 - **the `extract` step** — one step of kind `extract` per registered folder source (id
   `extract_<slot>`), `after: []`, whose `params.files` is the union of every step's
   `reads` under that source and nothing else, one entry per table a step reads: `id`
-  (the slug the readers use), `path` relative to the source, `file_role` from the
-  source class you assigned in § 3, `control` (the column a check would agree a total
-  to, or `"none"`), `sheet` where the file has several, and `what` — the table in your
-  profile's words and anchors (`"the By-stream table, header at row 40"`), required
-  when two entries share a path and sheet. How the table is written is the extract
-  worker's to read; each table needs one whole-table span in your profile for its
-  control check. What no step reads is not in the list.
+  (the slug the readers use, with `_`, not `-`: `aging_2025_06_30`), `path` relative to
+  the source, `file_role` from the source class you assigned in § 3, `control` (the
+  column a check would agree a total to, or `"none"`), `sheet` where the file has
+  several, and `what` — the table in your profile's words and anchors (`"the By-stream
+  table, header at row 40"`), required when two entries share a path and sheet. How the
+  table is written is the extract worker's to read; each table needs one whole-table
+  span in your profile for its control check. What no step reads is not in the list.
 - **`params.cache_from`** on every step with a non-empty `reads`, naming that extract
   step; it is one of the step's `_from` params, so the extract step is in its `after`
   like any other read.
@@ -350,6 +350,6 @@ outside `after`, and a `reads` id the extract step does not parse.
 
 ## Return
 
-At most ten lines: the two plan paths, files indexed / set aside as counts, the step
+Return the two plan paths, files indexed / set aside as counts, the step
 count by family, the entities covered, each dropped or degraded family with its
 reason, and the estimate's run cost and elapsed time with their ranges. The relay puts the plan to the user; nothing runs until they have seen it.

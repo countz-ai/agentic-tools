@@ -16,7 +16,7 @@ import tempfile
 # The plugin under test: <repo>/countz-accounting/scripts, from <repo>/tests/countz-accounting.
 SCRIPTS = pathlib.Path(__file__).resolve().parents[2] / "countz-accounting" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
-from check_playbook import CHECK_ID, check_params, validate  # noqa: E402
+from check_playbook import CHECK_ID, check_files, check_params, validate  # noqa: E402
 
 
 def main() -> int:
@@ -51,6 +51,16 @@ def main() -> int:
     # the tab no name the gate traces back to the check (accounts_receivable, 2026-10-08)
     expect(CHECK_ID.fullmatch("a7_writeoff_authority_and_limits") is None, "a 32-character check id refused")
     expect(CHECK_ID.fullmatch("a" * 31) is not None, "a 31-character check id accepted")
+
+    # A table id is written with `_`: the extract caches the table under it and the
+    # handoff finds it by it (revenue_leak, 2026-10-24: the plan's `aging_2024-06-30`
+    # cached as `aging_2024_06_30`, and 19 briefs read the table as not parsed)
+    entry = {"path": "a.csv", "file_role": "system_export", "control": "none"}
+    got = check_files("extract", {"files": [{**entry, "id": "aging_2024-06-30"}]})
+    expect(len(got) == 1 and "`aging_2024_06_30`" in got[0],
+           f"a table id with `-` is refused, naming the `_` spelling, got {got}")
+    got = check_files("extract", {"files": [{**entry, "id": "aging_2024_06_30"}]})
+    expect(got == [], f"a table id with `_` is accepted, got {got}")
 
     def plan(steps: list[dict]) -> dict:
         return {"schema": "countz-accounting/playbook@1", "name": "p", "title": "t",

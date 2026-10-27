@@ -100,4 +100,4 @@ what you disagree with, rewrite only your own files — the item tables included
 Write `steps/<NNNN>-analyze.json` per `RUN_CONTRACT.md`: `check_id` set, `produced`
 naming your files, `consumed` every file you opened with its mtime, `blockers` for
 anything you could not reach. `conclusion` names what the analysis established and the
-largest open matter, in two sentences. Return at most ten lines.
+largest open matter, in two sentences.

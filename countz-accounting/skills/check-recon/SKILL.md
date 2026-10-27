@@ -180,5 +180,4 @@ what you disagree with, rewrite only your own files — the match table included
 
 Write `steps/<NNNN>-recon.json` per `RUN_CONTRACT.md`: `check_id`, `produced`,
 `consumed` with mtimes, `blockers`. `conclusion` states the difference, how much is
-explained, and the unexplained residual in dollars, in two sentences. Return at most ten
-lines.
+explained, and the unexplained residual in dollars, in two sentences.

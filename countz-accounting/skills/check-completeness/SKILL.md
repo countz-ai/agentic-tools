@@ -87,4 +87,4 @@ what you disagree with, rewrite only your own files — the roster table include
 
 Write `steps/<NNNN>-completeness.json` per `RUN_CONTRACT.md`: `check_id`, `produced`,
 `consumed` with mtimes, `blockers`. `conclusion` states the roster sizes and
-the exception count in two sentences. Return at most ten lines.
+the exception count in two sentences.

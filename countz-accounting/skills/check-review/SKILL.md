@@ -65,4 +65,4 @@ vanishes from the open-item accounting.
 
 Write `steps/<NNNN>-review.json` per `RUN_CONTRACT.md` § The step record, with
 `findings[]` populated. `conclusion` gives counts by severity and the worst finding in
-one clause. Return at most ten lines; the findings live in the record.
+one clause.

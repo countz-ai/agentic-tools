@@ -75,7 +75,10 @@ over the same catalog and records nothing. Every table write rewrites `catalog.s
   is a constant;
 - a statement that no longer runs;
 - a data-room span with no `cache_id`;
-- a stated constant whose file changed or no longer holds its quote.
+- a stated constant whose file changed or no longer holds its quote;
+- with `--check`, once the check has a tab: an id the check's rows on the ledger tabs
+  cite (a table's statement, a figure's expression) that the seal would find stated
+  nowhere (`ledger_tabs.dead_ends`).
 
     sql.py verify <run_dir> [--check <check>]        exit 1 on a failure
     sql.py catalog <run_dir>                         rewrite <run_dir>/catalog.sql
@@ -1505,6 +1508,9 @@ def verify(run_dir, check: str | None = None) -> dict:
                 failures.append(f"{e.get('id')} ({f.name}): a data-room span with no cache_id - "
                                 f"the table was parsed outside the cache; write it with "
                                 f"cache.write and read it by SQL")
+    if check is not None:
+        import ledger_tabs
+        failures += ledger_tabs.dead_ends(run_dir, check)
     return {"failures": failures, "figures": len(entries), "tables": len(tabs),
             "statements": len(results) + len(tabs)}
 

@@ -78,4 +78,4 @@ files — the items table included.
 Write `steps/<NNNN>-vouch.json` per `RUN_CONTRACT.md`: `check_id`, `produced`,
 `consumed` with mtimes (the dependency's record included), `blockers`. `conclusion`
 states items traced over items listed and the untraced amount in dollars, in two
-sentences. Return at most ten lines.
+sentences.

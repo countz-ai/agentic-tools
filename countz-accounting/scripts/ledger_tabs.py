@@ -412,6 +412,117 @@ def _evidence(ws, subtitle, evs, order, run: dict) -> None:
     finish(ws, last, ledger=True)
 
 
+# Id prefixes a run-level tab built at the seal states (WORKBOOK.md § 6), and review
+# findings, which live in the review step's record (check_workbook.py GATE 2).
+SEAL_STATED = {"C", "S", "D", "Q"}
+
+
+def _row_texts(run_dir: pathlib.Path, check: str, known: set[str]) -> list[tuple[str, str]]:
+    """[(where, text)] — the text cells `check`'s rows carry on the ledger tabs, as
+    _sources, _tables, _constants and _evidence write them (change both). A figure's root
+    reads are left out: they are evidence ids its own reads already name."""
+    import sql
+    import yaml
+    out: list[tuple[str, str]] = []
+
+    def entries(kind: str) -> list[dict]:
+        f = run_dir / "workpapers" / f"{kind}-{check}.yaml"
+        if not f.is_file():
+            return []
+        loader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)     # a ledger runs to MBs
+        return [e for e in yaml.load(f.read_text(encoding="utf-8"), Loader=loader) or []
+                if isinstance(e, dict)]
+
+    for e in entries("figures"):
+        fid = e.get("id")
+        pop = e.get("population")
+        pop = pop.get("ref") if isinstance(pop, dict) else pop
+        out += [(f"the label of {fid}", str(e.get("label") or "")),
+                (f"the disposition of {fid}", str(e.get("disposition") or "")),
+                (f"the expression of {fid}", _sql_text(e.get("expression") or "", known)),
+                (f"the To reperform of {fid}", _to_reperform(e, [], {}, known)),
+                (f"the caveats of {fid}", "; ".join(str(x) for x in e.get("caveats") or [])),
+                (f"the population of {fid}", pop if isinstance(pop, str) else "")]
+        out += [(f"the reads of {fid}", x) for x in _reads(e)]
+    for t in sql.tables(run_dir):
+        if t["check"] == check and t["kind"] != "source":
+            m = t["meta"] or {}
+            out += [(f"the description of table {t['name']}", str(m.get("description") or "")),
+                    (f"the statement of table {t['name']}", _sql_text(m.get("sql") or "", known))]
+    f = run_dir / sql.CONSTANTS_DIR / f"{check}.json"
+    if f.is_file():
+        for c in json.loads(f.read_text(encoding="utf-8")).get("rows") or []:
+            out += [(f"the basis of constant {c.get('name')}",
+                     _ids_named(c.get("quote") or c.get("basis") or "", known)),
+                    (f"the evidence of constant {c.get('name')}", str(c.get("citation_id") or ""))]
+    for e in entries("evidence"):
+        note = e.get("note") or e.get("quote") or e.get("label_from")
+        out += [(f"the filter of {e.get('id')}", str(e.get("filter") or "")),
+                (f"the note of {e.get('id')}", str(note or ""))]
+    return [(w, t) for w, t in out if t]
+
+
+def dead_ends(run_dir, check: str) -> list[str]:
+    """The ids `check`'s rows on the ledger tabs cite that the seal will find stated
+    nowhere, one line each. Run at the check's own gate (`sql.py verify --check`), while
+    the check can still fix them: at the seal the report step may not repair a copied tab.
+
+    A ledger id (`F.`, `P.`, `E.`) resolves when a `workpapers/*.yaml` record declares it.
+    A `T.`, `RI.` or `X.` id resolves when a cell of the check's tab (staged or placed) or
+    of a placed tab is that id, or a line of one opens with it, or a line of the check's
+    own row texts does. Exempt: `C.` ids and placeholder stems (`T.foot.<month>`), as at
+    the seal (check_workbook.py GATE 2), and `S.`, `D.` and `Q.` ids, which the report
+    step states on Basis of Preparation and Open Items (WORKBOOK.md § 6). Empty when the check has no tab yet: its own ids cannot be
+    stated before it writes one. Measured on two runs: an exception id inside a quoted
+    literal of a table's statement (`'(X.a7.'`) and a tie id in a figure's expression,
+    each refused at the seal and costing a re-run of the check and of the report step."""
+    import zipfile
+    import check_workbook as cw
+    run_dir = pathlib.Path(run_dir).resolve()
+    tabs = run_dir / "out" / "tabs"
+    own = [run_dir / "out" / ".staging" / f"{check}.xlsx", tabs / f"{check}.xlsx"]
+    if not any(f.is_file() for f in own):
+        return []
+    declared, _ = cw.declared_ids(run_dir)
+    declared = declared or set()
+    rows = _row_texts(run_dir, check, declared)
+    texts = [t for _, t in rows]
+    for f in [own[0], *sorted(tabs.glob("*.xlsx"))]:
+        if not f.is_file():
+            continue
+        with zipfile.ZipFile(f) as z:
+            shared = cw.shared_strings(z)
+            for part, _ in cw.sheet_order(z):
+                texts += cw.sheet_cells(z.read(part).decode("utf-8", "replace"), shared)[0].values()
+    stated: set[str] = set()
+    for v in texts:
+        if m := cw.ID_TOKEN.fullmatch(v.strip()):
+            stated.add(m.group(0))
+        for line in v.split("\n"):
+            line = line.strip()
+            if (m := cw.ID_TOKEN.match(line)) and not cw.is_stem(line, m):
+                stated.add(m.group(0))
+    out: list[str] = []
+    seen: set[str] = set()
+    for where, text_ in rows:
+        for m in cw.ID_TOKEN.finditer(text_):
+            i, pfx = m.group(0), m.group(0).split(".")[0]
+            if i in seen or cw.is_stem(text_, m) or pfx in SEAL_STATED:
+                continue
+            seen.add(i)
+            tab = cw.LEDGER.get(pfx)
+            if tab and i not in declared:
+                out.append(f"dead-end id `{i}` — cited in {where}, declared by no "
+                           f"workpapers/*.yaml record: at the seal it is on no {tab} row. "
+                           f"Record it, or cite the id that is recorded")
+            elif not tab and i not in stated:
+                out.append(f"dead-end id `{i}` — cited in {where}, stated on no tab: no "
+                           f"cell is it and no line begins with it. State it on {check}'s "
+                           f"tab, or reword the text; a literal that builds an id is "
+                           f"written split, `'{pfx}.' || ...`, so no partial id shows")
+    return out
+
+
 def write(wb, run_dir, subtitle: str) -> dict:
     """Append Sources, Tables, Constants and Evidence to `wb` (module docstring). Returns
     the row counts: {sources, tables, constants, evidence}."""

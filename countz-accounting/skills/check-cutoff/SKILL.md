@@ -104,4 +104,4 @@ files — the window table included.
 
 Write `steps/<NNNN>-cutoff.json` per `RUN_CONTRACT.md`: `check_id`, `produced`,
 `consumed` with mtimes, `blockers`. `conclusion` states the window, the items tested, and
-the wrong-period amount in dollars, in two sentences. Return at most ten lines.
+the wrong-period amount in dollars, in two sentences.

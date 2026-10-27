@@ -263,4 +263,4 @@ put those checks in `conclusion`. Never put the gate's output in `error`: `error
 you could not do your work, and a failed step is retried — a re-run of the same gate to
 the same answer.
 Write `steps/<NNNN>-report.json` with `produced` naming the workbook, the deck, its
-plan and source, the summary and the snapshots. Return at most ten lines.
+plan and source, the summary and the snapshots.

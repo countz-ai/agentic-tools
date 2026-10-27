@@ -386,8 +386,10 @@ rename. `--run-dir` resolves
 every `F.` / `P.` / `E.` id the tab cites against the run's own `workpapers/*.yaml`
 records, which gates the ids before any Sources or Evidence tab exists. An id cited but
 never recorded fails here, or it reaches the deliverable, where the report step may not
-repair a tab it copied. What `check_prose.py` holds the tab to is `VALIDATION.md`
-§ Prose checking.
+repair a tab it copied. With `--run-dir`, each tab's name must also pair with the check
+(§ 2). `sql.py verify --check` refuses an id the check's ledger rows cite (a table's
+statement, a figure's expression or caveats) that no tab states. What `check_prose.py`
+holds the tab to is `VALIDATION.md` § Prose checking.
 
 `check_workbook.py` holds the mechanical rules of this file and the style as its GATE 4
 and refuses a tab at the check's own gate and again at the seal. The author's pass
