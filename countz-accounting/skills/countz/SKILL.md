@@ -50,6 +50,7 @@ no file first.
 | `create-arr-policy` | Settle how your company computes ARR: read your existing ARR rules from your documents, ask only what they leave open, and save the approved policy that every ARR analysis then runs under. |
 | `tieout` | Establish whether two or more records of the same quantity agree — a general ledger to a trial balance, a sub-ledger to its control account — and analyze what does not. |
 | `recon` | Explain the difference between two related records — GL cash to a bank statement, payables to a supplier statement — item by item, every reconciling item evidenced. |
+| `explain` | Explain a result of a finished run: re-perform the statements behind it from the data-room tables, query the run for the evidence around it, and walk from the source data through each step of logic to the result. |
 
 Then call `get_countz_config` on the `countz` server, once. It returns `catalog_yaml`,
 one entry per analysis with `name`, `skill` and `description`. For every entry whose

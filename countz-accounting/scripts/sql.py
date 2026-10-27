@@ -80,8 +80,20 @@ over the same catalog and records nothing. Every table write rewrites `catalog.s
   cite (a table's statement, a figure's expression) that the seal would find stated
   nowhere (`ledger_tabs.dead_ends`).
 
+`emptying(run_dir, id)` finds which inputs decide a figure's value. Starting from what the
+figure's statement reads and moving one statement further at a time, it empties each node
+in turn - a table to no rows, a constant or a figure to no value - re-runs the statements
+in the figure's lineage and compares the value with the figure re-performed. A node that
+changes it `affects` the figure, and the nodes it reads are tested next. A node that does
+not has `no effect`; what is read only through it is `not tested`. `no effect` means the
+value does not depend on the node's rows in this run, not that the statement ignores it: a
+filter every row passes has no effect.
+
     sql.py verify <run_dir> [--check <check>]        exit 1 on a failure
     sql.py catalog <run_dir>                         rewrite <run_dir>/catalog.sql
+    sql.py emptying <run_dir> <figure id>            the value re-performed, then one line
+                                                     per lineage node: result, depth, node,
+                                                     kind, value, read by
 
 Run with `uv run --project ${CLAUDE_PLUGIN_ROOT} python3`.
 """
@@ -1360,6 +1372,86 @@ def reperform(run_dir, id: str) -> str:
     return "\n".join(out)
 
 
+def emptying(run_dir, id: str) -> dict:
+    """Which inputs decide figure `id`'s value (module docstring, emptying): `value` (the
+    figure re-performed through every statement of its lineage), `recorded` (the ledger's
+    value) and `nodes`, one dict per node of `lineage(id)`: `node`, `kind`, `depth`
+    (statements between it and the figure), `via` (the nodes that read it), `result`
+    (`affects`, `no effect` or `not tested`) and `value` (the figure's value with the node
+    emptied; None when the figure has no row)."""
+    d = db(run_dir)
+    d.refresh()
+    con = d.con
+    row = con.execute("SELECT statement, value, unit FROM countz.figures WHERE id = ?",
+                      [id]).fetchone()
+    if row is None or not row[0]:
+        raise ValueError(f"{id}: no figure computed in SQL by that id")
+    target, recorded, unit = row
+    chain = [r for r in con.execute("SELECT node, kind, statement FROM lineage(?) ORDER BY step",
+                                    [id]).fetchall() if r[0] != id]
+    kinds = {n: k for n, k, _ in chain}
+    reads: dict[str, list[str]] = {}
+    for reader, read in con.execute("SELECT reader, read FROM countz.reads").fetchall():
+        reads.setdefault(reader, []).append(read)
+
+    def value(emptied=None):
+        """The figure re-performed with `emptied` holding no rows or no value."""
+        con.execute("BEGIN TRANSACTION")
+        try:
+            if kinds.get(emptied) == "constant":
+                con.execute("DELETE FROM room.constants WHERE name = ?",
+                            [emptied.removeprefix("const:")])
+            elif emptied in kinds and kinds[emptied] != "figure" \
+                    and not dict((n, s) for n, _, s in chain).get(emptied):
+                q = _qualified(emptied)              # a parsed table: its view, emptied
+                con.execute(f"CREATE TEMP TABLE countz_emptied AS SELECT * FROM {q} LIMIT 0")
+                con.execute(f"DROP VIEW {q}")
+                con.execute(f"CREATE VIEW {q} AS SELECT * FROM temp.countz_emptied")
+            for node, kind, statement in chain:      # each statement again, in lineage order
+                if kind == "figure":
+                    v = None if node == emptied else con.execute(
+                        f"SELECT value FROM ({statement}) WHERE id = ?", [node]).fetchone()
+                    con.execute("UPDATE countz.figures SET value = ? WHERE id = ?",
+                                [v[0] if v else None, node])
+                elif statement:
+                    q = _qualified(node)
+                    con.execute(f"DROP VIEW {q}")
+                    con.execute(f"CREATE TABLE {q} AS " + (
+                        f"SELECT * FROM ({statement}) LIMIT 0" if node == emptied else statement))
+            r = con.execute(f"SELECT value FROM ({target}) WHERE id = ?", [id]).fetchone()
+            return None if r is None else r[0]
+        finally:
+            con.execute("ROLLBACK")
+
+    base = value()
+    if not _agrees(recorded, base, unit):
+        raise ValueError(f"{id}: re-performed {base}, recorded {recorded} - run sql.py verify")
+    out: dict[str, dict] = {}
+    frontier, depth = [(x, id) for x in reads.get(id, [])], 1
+    while frontier:                                  # nearest first; past a node with no
+        nxt = []                                     # effect, nothing it reads is tested
+        for node, via in frontier:
+            if node in out:
+                out[node]["via"].append(via)
+                continue
+            try:
+                v = value(node)
+            except Exception:                        # the chain fails without it
+                v = None
+            res = "no effect" if v == base else "affects"
+            out[node] = {"node": node, "kind": kinds.get(node), "depth": depth, "via": [via],
+                         "result": res, "value": v}
+            if res == "affects":
+                nxt += [(x, node) for x in reads.get(node, [])]
+        frontier, depth = nxt, depth + 1
+    for node, kind, _ in chain:
+        if node not in out:
+            out[node] = {"node": node, "kind": kind, "depth": None, "result": "not tested",
+                         "via": [r for r, xs in reads.items() if node in xs and r in kinds],
+                         "value": None}
+    return {"value": base, "recorded": recorded, "nodes": list(out.values())}
+
+
 # -- verify --------------------------------------------------------------------------------
 def _agrees(stored, now, unit: str) -> bool:
     if stored is None or now is None:
@@ -1525,10 +1617,20 @@ def main() -> int:
     v.add_argument("--check")
     c = sub.add_parser("catalog")
     c.add_argument("run_dir", type=pathlib.Path)
+    e = sub.add_parser("emptying")
+    e.add_argument("run_dir", type=pathlib.Path)
+    e.add_argument("id")
     a = ap.parse_args()
     try:
         if a.cmd == "catalog":
             print(write_catalog(a.run_dir))
+            return 0
+        if a.cmd == "emptying":
+            e = emptying(a.run_dir, a.id)
+            print(f"re-performed\t{e['value']}\trecorded {e['recorded']}")
+            for r in e["nodes"]:
+                print("\t".join([r["result"], str(r["depth"] or "-"), r["node"],
+                                 str(r["kind"]), str(r["value"]), ", ".join(r["via"])]))
             return 0
         r = verify(a.run_dir, a.check)
     except ValueError as exc:

@@ -440,6 +440,24 @@ def main() -> int:
         if [x["agrees"] for x in cache.verify(rd, fs["cache_id"])] != [False]:
             bad.append("folder span: a changed file in the folder still verifies")
 
+        # emptying: what decides a figure; past a node with no effect, nothing is tested
+        run_sql(f'CREATE TABLE t9.terms AS SELECT kind, max_days FROM room."{tid}";'
+                "COMMENT ON TABLE t9.terms IS 'One row per document kind.'", rd)
+        run_sql("CREATE TABLE t9.june AS SELECT i.id, i.amount, t.max_days FROM room.inv i "
+                "LEFT JOIN t9.terms t USING (kind) WHERE i.month = '2025-06';"
+                "COMMENT ON TABLE t9.june IS 'One row per June document.'", rd)
+        L9 = Ledger(rd, "t9")
+        L9.figures("SELECT 'F.t9.june' AS id, 'Billed in June' AS label, 'usd' AS unit, "
+                   "sum(amount) AS value FROM t9.june")
+        L9.write()
+        em = sql.emptying(rd, "F.t9.june")
+        got = {r["node"]: (r["result"], r["depth"], r["value"]) for r in em["nodes"]}
+        if em["value"] != 225.5 or em["recorded"] != 225.5:
+            bad.append(f"emptying: re-performed {em['value']}, recorded {em['recorded']}")
+        if got != {"t9.june": ("affects", 1, None), "room.inv": ("affects", 2, None),
+                   "t9.terms": ("no effect", 2, 225.5), f"room.{tid}": ("not tested", None, None)}:
+            bad.append(f"emptying: {got}")
+
         # a moved run: countz-sql writes the catalog anew and keeps the run's own
         moved = rd.rename(rd.with_name("moved"))
         was = (moved / "catalog.sql").read_text()

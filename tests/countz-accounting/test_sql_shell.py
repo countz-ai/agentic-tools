@@ -78,6 +78,11 @@ def main() -> int:
         r = subprocess.run([cli, "-agent", "-init", str(init), "-c", "SELECT * FROM v"],
                            capture_output=True, text=True)
         want("countz-sql -init -c", (r.returncode, r.stdout), (0, "| x:INTEGER |\n|---|\n| 7 |\n"))
+        r = subprocess.run([cli, "-c", ".maxcellwidth 3", "-c", "SELECT 'abcdef' AS s",
+                            "-c", "SELECT 2 AS y"], capture_output=True, text=True)
+        want("countz-sql runs each -c in order",
+             (r.returncode, r.stdout), (0, "| s:VARCHAR |\n|---|\n| abc…(+3 chars) |\n"
+                                           "| y:INTEGER |\n|---|\n| 2 |\n"))
         r = subprocess.run([cli], input="SELECT 3 AS z;", capture_output=True, text=True)
         want("countz-sql from stdin", r.stdout, "| z:INTEGER |\n|---|\n| 3 |\n")
         r = subprocess.run([cli, "-c", "SELECT 1; SELECT * FROM nosuch; SELECT 2"],

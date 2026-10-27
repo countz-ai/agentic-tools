@@ -3,11 +3,12 @@
 2.0 CLI ships on PyPI. `countz-sql` runs it. The options and the output follow the CLI, so
 switching to `duckdb -agent` changes nothing for the caller:
 
-    countz-sql [-agent] [-init FILE] [-readonly] [-c SQL] [FILENAME]
+    countz-sql [-agent] [-init FILE] [-readonly] [-c SQL]... [FILENAME]
 
 FILENAME is a database file (default in memory). `-init` runs a file of statements first,
-printing nothing. The SQL comes from `-c`, else from stdin. A line that starts with `.` is a
-dot command: `.maxrows N`, `.maxbytes N`, `.maxcellwidth N` (-1 or 0 for all) and `.tables`.
+printing nothing. The SQL comes from each `-c`, in order, else from stdin. A line that
+starts with `.` is a dot command: `.maxrows N`, `.maxbytes N`, `.maxcellwidth N` (-1 or 0
+for all) and `.tables`.
 
 Output, per statement that returns rows: a markdown table whose header names each column
 with its type; a result of up to 1000 rows and 10000 bytes whole, a larger one as its first
@@ -157,7 +158,8 @@ def init_text(path: pathlib.Path) -> str:
 
 
 def main(argv: list[str]) -> int:
-    init = sql = None
+    init = None
+    sqls: list[str] = []
     database, read_only = ":memory:", False
     it = iter(argv)
     for a in it:
@@ -166,7 +168,7 @@ def main(argv: list[str]) -> int:
         if a == "-init":
             init = next(it, None)
         elif a == "-c":
-            sql = next(it, None)
+            sqls.append(next(it, ""))
         elif a == "-readonly":
             read_only = True
         elif a.startswith("-"):
@@ -182,7 +184,8 @@ def main(argv: list[str]) -> int:
         sh = Shell(database, read_only)
         if init:
             sh.script(init_text(pathlib.Path(init)), quiet=True)
-        sh.script(sql if sql is not None else sys.stdin.read())
+        for sql in sqls or [sys.stdin.read()]:
+            sh.script(sql)
     except Exception as exc:
         sys.stdout.flush()
         print(error_json(exc), file=sys.stderr)
