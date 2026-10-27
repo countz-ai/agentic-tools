@@ -33,7 +33,7 @@ of tables it cached, from `countz.tables`.
 The tab strip, the band and the content of every run-level tab are `WORKBOOK.md` § 2
 and § 6. Copy each check's tab cell by cell with its resolved formatting — every sheet
 of its tab file, the match tabs included; write the other run-level tabs yourself, and
-the three ledger tabs with the kit (**Sources, Tables, Evidence** below). Each
+the ledger tabs with the kit (**Sources, Tables, Constants, Evidence** below). Each
 check's match tabs follow its own tab (`WORKBOOK.md` § 2); where the Exec Summary tells
 how much of the population is matched, copy the match summary's walk.
 
@@ -53,7 +53,7 @@ recipe tells the story its objective and results support. Read `${CLAUDE_PLUGIN_
 § Voice again before writing its sentences
 (`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py DOCTRINE.md Voice`).
 
-**Sources, Tables, Evidence.** Run the root collapse first:
+**Sources, Tables, Constants, Evidence.** Run the root collapse first:
 
 ```
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/resolve_roots.py <run_dir>
@@ -63,7 +63,7 @@ An `unresolved` entry is a ledger reference nothing defines — a blocker agains
 that cited it, never patched here. Exit 2 is a refused ledger — a top level that is not a
 list, an id outside the grammar (EVIDENCE.md § 0) — named on stderr with its file: the
 owning check's to rewrite. Do not normalize a copy and proceed; end the step `blocked`
-naming that check (§ 6). Then, as the last tabs of the assembly, one call writes all three:
+naming that check (§ 6). Then, as the last tabs of the assembly, one call writes them all:
 
 ```
 from ledger_tabs import write
@@ -196,7 +196,7 @@ reperformance contract — it refuses an external or broken link, an unwired id 
 dead-end id (one cited but resolving nowhere), a number on the Exec Summary with no link
 to what it was copied from, an `E.` id in a workbook with no Evidence tab, a Sources tab missing the `root source` / `To reperform` columns, a figure row
 whose `To reperform` cell is empty, a pane frozen deeper than the title band
-(3 rows / 2 columns — never a table header row) on any tab, and a tab strip that is not the reader's path
+(3 rows / 2 columns; 4 rows on a tab holding one table) on any tab, and a tab strip that is not the reader's path
 (WORKBOOK.md § 2) —
 with `--run-dir` it computes the order from the roster and the recipe's `lead` and
 names the strip it wants. `check_report.py` gates the deck (`REPORT.md` § 5): every number on
@@ -215,7 +215,7 @@ reads `Customer C10007, days beyond terms` as a typed day count; reword `, days`
 or verdict, an id, a tab name, a row — you may not repair: name the cell or the id, name
 the check that wrote it, and end the step `blocked` so the run re-runs that check. A
 dead-end ledger id is the owning check's record to write even when the citation sits on
-the Sources, Tables or Evidence tab — those tabs are written from the run's records, so
+the Sources, Tables, Constants or Evidence tab — those tabs are written from the run's records, so
 an id no record declares cannot be repaired here either. Also
 assert the open-item
 accounting balances (every finding `fixed`, `carried_to_open_items` or `withheld`; the

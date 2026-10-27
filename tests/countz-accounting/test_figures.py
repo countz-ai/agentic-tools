@@ -90,6 +90,9 @@ def main() -> int:
                 bad.append(f"{t['id']}: {t['status']}, want {want} ({t['tests']})")
         if L.entries["F.k1.exact.difference"]["zero_basis"] != "measured_zero":
             bad.append("a zero difference carries no measured_zero")
+        got_ = L.sub("Billed {F.k1.revenue} against {F.k0.tb.revenue:deck}, {F.k1.revenue}.")
+        if got_.ids != ("F.k1.revenue", "F.k0.tb.revenue") or (got_ + "").__class__ is not str:
+            bad.append(f"sub remembers the ids it states, once each, in order: {getattr(got_, 'ids', None)}")
         if L.sub("Billed {F.k1.revenue} against {F.k0.tb.revenue:deck}.") != \
                 "Billed $1,000 against $1K.":
             bad.append(f"sub: {L.sub('Billed {F.k1.revenue} against {F.k0.tb.revenue:deck}.')}")

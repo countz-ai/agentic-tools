@@ -144,9 +144,11 @@ TYPED_COLUMNS = ("result", "status")
 FUNCTIONS = (
     ("fig", "fig(id)", "the value of figure `id` (countz.figures)",
      "CREATE MACRO fig(i) AS (SELECT first(value) FROM countz.figures WHERE id = i)"),
-    ("cell", "cell(id)", "figure `id` as a table cell of the check's page (scripts/render.py)",
-     "CREATE MACRO cell(i) AS {'id': i, 'value': (SELECT first(value) FROM countz.figures "
-     "WHERE id = i)}"),
+    ("cell", "cell(id[, formula := text])",
+     "figure `id` as a table cell of the check's page; with `formula`, the cell is that "
+     "formula over another table on the page (scripts/render.py)",
+     "CREATE MACRO cell(i, formula := NULL) AS {'id': i, 'value': (SELECT first(value) "
+     "FROM countz.figures WHERE id = i), 'formula': CAST(formula AS VARCHAR)}"),
     ("tie", "tie(id)", "tie `id`: `label`, its figures `a`, `b` and `difference`, and its "
      "`status` (countz.ties)",
      "CREATE MACRO tie(t) AS (SELECT {'label': label, 'a': side_a, 'b': side_b, "

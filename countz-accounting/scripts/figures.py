@@ -299,19 +299,35 @@ def md_table(headers, rows, units, style_: str = "prose") -> str:
     return "\n".join(out) + "\n"
 
 
+class Cited(str):
+    """A sentence with its figures interpolated, which remembers the ids it states (`ids`,
+    in order): the kit records them for the cell it writes the sentence to, and assembly
+    links the cell to the first one's cell (link_workbook.py). Any str operation returns a
+    plain str, which cites nothing."""
+    ids: tuple = ()
+
+    def __new__(cls, text: str, ids=()):
+        s = super().__new__(cls, text)
+        s.ids = tuple(dict.fromkeys(ids))
+        return s
+
+
 def _sub(template: str, lookup) -> str:
+    ids: list[str] = []
+
     def one(m):
         fid, style = m.group(1), m.group(2) or "prose"
         f = lookup(fid)
         if f is None:
             raise KeyError(f"{fid}: no figure with this id in the run's ledgers")
+        ids.append(fid)
         return fmt(f.get("value"), f.get("unit"), style)
     out = TEMPLATE.sub(one, template)
     left = TEMPLATE_ANY.search(out)
     if left:
         raise ValueError(f"{left.group(0)!r} is no figure reference this substitutes - "
                          f"`{{F.id}}` or `{{F.id:deck}}` (prose, deck or cell), no spaces")
-    return out
+    return Cited(out, ids)
 
 
 # --- the run's figures ---------------------------------------------------------------------

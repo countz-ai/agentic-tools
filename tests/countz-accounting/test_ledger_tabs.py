@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Self-test for scripts/ledger_tabs.py: Sources, Tables and Evidence written from a run's
+"""Self-test for scripts/ledger_tabs.py: Sources, Tables, Constants and Evidence written from a run's
 records, and the trail down them once link_workbook.py has wired it.
 
 Run by check-plugin.py (8z) as `uv run --project <plugin> python3 tests/countz-accounting/test_ledger_tabs.py`
@@ -78,10 +78,17 @@ def main() -> int:
         band(wb.active, "t1 · Billing", "Test Co · 2025")
         wb.active.title = "t1 Billing"
         got = ledger_tabs.write(wb, rd, "Test Co · 2025")
-        if wb.sheetnames != ["t1 Billing", "Sources", "Tables", "Evidence"]:
+        if wb.sheetnames != ["t1 Billing", "Sources", "Tables", "Constants", "Evidence"]:
             bad.append(f"tab strip: {wb.sheetnames}")
-        if got["tables"] != 3:
+        if got["tables"] != 3 or got["constants"] != 2:
             bad.append(f"counts: {got}")
+        # a tab holding one table freezes its header with the band
+        for name in ("Sources", "Tables", "Constants", "Evidence"):
+            want = "B5" if len(wb[name].tables) == 1 else "B4"
+            if wb[name].freeze_panes != want:
+                bad.append(f"{name}: frozen at {wb[name].freeze_panes}, want {want}")
+        if wb["Tables"].freeze_panes != "B5":
+            bad.append("Tables holds one table and freezes its header")
 
         # Sources: the statement, its reads, and how to reperform it
         src = wb["Sources"]
@@ -101,7 +108,7 @@ def main() -> int:
         if src.cell(at["F.t1.all"], h["root source"]).value != "E.t1.inv":
             bad.append(f"root source: {src.cell(at['F.t1.all'], h['root source']).value!r}")
 
-        # Tables: what a row is, how it was made, its counts, what it reads; then constants
+        # Tables: what a row is, how it was made, its counts, what it reads
         tab = wb["Tables"]
         h, at = header(tab), rows_by(tab)
         big, inv = at.get("t1.large"), at.get("room.inv")
@@ -123,10 +130,15 @@ def main() -> int:
             bad.append(f"a data-room table: {[tab.cell(inv, c).value for c in h.values()]} ({foot})")
         if "'F.' || 't1.'" not in cell(at["t1.tagged"], "SQL or read"):
             bad.append(f"a table's SQL shows its id fragment whole: {cell(at['t1.tagged'], 'SQL or read')!r}")
-        if tab.cell(at["review_floor"], 7).value != "the smallest invoice in E.t1.const.large_invoice, E.t1.inv":
-            bad.append(f"a constant's wildcard id: {tab.cell(at['review_floor'], 7).value!r}")
-        if "large_invoice" not in at or tab.cell(at["large_invoice"], 3).value != "500" \
-                or tab.cell(at["large_invoice"], 7).value != "a threshold of $500":
+        if "large_invoice" in at or "review_floor" in at:
+            bad.append("a constant is on the Tables tab")
+        # Constants: one row per constant
+        con_tab = wb["Constants"]
+        at = rows_by(con_tab)
+        if con_tab.cell(at["review_floor"], 7).value != "the smallest invoice in E.t1.const.large_invoice, E.t1.inv":
+            bad.append(f"a constant's wildcard id: {con_tab.cell(at['review_floor'], 7).value!r}")
+        if "large_invoice" not in at or con_tab.cell(at["large_invoice"], 3).value != "500" \
+                or con_tab.cell(at["large_invoice"], 7).value != "a threshold of $500":
             bad.append("the constant's row")
 
         ev = wb["Evidence"]
@@ -145,6 +157,7 @@ def main() -> int:
         src, tab = wb["Sources"], wb["Tables"]
         loc = lambda c: c.hyperlink.location if c.hyperlink else None  # noqa: E731
         s_at, t_at, e_at = rows_by(src), rows_by(tab), rows_by(wb["Evidence"])
+        c_at = rows_by(wb["Constants"])
         hop = {
             "a figure's read to its table": (loc(src.cell(s_at["F.t1.large"], header(src)["reads"])),
                                              f"'Tables'!B{t_at['t1.large']}"),
@@ -153,7 +166,7 @@ def main() -> int:
             "a table's read to the table it reads": (loc(tab.cell(t_at["t1.large"], header(tab)["reads 2"])),
                                                      f"'Tables'!B{t_at['room.inv']}"),
             "a constant to its row": (loc(tab.cell(t_at["t1.large"], header(tab)["reads"])),
-                                      f"'Tables'!B{t_at['large_invoice']}"),
+                                      f"'Constants'!B{c_at['large_invoice']}"),
             "a data-room table to its Evidence row": (loc(tab.cell(t_at["room.inv"], header(tab)["evidence"])),
                                                       f"'Evidence'!B{e_at['E.t1.inv']}"),
         }
@@ -163,7 +176,8 @@ def main() -> int:
         gate = subprocess.run([sys.executable, str(SCRIPTS / "check_workbook.py"), str(path), "--json"],
                               capture_output=True, text=True)
         g = json.loads(gate.stdout[gate.stdout.index("{"):])
-        design = [f for f in g.get("design") or [] if f.split(":")[0] in ("Sources", "Tables", "Evidence")]
+        design = [f for f in g.get("design") or [] if f.split(":")[0] in ("Sources", "Tables", "Constants",
+                                                                            "Evidence")]
         if g["links"]["link_failures"] or design:
             bad.append(f"the gate refuses the ledger tabs: {g['links']['link_failures']} {design}")
     if bad:

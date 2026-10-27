@@ -214,8 +214,8 @@ fails a figure whose value moved and one computed outside SQL.
 **Every figure cell in a workbook carries its computed value.** openpyxl writes a formula
 with no cached result, and the cell renders blank in a viewer that does not recalculate.
 A body figure is a value, and its `expression` on the Sources tab shows how it was
-computed. A subtotal, a total, a derived line and a copy of another check's figure
-are formulas with their results cached — `scripts/render.py` and `link_workbook.py`
+computed. A subtotal, a total, a derived line, a figure over a supporting table on its
+tab and a copy of another check's figure are formulas with their results cached — `scripts/render.py` and `link_workbook.py`
 write them (WORKBOOK.md § 7). The gate is `scripts/check_workbook.py`. A typed constant that resolves to no figure id is blocking.
 
 **Prose numbers are interpolated, never typed.** A sentence cites a figure id,

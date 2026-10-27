@@ -31,6 +31,14 @@ The template is Markdown:
   - `_when` on a summing row adds only the rows whose status reads that word.
   - `_stated` on a summing row names the columns it states rather than sums (a count).
   - any other (`_seq`) sorts.
+- A figure the page shows a supporting table for is a formula over that table:
+  `cell('F.id', formula := 'SUMIFS({Entries selected.Gross}, {Entries selected.Shared
+  address}, "yes")')`. `{Heading.Header}` is that column's body rows in the table under
+  that heading; `{Header}` is this row's cell in this table. The grammar is
+  scripts/formula.py's (SUM, SUMIFS, COUNTIFS, + - * /, parentheses; a criterion a string,
+  a number or one cell). The SQL figure stays the value: a formula that does not reach it
+  is refused, so it reads the wrong rows or columns. Assembly links the cell to the range
+  it reads instead of its Sources row (link_workbook.py § 8).
 - Options, as comment lines opening a block: `-- kinds: Header=kind, ...` (`wbkit.KINDS`)
   and `-- heading: Text`, the tab's heading when the md heading above does not fit.
 - `{ties}` on its own line: the check's tie schedule. A table of some ties, or with more
@@ -43,7 +51,8 @@ The template is Markdown:
 
 Other prose is in the md only. Refused, writing nothing: a reference no ledger holds, a
 block that is not one SELECT, no primary table or two, an unknown option or kind, a `_row`
-word other than those four, a `_when` on a table with no status column, a note with no id.
+word other than those four, a `_when` on a table with no status column, a note with no id,
+a formula that does not evaluate or does not reach its figure.
 
 Example, a template's primary table with its total:
 
@@ -66,6 +75,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import figures  # noqa: E402
+import formula as fx  # noqa: E402
 import items  # noqa: E402
 import style  # noqa: E402
 import wbkit  # noqa: E402
@@ -75,6 +85,7 @@ FENCE = re.compile(r"^```\s*(\w*)\s*(.*?)\s*$")
 HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*$")
 NOTE = re.compile(r"^\s*[-*]\s+`?([A-Z]{1,2}\.[A-Za-z0-9_.-]*[A-Za-z0-9])`?\s*[:—-]\s*(.+)$")
 STEP = re.compile(r"^\s*\d+\.\s+\S")
+REF = re.compile(r"\{([^{}]+)\}")
 FIGURE_FORMAT = {"pct": wbkit.FMT_PCT, "rate": wbkit.FMT_RATE, "fx_rate": wbkit.FMT_FX,
                  "days": wbkit.FMT_DAYS, "ratio": wbkit.FMT_DAYS, "quantity": wbkit.FMT_DAYS}
 KIND_FORMAT = {"amount": wbkit.FMT_AMOUNT, "cents": wbkit.FMT_CENTS, "pct": wbkit.FMT_PCT,
@@ -253,12 +264,14 @@ class Table:
     word it adds (`when`) and the headers it states rather than sums (`stated`)."""
 
     def __init__(self, heading, headers, kinds, rows, roles=None, sql=None, primary=False,
-                 when=None, stated=None):
+                 when=None, stated=None, formulas=None):
         self.heading, self.headers, self.kinds, self.rows = heading, headers, kinds, rows
         self.roles = roles or [None] * len(rows)
         self.when = when or [None] * len(rows)
         self.stated = stated or [set() for _ in rows]
         self.sql, self.primary = sql, primary
+        self.formulas = formulas or {}          # {(row, column): formula text}
+        self.at: list[int] = []                 # the sheet row of each row, once placed
 
     def width(self, i: int) -> str:
         k = self.kinds[i]
@@ -301,16 +314,22 @@ def _query_table(run_dir, L, part, meta, where) -> Table:
     df = df.drop([c for c in df.columns if c.startswith("_")])
     kinds = _kinds(df, opts, where)
     cur = str(meta.get("currency") or "usd").lower()
-    rows = []
-    for rec in df.iter_rows():
+    rows, formulas = [], {}
+    for n, rec in enumerate(df.iter_rows()):
         row = []
-        for v, k in zip(rec, kinds):
+        for j, (v, k) in enumerate(zip(rec, kinds)):
             if k == "figure":
                 if v is None or v.get("id") is None:
                     row.append((None, k, None, None))
                     continue
                 f = _figure(L, v["id"], where)
                 row.append((f.get("value"), k, f.get("unit"), v["id"]))
+                if v.get("formula"):
+                    if roles[n] not in (None, "less"):
+                        raise TemplateError(f"{where}: row {n + 1}: {v['id']} carries a formula on "
+                                            f"a {roles[n]} row, which is already a formula over "
+                                            f"the rows it adds")
+                    formulas[(n, j)] = str(v["formula"])
             elif isinstance(v, str):
                 row.append((L.sub(v), k, None, None))
             elif isinstance(v, bool):
@@ -325,7 +344,7 @@ def _query_table(run_dir, L, part, meta, where) -> Table:
         raise TemplateError(f"{where}: _when adds the rows whose status reads a word; the table "
                             f"has no status column")
     return Table(heading, list(df.columns), kinds, rows, roles, query, primary, when,
-                 [{shown.index(h) for h in s} for s in stated])
+                 [{shown.index(h) for h in s} for s in stated], formulas)
 
 
 def _tie_table(ties, heading) -> Table:
@@ -339,6 +358,105 @@ def _tie_table(ties, heading) -> Table:
                      (t["status"], "status", None, None)])
     return Table(heading, ["Tie", "What is agreed", "Side A", "Side B", "Difference", "Status"],
                  ["id", "text", "figure", "figure", "figure", "status"], rows)
+
+
+# --- a figure over a supporting table -------------------------------------------------------
+def _body(t: Table) -> list[int]:
+    return [r for r, role in zip(t.at, t.roles) if role in (None, "less")]
+
+
+def _resolve(t: Table, n: int, text: str, tables: list, where: str) -> tuple[str, str | None]:
+    """`text` with `{Header}` as this row's cell of `t` and `{Heading.Header}` as the body
+    rows of that column in the table under that heading; and the body block of the first
+    table it reads that way, the range the cell links to."""
+    block: list[str] = []
+    def col(table, header):
+        return wbkit.get_column_letter(2 + table.headers.index(header))
+
+    def one(m: re.Match) -> str:
+        name = m.group(1).strip()
+        if name in t.headers:
+            return f"${col(t, name)}{t.at[n]}"
+        hits = [(o, name[len(o.heading) + 1:].strip()) for o in tables
+                if o.heading and name.startswith(o.heading + ".")
+                and name[len(o.heading) + 1:].strip() in o.headers]
+        if len(hits) != 1:
+            heads = sorted({o.heading for o in tables if o.heading})
+            raise TemplateError(f"{where}: {{{name}}}: " + (
+                f"{len(hits)} tables under that heading; give the table its own `-- heading:`"
+                if hits else f"not a column of this table nor `Heading.Header` of {heads}"))
+        o, h = hits[0]
+        body = _body(o)
+        if not body:
+            raise TemplateError(f"{where}: {{{name}}}: '{o.heading}' has no body rows")
+        lo, hi = body[0], body[-1]
+        if any(lo < r < hi for r in set(o.at) - set(body)):
+            raise TemplateError(f"{where}: {{{name}}}: '{o.heading}' has summing rows between its "
+                                f"body rows; a range over it would add them")
+        c = col(o, h)
+        if not block:
+            block.append(f"$B${lo}:${col(o, o.headers[-1])}${hi}")
+        return f"${c}${lo}:${c}${hi}"
+
+    return REF.sub(one, text), (block[0] if block else None)
+
+
+def _formulas(ws, tables: list, own: set, where: str) -> None:
+    """Write each figure's formula over its supporting table and hold it to the figure:
+    the SQL figure is the value, the formula is how the page reaches it."""
+    pending = {}
+    for t in tables:
+        for (n, j), text in t.formulas.items():
+            v, _, _, fid = t.rows[n][j]
+            at = f"{t.heading or 'primary table'} row {n + 1}, {t.headers[j]}"
+            if fid not in own:
+                raise TemplateError(f"{where}: {at}: {fid} is another check's figure, copied by "
+                                    f"reference at assembly; a formula belongs on its own tab")
+            if v is None:
+                raise TemplateError(f"{where}: {at}: {fid} has no value to hold the formula to")
+            body, over = _resolve(t, n, text.strip().lstrip("="), tables, f"{where}: {at}")
+            cell = ws.cell(row=t.at[n], column=2 + j)
+            pending[cell.coordinate] = (cell, "=" + body, float(v), fid, at, over)
+
+    class _Pending(Exception):
+        pass
+
+    done: dict[str, float] = {}
+
+    def get(sh, co):
+        if sh != ws.title:
+            return None
+        if co in pending:
+            if co in done:
+                return done[co]
+            raise _Pending
+        return wbkit._kit_value(ws, co)
+
+    left = dict(pending)
+    while left:
+        moved = False
+        for co, (cell, f, v, fid, at, _) in list(left.items()):
+            try:
+                got = fx.evaluate(f, ws.title, get)
+            except _Pending:
+                continue
+            if got is None:
+                raise TemplateError(f"{where}: {at}: {f} is outside the formula grammar "
+                                    f"(scripts/formula.py) or divides by zero")
+            terms = [get(*c) for c in fx.precedents(f, ws.title) or []]
+            terms = [float(x) for x in terms if fx.is_number(x)]
+            if not fx.foots(v, got, max(len(terms), 1), terms):
+                raise TemplateError(f"{where}: {at}: {f} gives {got:,.2f}, not the {v:,.2f} of "
+                                    f"{fid} — the formula reads the wrong rows or columns")
+            done[co] = got
+            del left[co]
+            moved = True
+        if not moved:
+            raise TemplateError(f"{where}: formulas reading each other in a circle: "
+                                f"{', '.join(sorted(left))}")
+    for co, (cell, f, v, fid, at, over) in pending.items():
+        cell.value = f
+        wbkit._note(cell, formula=f, result=done[co], fid=fid, over=over)
 
 
 # --- the md -------------------------------------------------------------------------------
@@ -420,8 +538,10 @@ def _place(ws, t: Table, row: int, need: dict, own: set) -> int:
     status_col = (wbkit.get_column_letter(2 + t.kinds.index("status"))
                   if "status" in t.kinds else None)
     r, body, since, above = row, [], [], None   # body and since: (row, deducted)
+    t.at = []
     for rec, role, when, stated in zip(t.rows, t.roles, t.when, t.stated):
         r += 1
+        t.at.append(r)
         if role in (None, "less"):
             for c, (v, k, u, fid) in enumerate(rec, start=2):
                 _write_cell(ws, r, c, v, k, u, fid, own)
@@ -492,6 +612,7 @@ def _tab(wb, meta, tables, notes, steps, L):
             r = wbkit.section(ws, r, L.sub(t.heading))
         shown = t.heading
         last = _place(ws, t, r, need, own)
+    _formulas(ws, tables, own, meta.get("tab") or "tab")
     for title, lines in (("Notes", notes), ("To reperform", steps)):
         if not lines:
             continue

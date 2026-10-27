@@ -21,7 +21,7 @@ what goes where.
   run, or dropped by the plan — has no tab and is skipped
 - Basis of Preparation
 - every other check tab in roster order
-- Coverage, Open Items, Sources, Tables, Evidence
+- Coverage, Open Items, Sources, Tables, Constants (when the run states any), Evidence
 - Nothing hidden, nothing else.
 
 A reconciliation's match tabs (check-recon § 3) follow its check's own tab, wherever
@@ -51,8 +51,9 @@ reader.
 
 Every check tab puts the following in the frozen band: a title and a quick summary of what
 the tab is trying to accomplish. It orients a user on how to approach the data below. The
-band is frozen at `B4`. A table header is never frozen: the primary table's header on
-row 4 describes that table alone, not the tables below it.
+band is frozen at `B4`. On a tab holding one table, its header on row 4 is frozen with
+the band, at `B5`. On a tab of several, no table header is frozen: the primary table's
+header on row 4 describes that table alone, not the tables below it.
 
 - B1 the title, opening with the token (`q6 · Adjusted EBITDA reconciles to the ledger`).
   On every tab, run-level and script-written tabs included, the title is what an
@@ -60,7 +61,7 @@ row 4 describes that table alone, not the tables below it.
   plain sentence saying what the tab holds or shows. It does not list the tab's columns
   or explain how to read them; the headers and B3 do that. Example — not
   `Tables · Every table the figures read: what one row is, how it was made, and what it
-  reads`, but `Tables · Tables and constants behind the figures`.
+  reads`, but `Tables · Tables behind the figures`.
 - B2 the subtitle: entity · period set · basis · unit · tolerance. The unit carries the
   primary table's currency and scale (`$ in thousands`); a column header never carries the
   scale. A tab covering several entities names the group and its count (`13 bank
@@ -111,7 +112,7 @@ its heading. The kit writes this: `section()` returns the header's row and
 
 **Every table is an Excel table.** A tab holding several tables cannot freeze one header
 for all of them, so the band is the only frozen row and each table carries its own header
-instead: `finish()` (and `link_workbook.py` again on the assembled workbook) makes every
+instead (a tab holding one table freezes its header with the band, § 2): `finish()` (and `link_workbook.py` again on the assembled workbook) makes every
 table block an Excel table — its own range, its own filter buttons, and its header shown in
 place of the column letters while the reader scrolls inside it. A block is a header row
 (bold on a fill, opening after a blank row or a Section heading) and the rows under it to
@@ -299,7 +300,7 @@ or `D.` id the check raises is stated on that check's own tab as well, so the ro
 resolves there and the reader lands on the schedule that raised it; a row whose only link
 is the check's name sends them to the top of a tab to search.
 
-**Sources, Tables, Evidence** — the ledger tabs, written by `scripts/ledger_tabs.py`
+**Sources, Tables, Constants, Evidence** — the ledger tabs, written by `scripts/ledger_tabs.py`
 from the run's records, never by hand. They are the trail a reader follows down from a
 number to the data room (`docs/REPERFORM.md`); the module's docstring states their
 columns.
@@ -309,8 +310,9 @@ columns.
   (`root source`, from `resolve_roots.py`) and `To reperform`.
 - **Tables**: one row per table: what one row of it is, the check that made it, its row
   count, totals and result hash, the statement that made it or the read of its file, and
-  what it reads (each a link). The constants follow, each with the sentence or basis it
-  rests on.
+  what it reads (each a link).
+- **Constants**: one row per constant the statements read, with the sentence or basis it
+  rests on; no tab when the run states none.
 - **Evidence**: one row per read of a file, with its rows and control total, then the
   source roots.
 
@@ -341,6 +343,14 @@ figure to where it came from by Excel's precedents, so:
 - A body figure is a value: it comes from the data room, which the workbook does not
   hold, and its reperformance is its Sources row. In a template it is `cell('F.…')`, and
   the cell carries the figure's id.
+- A figure you built a table on the tab to support — the rows it counts, adds or filters
+  — is a formula over that table: `cell('F.…', formula := 'SUMIFS({Entries
+  selected.Gross}, {Entries selected.Counterparty}, {Who or what})')`. `{Heading.Header}`
+  is that column of the table under that heading; `{Header}` is this row's cell. The
+  formula shows which cells the figure reads and how; it may filter on any shown column
+  or on a cell of its own row. The renderer refuses one that does not reach the figure,
+  and the cell links to that table instead of its Sources row. A figure no table on the
+  tab supports stays a value.
 - A figure of ANOTHER check is written as a copy of it. At assembly `link_workbook.py
   --run-dir` replaces it with a reference to the producing check's cell (`='r5 Position
   and DSO'!G23`), and reports a copy that disagrees with its source — the copying check's
@@ -384,7 +394,7 @@ and refuses a tab at the check's own gate and again at the seal. The author's pa
 covers what a parser cannot judge — the style's § 10 checklist, then:
 
 - B1 title, B2 subtitle, B3 the summary; on a check tab row 4 the one `BAND` header;
-  freeze at `B4` on every tab — the band alone, never a table header row; every table an
+  freeze at `B4` — the band alone — or at `B5` on a tab holding one table; every table an
   Excel table with distinct header labels;
 - the tab name is `<token> <Title>`, at most 31 characters; tab color per
   `WORKBOOK_STYLE.md` § 4;

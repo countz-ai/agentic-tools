@@ -169,6 +169,13 @@ def band(ws, title, subtitle, summary=None):
     ws.row_dimensions[1].height, ws.row_dimensions[4].height = 24, 20
     if summary:
         ws["B3"].value, ws["B3"].style = summary, S["Body"]
+        _cites(ws["B3"], summary)
+
+
+def _cites(cell, v) -> None:
+    """Record the figures a sentence interpolated (figures.Cited) for its cell."""
+    if getattr(v, "ids", None):
+        _note(cell, cites=list(v.ids))
 
 
 def header(ws, row, labels, widths, primary=True, currency=None):
@@ -231,11 +238,13 @@ def text(cell, v, style="Body"):
     ws = cell.parent
     if (ws.column_dimensions[cell.column_letter].width or 0) >= WIDTH["description"]:
         cell.alignment = WRAP                   # description and note columns wrap
+    _cites(cell, v)
 
 
 # --- the cells map: which figure each cell holds, and the formulas the kit wrote --------
 # Keyed by the worksheet object, so a sheet renamed before `save` is mapped by its final
-# title. Each entry is {coord: {"fid": ..., "src": ..., "formula": ..., "result": ...}}.
+# title. Each entry is {coord: {"fid": ..., "src": ..., "formula": ..., "result": ...,
+# "cites": [the figures a sentence states]}}.
 CELLS_SUFFIX = ".cells.json"
 _MAP: dict[int, tuple[object, dict[str, dict]]] = {}
 
@@ -355,7 +364,7 @@ def save(wb, path) -> pathlib.Path:
         for coord, e in cells.items():
             if "formula" in e and ws[coord].value != e["formula"]:
                 continue                        # overwritten since: not the kit's formula any more
-            sheets[ws.title][coord] = {k: e[k] for k in ("fid", "src", "formula", "stated") if k in e}
+            sheets[ws.title][coord] = {k: e[k] for k in ("fid", "src", "formula", "stated", "over", "cites") if k in e}
             if "formula" in e:
                 known.setdefault(ws.title, {})[coord] = e["result"]
     # every formula's result, the kit's and any the script wrote itself (a conditional sum)
@@ -534,7 +543,8 @@ def excel_tables(ws, taken=None) -> list[str]:
     """Make every table on the tab an Excel table: its own range, its own filter
     buttons, and its header shown in place of the column letters while the reader
     scrolls inside it. A tab holding several tables cannot freeze one header for all
-    of them (the band is the only frozen row); a table object carries its own.
+    of them (the band is the only frozen row); a table object carries its own. A tab
+    holding one freezes its header with the band (`freeze`).
 
     Replaces the tab's existing tables and its sheet-level AutoFilter, which must not
     overlap a table. `taken` is the workbook's set of table names (case-folded) — table
@@ -568,15 +578,30 @@ def excel_tables(ws, taken=None) -> list[str]:
     return written
 
 
-def finish(ws, table_last_row, ledger=False, header_row=4, freeze="B4"):
+def one_table(ws) -> bool:
+    """Whether the tab holds one Excel table, with its header on row 4 under the band."""
+    if len(ws.tables) != 1:
+        return False
+    ref = next(iter(ws.tables.values())).ref
+    return int("".join(ch for ch in ref.split(":")[0] if ch.isdigit())) == 4
+
+
+def freeze(ws) -> None:
+    """Freeze the band, and with it the header of a tab's only table: a tab holding one
+    table scrolls under its header; a tab holding several freezes the band alone, each
+    table carrying its own header (excel_tables)."""
+    ws.freeze_panes = "B5" if one_table(ws) else "B4"
+
+
+def finish(ws, table_last_row, ledger=False, header_row=4):
     """The per-sheet settings of WORKBOOK_STYLE.md § 9, after the last row is written."""
     grid(ws, header_row, table_last_row, 2, ws.max_column)   # the primary table's rules
     fit_rows(ws)
-    ws.freeze_panes = freeze
     ws.sheet_view.showGridLines = ledger
     ws.sheet_properties.tabColor = SLATE if ledger else ACCENT
     if not excel_tables(ws):                    # no table object: the sheet filter on the header
         ws.auto_filter.ref = f"B{header_row}:{get_column_letter(ws.max_column)}{table_last_row}"
+    freeze(ws)
     ws.print_title_rows = "1:3"                                # the band; never a table header
     ws.page_setup.orientation, ws.page_setup.fitToWidth, ws.page_setup.fitToHeight = "landscape", 1, 0
     ws.sheet_properties.pageSetUpPr.fitToPage = True

@@ -27,7 +27,7 @@
   <g font-size="12">
     <rect x="448" y="76" width="408" height="300" rx="6" fill="#F8FAFC" stroke="#CBD2D9"/>
     <rect x="448" y="76" width="408" height="30" rx="6" fill="#0A5F6A"/>
-    <text x="460" y="96" fill="#FFFFFF" font-weight="bold">Constants row (Tables tab)</text>
+    <text x="460" y="96" fill="#FFFFFF" font-weight="bold">Constants row (Constants tab)</text>
     <g fill="#52606D"><text x="460" y="132">name</text><text x="460" y="162">value</text><text x="460" y="192">kind</text><text x="460" y="222">where</text><text x="460" y="266">quote</text></g>
     <g fill="#1F2933">
       <text x="540" y="132" fill="#0A5F6A">halcyon_filing_date</text>

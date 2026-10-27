@@ -25,7 +25,8 @@ tab carry the trail:
 |---|---|
 | A check tab | A schedule. A number another check computed is a formula naming the cell it copies. |
 | Sources | One figure: its value, the SQL that computed it, and what that SQL reads. |
-| Tables | One table: what a row stands for, the SQL that made it, what it reads, and its row count, totals and hash. Constants follow the tables, one row each. |
+| Tables | One table: what a row stands for, the SQL that made it, what it reads, and its row count, totals and hash. |
+| Constants | One constant: its value and unit, where it was read and the sentence or basis it rests on. |
 | Evidence | One read of a data-room file: the file, the rows read and the control total. |
 
 ## Following the example

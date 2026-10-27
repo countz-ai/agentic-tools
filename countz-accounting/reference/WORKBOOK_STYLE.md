@@ -126,10 +126,11 @@ then each further block: Section heading, one blank row, its table
   (a block of lines — Notes, To reperform — starts right under its heading)
 ```
 
-- **Freeze panes at B4** (title, subtitle, summary + the margin column). Never freeze a
-  table header row: the primary table's header on row 4 is not the header of the tables
-  below it, and a header pinned over a table it does not describe misleads the reader.
-  Never freeze deeper than 3 rows or 2 columns — a deep freeze fills a laptop screen and
+- **Freeze panes at B4** (title, subtitle, summary + the margin column), or at **B5** on a
+  tab holding one table, whose header on row 4 is frozen with the band. On a tab of
+  several tables never freeze a table header row: the primary table's header on row 4 is
+  not the header of the tables below it, and a header pinned over a table it does not
+  describe misleads the reader. Never freeze deeper than that — a deep freeze fills a laptop screen and
   blocks scrolling. Each table carries its own header instead, as an Excel table: its
   filter buttons, and its header in place of the column letters while the reader scrolls
   inside it (`WORKBOOK.md` § 4).
@@ -276,7 +277,7 @@ verifies the stored workbook against the same values. The names, for reading the
   workbook; `S = styles()` at import.
 
 Per sheet, `finish()` in the same module sets: gridlines off (on for a ledger), freeze
-panes `B4`, column A width 2, row 1 height 24 and row 4 height 20, the tab color
+panes `B4` (`B5` on a tab holding one table, `freeze()`), column A width 2, row 1 height 24 and row 4 height 20, the tab color
 (`ACCENT`; `SLATE` for a ledger), an Excel table per table block in `TableStyleLight1` with
 stripes off (the cell styles are the look; a table naming no style is dropped by Google
 Sheets on import), print titles `1:3`, landscape fit to one page wide, 0.5
@@ -329,7 +330,8 @@ Open the produced workbook (or dump its XML) and confirm, per deliverable tab:
 
 1. Every cell font is Arial; sizes used ⊆ {9, 10, 11, 12, 14}.
 2. Every table header row is `BAND`-filled, row 4 among them, and `BAND` fills nothing else.
-3. Freeze pane is `B4` — no table header row frozen; gridlines hidden; every table an
+3. Freeze pane is `B4`, or `B5` on a tab holding one table — no other table header row
+   frozen; gridlines hidden; every table an
    Excel table (`ws.tables`), none overlapping a sheet AutoFilter.
 4. Column A width 2 and empty.
 5. Amount columns use a three-part format with parentheses and `"–"`; no red negatives.

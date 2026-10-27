@@ -94,6 +94,31 @@ SELECT 'T.t1.ledger' AS "Tie", tie("Tie").status AS "Result", cell(tie("Tie").di
 We agreed billing of {F.t1.billed.total} to the ledger.
 """
 
+# A figure the page shows a supporting table for, as a formula over that table.
+OVER = """---
+tab: t1 Billing
+title: t1 · Billing by kind
+subtitle: Test Co · May and June 2025 · $
+summary: Invoices billed {F.t1.inv} of {F.t1.billed.total}.
+---
+# t1_billing
+
+## Billed by kind
+
+```sql primary
+SELECT 'INV' AS "Kind",
+       cell('F.t1.inv', formula := 'SUMIFS({Invoices.Amount}, {Invoices.Kind}, {Kind})') AS "Billed",
+       cell('F.t1.inv_count', formula := 'COUNTIFS({Invoices.Kind}, {Kind})') AS "Invoices",
+       cell('F.t1.billed.total') AS "All kinds"
+```
+
+## Invoices
+
+```sql
+SELECT id AS "Invoice", kind AS "Kind", amount AS "Amount" FROM room.inv ORDER BY id
+```
+"""
+
 
 def main() -> int:
     import tempfile
@@ -237,6 +262,30 @@ def main() -> int:
         refused("a total the rows do not reach", TEMPLATE.replace("FROM (SELECT DISTINCT month FROM room.inv)",
                 "FROM (SELECT DISTINCT month FROM room.inv WHERE month = '2025-05')"), "not the", rd)
         refused("no tab name", TEMPLATE.replace("tab: t1 Billing\n", ""), "`tab`", rd)
+
+        # a figure written as a formula over a supporting table on the page
+        (rd / "workpapers" / "t1.tpl.md").write_text(OVER)
+        out = render.render(rd, "t1")
+        ws = load_workbook(out["tab"]).active
+        cells = json.loads(out["tab"].with_name("t1.cells.json").read_text())["sheets"]["t1 Billing"]
+        if ws["C5"].value != "=SUMIFS($D$11:$D$13, $C$11:$C$13, $B5)":
+            bad.append(f"a figure over a table: {ws['C5'].value}")
+        if ws["D5"].value != "=COUNTIFS($C$11:$C$13, $B5)":
+            bad.append(f"a count over a table: {ws['D5'].value}")
+        e = cells.get("C5", {})
+        if (e.get("fid"), e.get("over")) != ("F.t1.inv", "$B$11:$D$13"):
+            bad.append(f"the formula cell's map entry: {e}")
+        if ws["E5"].value != 350 or "over" in cells.get("E5", {}):
+            bad.append(f"a figure with no formula stays a value: {ws['E5'].value} {cells.get('E5')}")
+        g = subprocess.run([sys.executable, str(SCRIPTS / "check_workbook.py"), str(out["tab"]),
+                            "--run-dir", str(rd)], capture_output=True, text=True)
+        if g.returncode != 0:
+            bad.append(f"check_workbook refuses a formula over a table: {(g.stdout + g.stderr)[-400:]}")
+        refused("a formula that misses its figure", OVER.replace("{Invoices.Kind}, {Kind})') AS \"Billed\"",
+                "{Invoices.Kind}, \"CM\")') AS \"Billed\""), "not the 300", rd)
+        refused("a reference to no table", OVER.replace("{Invoices.Amount}", "{Bills.Amount}"),
+                "not a column", rd)
+        refused("a formula outside the grammar", OVER.replace("SUMIFS(", "AVERAGEIFS("), "grammar", rd)
     if bad:
         print("render.py self-check FAILED:")
         for b in bad:

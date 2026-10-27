@@ -59,11 +59,15 @@ def main() -> int:
                             ("F.b1.add", "Add: billed", 10.0, None, None),
                             ("F.b1.less", "Less: cash received", 4.56, None, None),
                             (None, "= Closing", 1240.0, None, None)])
-        tab(wb, "m1 Producer", [("F.m1.x", "Produced figure", 500.25, None, None)])
+        tab(wb, "m1 Producer", [("F.m1.x", "Produced figure", 500.25, None, None),
+                                ("F.m1.y", "Over the table above", 500.25, None, None)])
+        wb["m1 Producer"]["D6"] = "=SUM($D$5:$D$5)"   # render.py: a figure over a table on its tab
         tab(wb, "c1 Mapped", [("F.c1.copy", "Copied figure", 500.25, None, None),
                               ("F.c1.wrong", "Copied, but wrong", 501.0, None, None),
                               ("F.c1.lost", "Copied from nowhere", 9.0, None, None)])
-        maps = {"m1_producer": {"m1 Producer": {"D5": {"fid": "F.m1.x"}}},
+        maps = {"m1_producer": {"m1 Producer": {"D5": {"fid": "F.m1.x"},
+                                                "D6": {"fid": "F.m1.y", "formula": "=SUM($D$5:$D$5)",
+                                                       "over": "$B$5:$D$5"}}},
                 "c1_mapped": {"c1 Mapped": {"D5": {"src": "F.m1.x"}, "D6": {"src": "F.m1.x"},
                                             "D7": {"src": "F.zz.none"}}}}
         for name, sheets in maps.items():           # one map per placed tab, as place_tab leaves them
@@ -74,9 +78,18 @@ def main() -> int:
         header(src_tab, 4, ["id", "label"], ["id", "description"])
         ident(src_tab.cell(5, 2), "F.m1.x")
         text(src_tab.cell(5, 3), "Produced figure")
+        ident(src_tab.cell(6, 2), "F.m1.y")
+        text(src_tab.cell(6, 3), "Over the table above")
+        # a sentence citing figures, mapped by the assembly's own cells map
+        ex = wb.create_sheet("Exec Summary", 0)
+        band(ex, "Exec Summary", "Fixture")
+        text(ex.cell(5, 2), "Produced 500.25 over the table above, and 9.00 copied from nowhere.")
         path = rd / "out" / ".staging" / "workbook.xlsx"
         path.parent.mkdir(parents=True)
         wb.save(path)
+        path.with_name("workbook.cells.json").write_text(json.dumps(
+            {"schema": "countz-accounting/cells@1",
+             "sheets": {"Exec Summary": {"B5": {"cites": ["F.zz.none", "F.m1.y", "F.m1.x"]}}}}))
 
         r = subprocess.run([sys.executable, str(SCRIPTS / "link_workbook.py"), str(path), "--run-dir", str(rd),
                             "--json"], capture_output=True, text=True)
@@ -108,6 +121,19 @@ def main() -> int:
             bad.append(f"a figure's cell links to its Sources row, got {h and h.location!r}")
         if f["m1 Producer"]["D5"].value != "=500.25" or v["m1 Producer"]["D5"].value != 500.25:
             bad.append(f"a linked number is a formula of itself, cached: {f['m1 Producer']['D5'].value!r}")
+        h = f["m1 Producer"]["D6"].hyperlink
+        if h is None or h.location != "'m1 Producer'!$B$5:$D$5":
+            bad.append(f"a figure over a table links to that table, got {h and h.location!r}")
+        if v["m1 Producer"]["D6"].value != 500.25:
+            bad.append(f"a figure over a table caches its result: {v['m1 Producer']['D6'].value!r}")
+        h = f["Sources"]["B6"].hyperlink
+        if h is None or h.location not in ("'m1 Producer'!B6", "'m1 Producer'!D6"):
+            bad.append(f"its Sources row still links back to it, got {h and h.location!r}")
+        h = f["Exec Summary"]["B5"].hyperlink
+        if h is None or h.location != "'m1 Producer'!D6":
+            bad.append(f"a sentence links to the first figure it states that has a cell, got {h and h.location!r}")
+        elif f["Exec Summary"]["B5"].font.underline:
+            bad.append("a linked sentence takes no underline")
         h = f["Sources"]["B5"].hyperlink
         if h is None or h.location != "'m1 Producer'!B5":
             bad.append(f"the id links back to the cell citing it, got {h and h.location!r}")

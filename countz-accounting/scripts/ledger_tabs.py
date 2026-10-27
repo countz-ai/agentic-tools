@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The workbook's ledger tabs, written from the run's records and never by hand: Sources
-(one row per figure and population), Tables (one row per table, then the constants) and
-Evidence (one row per read of a file). They are the trail a reader follows down from a
+(one row per figure and population), Tables (one row per table), Constants (one row per
+constant, when the run states any) and Evidence (one row per read of a file). They are the trail a reader follows down from a
 number (docs/REPERFORM.md): a figure's Sources row shows its statement and what it reads,
 each table's Tables row shows what one row of it is, the statement that made it, what it
 reads and the counts a re-run is compared against, and each data-room table lands on its
@@ -11,7 +11,7 @@ Evidence row.
     from ledger_tabs import write
     write(wb, RUN, "Sablewood Analytics, Inc. · Contract costs, December 31, 2024 and 2025")
 
-`write` appends the three tabs to `wb` in that order, after every other tab, replacing any
+`write` appends the tabs to `wb` in that order, after every other tab, replacing any
 of the same name. It refuses, writing nothing, when the figure ledgers disagree on an id
 or resolve_roots.py refuses a ledger record: both are the owning check's to fix.
 
@@ -28,8 +28,9 @@ read | evidence | reads. `totals` sums every DECIMAL and DOUBLE column over all 
 the cent. `result hash` is the one `countz-sql` prints for `SELECT * FROM <table>`, given
 when the table has ten rows or more, as the console prints it only then. For a table read
 from the data room, the read (file, sheet, header, rows, control total) stands in the SQL
-column and `evidence` names its Evidence row. The Constants table follows: name | value |
-unit | kind | where | quote or basis | evidence.
+column and `evidence` names its Evidence row.
+
+Constants columns: name | value | unit | kind | where | quote or basis | evidence.
 
 Run with `uv run --project ${CLAUDE_PLUGIN_ROOT} python3`.
 """
@@ -43,10 +44,9 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import figures as _figures  # noqa: E402  sibling: the ledgers and the number formatter
 from wbkit import (FMT_CENTS, FMT_COUNT, FMT_DAYS, FMT_FX, FMT_PCT, FMT_RATE, S, WRAP,  # noqa: E402
-                   band, bind_styles, finish, get_column_letter, header, ident, next_block,
-                   section, text)
+                   band, bind_styles, finish, get_column_letter, header, ident, text)
 
-SOURCES, TABLES, EVIDENCE = "Sources", "Tables", "Evidence"
+SOURCES, TABLES, CONSTANTS, EVIDENCE = "Sources", "Tables", "Constants", "Evidence"
 VALUE_FORMAT = {"pct": FMT_PCT, "count": FMT_COUNT, "ratio": "0.00", "fx_rate": FMT_FX,
                 "rate": FMT_RATE, "days": FMT_DAYS, "quantity": "#,##0.00"}
 HASH_ROWS = 10                  # sql_shell prints a result's hash at ten rows or more
@@ -282,7 +282,7 @@ def _tables(ws, subtitle, run_dir, evs, tabs, order, known) -> int:
     max_reads = max([len(reads.get(t["table_name"], [])) for t in rows] + [1])
     labels = (["table", "what one row is", "made by", "rows", "totals", "result hash",
                "SQL or read", "evidence", "reads"] + [f"reads {i}" for i in range(2, max_reads + 1)])
-    band(ws, "Tables · Tables and constants behind the figures",
+    band(ws, "Tables · Tables behind the figures",
          f"{subtitle} · {len(rows):,} tables")
     for i, label in enumerate(labels, start=2):
         ws.cell(row=4, column=i, value=label).style = S["Header"]
@@ -326,27 +326,36 @@ def _tables(ws, subtitle, run_dir, evs, tabs, order, known) -> int:
         for c in row:
             c.alignment = WRAP
 
-    consts = sql.constant_rows(run_dir)
-    if consts:
-        names = [c for c, _ in sql.CONSTANTS_COLUMNS]
-        r = section(ws, next_block(last), "Constants")
-        header(ws, r, ["name", "value", "unit", "kind", "where", "quote or basis",
-                       "constant evidence"],
-               ["id", "description", "count", "status", "description", "note", "id"])
-        for x in consts:
-            c = dict(zip(names, x))
-            r += 1
-            ident(ws.cell(r, 2), c["name"])
-            text(ws.cell(r, 3), c["value"])
-            for col, v in ((4, c["unit"]), (5, c["kind"]),
-                           (6, ", ".join(str(v) for v in (c["file"], c["locator"]) if v)),
-                           (7, _ids_named(c["quote"] or c["basis"] or "", known))):
-                if v:
-                    text(ws.cell(r, col), v)
-            if c["citation_id"]:
-                ident(ws.cell(r, 8), c["citation_id"])
     finish(ws, last, ledger=True)
     return len(rows)
+
+
+def _constants(wb, subtitle, run_dir, known) -> int:
+    """The Constants tab, one row per constant the run states; no tab when it states none."""
+    import sql
+    consts = sql.constant_rows(run_dir)
+    if not consts:
+        return 0
+    ws = wb.create_sheet(CONSTANTS)
+    names = [c for c, _ in sql.CONSTANTS_COLUMNS]
+    band(ws, "Constants · Values the statements read", f"{subtitle} · {len(consts):,} constants")
+    header(ws, 4, ["name", "value", "unit", "kind", "where", "quote or basis", "constant evidence"],
+           ["id", "description", "count", "status", "description", "note", "id"])
+    r = 4
+    for x in consts:
+        c = dict(zip(names, x))
+        r += 1
+        ident(ws.cell(r, 2), c["name"])
+        text(ws.cell(r, 3), c["value"])
+        for col, v in ((4, c["unit"]), (5, c["kind"]),
+                       (6, ", ".join(str(v) for v in (c["file"], c["locator"]) if v)),
+                       (7, _ids_named(c["quote"] or c["basis"] or "", known))):
+            if v:
+                text(ws.cell(r, col), v)
+        if c["citation_id"]:
+            ident(ws.cell(r, 8), c["citation_id"])
+    finish(ws, r, ledger=True)
+    return len(consts)
 
 
 def _evidence(ws, subtitle, evs, order, run: dict) -> None:
@@ -404,8 +413,8 @@ def _evidence(ws, subtitle, evs, order, run: dict) -> None:
 
 
 def write(wb, run_dir, subtitle: str) -> dict:
-    """Append Sources, Tables and Evidence to `wb` (module docstring). Returns the row
-    counts: {sources, tables, evidence}."""
+    """Append Sources, Tables, Constants and Evidence to `wb` (module docstring). Returns
+    the row counts: {sources, tables, constants, evidence}."""
     import resolve_roots
     run_dir = pathlib.Path(run_dir).resolve()
     run = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
@@ -423,12 +432,13 @@ def write(wb, run_dir, subtitle: str) -> dict:
     figs = _ledger(run_dir, "figures", order)
     evs = _ledger(run_dir, "evidence", order)
     known = set(figs) | set(evs)
-    for name in (SOURCES, TABLES, EVIDENCE):
+    for name in (SOURCES, TABLES, CONSTANTS, EVIDENCE):
         if name in wb.sheetnames:
             del wb[name]
     bind_styles(wb)
     tabs = _check_tabs(run, wb.sheetnames)
     _sources(wb.create_sheet(SOURCES), subtitle, figs, evs, roots, tabs, known)
     n_tables = _tables(wb.create_sheet(TABLES), subtitle, run_dir, evs, tabs, order, known)
+    n_consts = _constants(wb, subtitle, run_dir, known)
     _evidence(wb.create_sheet(EVIDENCE), subtitle, evs, order, run)
-    return {"sources": len(figs), "tables": n_tables, "evidence": len(evs)}
+    return {"sources": len(figs), "tables": n_tables, "constants": n_consts, "evidence": len(evs)}
