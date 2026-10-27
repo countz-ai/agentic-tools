@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import pathlib
+import subprocess
 import sys
 
 SCRIPTS = pathlib.Path(__file__).resolve().parents[2] / "countz-accounting" / "scripts"
@@ -438,6 +439,17 @@ def main() -> int:
         (forms / "b.md").write_text("fee 25\n")
         if [x["agrees"] for x in cache.verify(rd, fs["cache_id"])] != [False]:
             bad.append("folder span: a changed file in the folder still verifies")
+
+        # a moved run: countz-sql writes the catalog anew and keeps the run's own
+        moved = rd.rename(rd.with_name("moved"))
+        was = (moved / "catalog.sql").read_text()
+        r = subprocess.run([str(SCRIPTS / "countz-sql"), "-agent", "-init",
+                            str(moved / "catalog.sql"), "-c", "SELECT count(*) AS n FROM room.inv"],
+                           capture_output=True, text=True)
+        if (r.returncode, r.stdout) != (0, "| n:BIGINT |\n|---|\n| 4 |\n") \
+                or (moved / "catalog.orig.sql").read_text() != was \
+                or str(moved.resolve()) not in (moved / "catalog.sql").read_text():
+            bad.append(f"countz-sql on a moved run: {r.returncode} {r.stdout!r} {r.stderr!r}")
     if bad:
         print("sql.py self-check FAILED:")
         for b in bad:

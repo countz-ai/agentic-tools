@@ -49,7 +49,8 @@ agents:
 # RECIPES="<file.md> ..." is the one exception, by hand: each file is validated and staged
 # into the zip as `<plugin>/bundled-recipes/<frontmatter name>.md`, never into the source
 # tree, and a run of that recipe pins the bundled copy instead of fetching it
-# (scripts/bundled_recipe.py, PLAYBOOK_RECIPES.md § 2).
+# (scripts/bundled_recipe.py, PLAYBOOK_RECIPES.md § 2). A plugin without that script runs
+# no recipe, and its zip is built without them.
 zip: validate check
 	@mkdir -p $(DIST)
 	@for p in $(PLUGIN); do \
@@ -62,7 +63,7 @@ zip: validate check
 		rm -f $$out; \
 		zip -qr $$out $$p -x '*.DS_Store' '*/__pycache__/*' '*.pyc' '*/.venv/*' '*/playbook-recipes/*'; \
 		echo "$$out  ($$n files, $$b bytes uncompressed)"; \
-		if [ -n "$(RECIPES)" ]; then \
+		if [ -n "$(RECIPES)" ] && [ -f $$p/scripts/bundled_recipe.py ]; then \
 			stage=$(DIST)/.stage; rm -rf $$stage; mkdir -p $$stage/$$p/bundled-recipes; \
 			for r in $(RECIPES); do \
 				python3 $$p/scripts/validate_recipe.py $$r || { rm -f $$out; exit 1; }; \

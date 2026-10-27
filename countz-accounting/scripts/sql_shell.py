@@ -16,6 +16,12 @@ order-independent hash of the result when it has none or ten or more rows, or wa
 The hash is this module's own, not the CLI's. An error is one JSON line on stderr, exit 1;
 the statements after it do not run.
 
+A run's `catalog.sql` names its tables by absolute path. When `-init` is a `catalog.sql`
+naming a parquet file that does not exist, but does exist under the catalog's own directory,
+the run was moved: the shell replaces the old run directory with that directory throughout,
+renames the file it read to `catalog.orig.sql` (an earlier one is kept) and writes the
+result as `catalog.sql`.
+
 Run with `uv run --project ${CLAUDE_PLUGIN_ROOT} python3`.
 """
 from __future__ import annotations
@@ -31,6 +37,8 @@ SILENT = {"CREATE", "INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "SET", "VARIA
           "ATTACH", "DETACH", "TRANSACTION", "LOAD", "COPY", "PREPARE", "EXECUTE"}
 EDGE = 20                        # rows shown at each end of a cut result
 ERROR = re.compile(r"(?P<type>[A-Za-z ]+?) Error: (?P<msg>.*?)(?:\n\nLINE \d+:.*)?\Z", re.S)
+PARQUET = re.compile(r"read_parquet\('((?:[^']|'')*)'\)")
+ORIGINAL = "catalog.orig.sql"    # a moved run's catalog as the run wrote it
 
 
 class Shell:
@@ -129,6 +137,25 @@ def error_json(exc: Exception) -> str:
                       separators=(",", ":"))
 
 
+def init_text(path: pathlib.Path) -> str:
+    """The `-init` file's statements; a moved run's catalog repointed (module docstring)."""
+    text = path.read_text(encoding="utf-8")
+    gone = [p for p in (pathlib.PurePath(m.replace("''", "'")) for m in PARQUET.findall(text))
+            if not pathlib.Path(p).exists()]
+    if path.name != "catalog.sql" or not gone:
+        return text
+    here = path.parent.resolve()
+    was = next((a for a in gone[0].parents if (here / gone[0].relative_to(a)).exists()), None)
+    if was is None:
+        return text                                  # not a move: the error names the file
+    text = text.replace(str(was).replace("'", "''"), str(here).replace("'", "''"))
+    kept = path.with_name(ORIGINAL)
+    if not kept.exists():
+        path.rename(kept)
+    path.write_text(text, encoding="utf-8")
+    return text
+
+
 def main(argv: list[str]) -> int:
     init = sql = None
     database, read_only = ":memory:", False
@@ -154,7 +181,7 @@ def main(argv: list[str]) -> int:
     try:
         sh = Shell(database, read_only)
         if init:
-            sh.script(pathlib.Path(init).read_text(encoding="utf-8"), quiet=True)
+            sh.script(init_text(pathlib.Path(init)), quiet=True)
         sh.script(sql if sql is not None else sys.stdin.read())
     except Exception as exc:
         sys.stdout.flush()
