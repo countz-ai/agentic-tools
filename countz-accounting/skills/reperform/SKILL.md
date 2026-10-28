@@ -11,19 +11,19 @@ context: inline
 ---
 
 ```
-R=; for d in "${CLAUDE_PLUGIN_ROOT}" "${CLAUDE_SKILL_DIR}/../.." "$HOME"/.claude/plugins/synced/*/countz-accounting $(ls -td "$HOME"/.claude/plugins/cache/*/countz-accounting/*/ 2>/dev/null); do grep -qs '^def emptying' "$d/scripts/sql.py" && R=$(cd "$d" && pwd) && break; done; [ -n "$R" ] || { f=$(find "$HOME/.claude/plugins" -maxdepth 7 -path "*/countz-accounting/scripts/sql.py" -exec grep -l '^def emptying' {} + 2>/dev/null | head -1); [ -n "$f" ] && R=${f%/scripts/sql.py}; }; [ -n "$R" ] || { f=$(find / \( -path /proc -o -path /sys -o -path /dev \) -prune -o -path "*/countz-accounting/scripts/sql.py" -exec grep -l '^def emptying' {} + 2>/dev/null | head -1); [ -n "$f" ] && R=${f%/scripts/sql.py}; }; if [ -z "$R" ]; then echo "NOT INSTALLED: this plugin's files are not in the session. Tell the user so in one line, and stop."; else echo "CLAUDE_PLUGIN_ROOT=$R"; python3 "$R/scripts/section.py" DOCTRINE.md "Voice" "Number conventions" && python3 "$R/scripts/section.py" skills/explain/SKILL.md Inputs Querying "Find the result" "Re-perform it" "Fill the gaps"; fi
+R=; for d in "${CLAUDE_PLUGIN_ROOT}" "${CLAUDE_SKILL_DIR}/../.." "$HOME"/.claude/plugins/synced/*/countz-accounting $(ls -td "$HOME"/.claude/plugins/cache/*/countz-accounting/*/ 2>/dev/null); do grep -qs '^def emptying' "$d/scripts/sql.py" && R=$(cd "$d" && pwd) && break; done; [ -n "$R" ] || { f=$(find "$HOME/.claude/plugins" -maxdepth 7 -path "*/countz-accounting/scripts/sql.py" -exec grep -l '^def emptying' {} + 2>/dev/null | head -1); [ -n "$f" ] && R=${f%/scripts/sql.py}; }; [ -n "$R" ] || { f=$(find / \( -path /proc -o -path /sys -o -path /dev \) -prune -o -path "*/countz-accounting/scripts/sql.py" -exec grep -l '^def emptying' {} + 2>/dev/null | head -1); [ -n "$f" ] && R=${f%/scripts/sql.py}; }; if [ -z "$R" ]; then echo "NOT INSTALLED: this plugin's files are not in the session. Tell the user so in one line, and stop."; else echo "CLAUDE_PLUGIN_ROOT=$R"; python3 "$R/scripts/section.py" DOCTRINE.md "Voice" "Number conventions" && python3 "$R/scripts/section.py" skills/drilldown/SKILL.md Inputs Querying "Find the result" "Re-perform it" "Fill the gaps"; fi
 ```
 
 `$R` below is the `CLAUDE_PLUGIN_ROOT` the block printed. The block also printed the
-explain skill's Inputs, Querying and steps 1 to 3. You re-perform one result from the run's
+drilldown skill's Inputs, Querying and steps 1 to 3. You re-perform one result from the run's
 own tables, in this conversation.
 
 ## 1. Research
 
-If this conversation explained the result, start from that work: its `emptying` output,
-the statements it read and its query outputs. Run a query only for an output the
-conversation does not hold. Otherwise do explain's steps 1 to 3: find the result,
-re-perform it with `emptying`, and fill the gaps.
+If this conversation drilled into the result, start from that work: its lineage, the
+statements it read and its query outputs. Run a query only for an output the
+conversation does not hold. Otherwise do drilldown's steps 1 to 3: find the result,
+re-perform it, and fill the gaps.
 
 ## 2. Walk it through
 
@@ -44,9 +44,9 @@ Alternate two kinds of step, starting and ending with data:
 The data step after each logic step is that SQL's output: show at most ten rows of a
 longer result, and state its row count.
 
-Show the nodes that affect the value, and a node with no effect where its condition
-carries the explanation (example: earlier revenue that shows no customer billed before).
-Name the other nodes in one line. Where a statement builds several results (UNION
+Show the nodes the value rests on, and a node that leaves it unchanged where its
+condition carries the explanation (example: earlier revenue that shows no customer billed
+before). Name the other nodes in one line. Where a statement builds several results (UNION
 branches, CTEs), show the branch that yields the result's row.
 
 Example of one cycle:
@@ -67,8 +67,8 @@ Example of one cycle:
 > and 28 September 2025 (computed for this re-performance).
 
 Mark every figure as the run's, with its id, or as computed for this re-performance and
-absent from the run's ledger. Close with what no record in the run answers, and who
-holds it where the run names an owner. End with this line:
+absent from the run's ledger. Close with what the run's records do not show, and who
+holds the answer where the run names an owner. End with this line:
 
 > To run any of these queries, or a changed one, say: run query <sql>.
 
@@ -78,5 +78,5 @@ Write the walkthrough per § Voice and § Number conventions, which the block pr
 
 The user runs SQL through you in this conversation, never in a shell; give no shell
 command. When the user says *run query* followed by SQL, run that SQL with `countz-sql`
-as explain's § Querying says, and show the output as a table: at most ten rows, with
+as drilldown's § Querying says, and show the output as a table: at most ten rows, with
 the row count.

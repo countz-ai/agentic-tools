@@ -1,13 +1,14 @@
 ---
-name: explain
+name: drilldown
 description: >-
-  Explain a result of a finished run in accounting terms: what the item is, what it rests
-  on, and why it is worth attention. Re-performs the statements behind it and queries
-  the run for the evidence around it first. Invoke when the user asks to explain or
-  question a figure, finding or open item of a run, for example "explain the 1,406
-  customers first billed in August 2025". For the step-by-step data and SQL, use
-  `reperform`.
-argument-hint: "[run directory] what to explain"
+  Drill down into a result of a finished run and explain it in accounting terms: what the
+  item is, what it rests on, and why it is worth attention. Re-performs the statements
+  behind it and queries the run for the evidence around it first. Invoke when the user
+  asks to drill into, explain or question a figure, finding or open item of a run, for
+  example "drilldown the 1,406 customers first billed in August 2025". A question about an
+  accounting concept that names no result of a run is outside this skill. For the
+  step-by-step data and SQL, use `reperform`.
+argument-hint: "[run directory] the figure, finding or open item"
 context: inline
 ---
 
@@ -20,7 +21,9 @@ run's own tables, in this conversation.
 
 ## Inputs
 
-- **What to explain**: the arguments, or the message that invoked you.
+- **The result**: the figure, finding or open item the arguments or the invoking message
+  name. Where they name only a concept (example: "ARR", "ASC 606"), answer it in a few
+  sentences, then ask which result of the run to drill into.
 - **The run directory**: a path in the arguments; else the run this session ran or last
   named; else ask the user for it. It holds `run.json` and `catalog.sql`.
 
@@ -51,23 +54,13 @@ the result and no figure does, explain that table or tie.
 
 ## 2. Re-perform it
 
-Run `uv run --quiet --project $R python3 $R/scripts/sql.py emptying <run_dir> <figure id>`.
-It rebuilds each derived table in the figure's lineage from its statement and recomputes
-the figure (first line: re-performed and recorded value). Then it empties each input in
-turn, nearest first:
+Query `SELECT * FROM lineage('<figure id>')`: the statements behind the figure, in the
+order a re-performer runs them, down to the parsed tables and the constants. Run the
+figure's `statement` against the run's tables and compare its value with the recorded
+one. If they differ, report both values and stop. For a figure with no statement (a
+tie's difference), re-perform each side.
 
-- `affects`: the value changes without it;
-- `no effect`: the value does not change in this run (example: a filter every row
-  passes);
-- `not tested`: read only through a node with no effect; listed on that node's line.
-
-The last line counts each result. Read the output whole; without the count line, you
-have read part of it.
-
-If it refuses because the re-performed value differs from the ledger, report both values
-and stop. For a figure with no statement (a tie's difference), re-perform each side.
-
-Read the statements of the nodes that affect the value: `definition` in `countz.tables`,
+Read the statements of the nodes the value rests on: `definition` in `countz.tables`,
 `statement` in `countz.figures`, and each constant's row in `room.constants`. Where a
 statement builds several results (UNION branches, CTEs), follow the branch that yields
 the figure's row. A `chosen` constant is the run's judgment; step 3 tests it.
@@ -100,7 +93,7 @@ where the reader needs it to find the record. No SQL.
    records for the rule or judgment behind it; and what in the records it leaves
    unexplained. State the condition and its quantified consequence; do not grade the
    risk.
-3. **What no record answers**, and who holds it where the run names an owner.
+3. **What the records do not show**, and who holds the answer where the run names an owner.
 
 Show the evidence that carries a point in a short table. Mark every figure as the run's,
 with its id, or as computed for this explanation and absent from the run's ledger. End
