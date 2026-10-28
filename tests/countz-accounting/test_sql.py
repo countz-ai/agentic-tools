@@ -457,6 +457,14 @@ def main() -> int:
         if got != {"t9.june": ("affects", 1, None), "room.inv": ("affects", 2, None),
                    "t9.terms": ("no effect", 2, 225.5), f"room.{tid}": ("not tested", None, None)}:
             bad.append(f"emptying: {got}")
+        lines = sql.emptying_lines(em)
+        if lines != [f"re-performed\t{em['value']}\trecorded {em['recorded']}",
+                     "affects\t1\tt9.june\tderived\tNone\tF.t9.june",
+                     "affects\t2\troom.inv\tsource\tNone\tt9.june",
+                     f"no effect\t2\tt9.terms\tderived\t{got['t9.terms'][2]}\tt9.june\t"
+                     f"not tested through it: room.{tid}",
+                     "4 nodes: 2 affects, 1 no effect, 1 not tested"]:
+            bad.append(f"emptying lines: {lines}")
 
         # a moved run: countz-sql writes the catalog anew and keeps the run's own
         moved = rd.rename(rd.with_name("moved"))

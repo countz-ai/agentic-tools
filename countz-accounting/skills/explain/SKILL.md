@@ -1,11 +1,12 @@
 ---
 name: explain
 description: >-
-  Explain a result of a finished run: re-perform the statements behind it from the
-  data-room tables, query the run's tables for the evidence the statements do not hold,
-  and walk from the source data through each step of logic to the result. Invoke when
-  the user asks to explain, trace or question a figure, finding or open item of a run,
-  for example "explain the 1,406 customers first billed in August 2025".
+  Explain a result of a finished run in accounting terms: what the item is, what it rests
+  on, and why it is worth attention. Re-performs the statements behind it and queries
+  the run for the evidence around it first. Invoke when the user asks to explain or
+  question a figure, finding or open item of a run, for example "explain the 1,406
+  customers first billed in August 2025". For the step-by-step data and SQL, use
+  `reperform`.
 argument-hint: "[run directory] what to explain"
 context: inline
 ---
@@ -58,7 +59,10 @@ turn, nearest first:
 - `affects`: the value changes without it;
 - `no effect`: the value does not change in this run (example: a filter every row
   passes);
-- `not tested`: read only through a node with no effect.
+- `not tested`: read only through a node with no effect; listed on that node's line.
+
+The last line counts each result. Read the output whole; without the count line, you
+have read part of it.
 
 If it refuses because the re-performed value differs from the ledger, report both values
 and stop. For a figure with no statement (a tie's difference), re-perform each side.
@@ -84,35 +88,24 @@ to understand it. Examples of gaps:
 
 ## 4. Explain
 
-Lead with the answer in one short paragraph: what the result is and what explains it,
-or that no record in the run explains it.
+Write it for an accountant, in accounting terms: the account, the balance or metric, the
+policy rule, the period and the counterparty. Name a table, column or statement only
+where the reader needs it to find the record. No SQL.
 
-Then the chain, from the data-room files to the result and on through the gaps, in
-alternating steps:
+1. **What the item is.** One paragraph: what the result measures, which records it rests
+   on, and which policy rule or judgment puts it there.
+2. **Why it is worth attention.** Its size against materiality and against the total it
+   is part of (example: the share of ARR at the period end); the figures and pages that
+   read it and how far they move; how it would change under the alternative the run
+   records for the rule or judgment behind it; and what in the records it leaves
+   unexplained. State the condition and its quantified consequence; do not grade the
+   risk.
+3. **What no record answers**, and who holds it where the run names an owner.
 
-- **Data**: what a table holds at that point, in the counts, sums and rows that matter,
-  and where it comes from: the file and rows for a parsed table, the statement that made
-  it otherwise.
-- **Logic**: what the next statement or query does, in words (what it filters, joins,
-  groups or computes, and on which columns), with its SQL below in a fenced block.
+Show the evidence that carries a point in a short table. Mark every figure as the run's,
+with its id, or as computed for this explanation and absent from the run's ledger. End
+with this line:
 
-Follow each logic step with the data it yields. Show the nodes that affect the value,
-and a node with no effect where its condition carries the explanation (example: earlier
-revenue that shows no customer billed before). Name the other nodes in one line.
-
-Mark every figure as the run's, with its id, or as computed for this explanation and
-absent from the run's ledger. Close with what no record in the run answers, and who
-holds it where the run names an owner.
-
-Example of the cycle:
-
-> **Data.** `Customer Revenue Stream FY2025.csv`, rows 6:121430, parsed as
-> `room.revenue_stream_fy2025`: one row per customer, month and stream.
->
-> **Logic.** The statement behind `g0_scoping.customers` takes each customer's earliest
-> month with revenue.
->
-> **Data.** 1,518 customers have August 2025 as their first month; in each month from
-> October 2024 to July 2025, 17 or 18 do (computed for this explanation).
+> To walk through the data and re-perform each step, say: reperform.
 
 Write the explanation per § Voice and § Number conventions, which the block printed.

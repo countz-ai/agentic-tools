@@ -91,9 +91,12 @@ filter every row passes has no effect.
 
     sql.py verify <run_dir> [--check <check>]        exit 1 on a failure
     sql.py catalog <run_dir>                         rewrite <run_dir>/catalog.sql
-    sql.py emptying <run_dir> <figure id>            the value re-performed, then one line
-                                                     per lineage node: result, depth, node,
-                                                     kind, value, read by
+    sql.py emptying <run_dir> <figure id>            the value re-performed; a line per node
+                                                     that affects it, then per node with no
+                                                     effect (result, depth, node, kind,
+                                                     value, read by), the latter with the
+                                                     nodes not tested through it; last, a
+                                                     count of each result
 
 Run with `uv run --project ${CLAUDE_PLUGIN_ROOT} python3`.
 """
@@ -1452,6 +1455,44 @@ def emptying(run_dir, id: str) -> dict:
     return {"value": base, "recorded": recorded, "nodes": list(out.values())}
 
 
+def emptying_lines(e: dict) -> list[str]:
+    """`emptying`'s result as the lines the CLI prints: the value re-performed, each node
+    that `affects` the figure, each node with `no effect` and the nodes `not tested`
+    through it, then a count of each result - a reader who sees no count line saw a
+    truncated list."""
+    by = {r["node"]: r for r in e["nodes"]}
+
+    def under(node, seen=()):                        # the no-effect nodes above a node
+        r = by.get(node)
+        if r is None or node in seen:
+            return set()
+        if r["result"] == "no effect":
+            return {node}
+        return set().union(*[under(v, seen + (node,)) for v in r["via"]]) if r["via"] else set()
+
+    untested: dict[str, list[str]] = {}
+    for r in e["nodes"]:
+        if r["result"] == "not tested":
+            for top in under(r["node"]) or {"-"}:
+                untested.setdefault(top, []).append(r["node"])
+
+    def row(r):
+        return [r["result"], str(r["depth"] or "-"), r["node"], str(r["kind"]),
+                str(r["value"]), ", ".join(r["via"])]
+
+    lines = [f"re-performed\t{e['value']}\trecorded {e['recorded']}"]
+    lines += ["\t".join(row(r)) for r in e["nodes"] if r["result"] == "affects"]
+    lines += ["\t".join(row(r) + ["not tested through it: " +
+                                  (", ".join(untested.get(r["node"], [])) or "none")])
+              for r in e["nodes"] if r["result"] == "no effect"]
+    if "-" in untested:
+        lines.append("not tested\t-\t" + ", ".join(untested["-"]))
+    n = {k: sum(r["result"] == k for r in e["nodes"])
+         for k in ("affects", "no effect", "not tested")}
+    lines.append(f"{len(e['nodes'])} nodes: " + ", ".join(f"{v} {k}" for k, v in n.items()))
+    return lines
+
+
 # -- verify --------------------------------------------------------------------------------
 def _agrees(stored, now, unit: str) -> bool:
     if stored is None or now is None:
@@ -1627,10 +1668,7 @@ def main() -> int:
             return 0
         if a.cmd == "emptying":
             e = emptying(a.run_dir, a.id)
-            print(f"re-performed\t{e['value']}\trecorded {e['recorded']}")
-            for r in e["nodes"]:
-                print("\t".join([r["result"], str(r["depth"] or "-"), r["node"],
-                                 str(r["kind"]), str(r["value"]), ", ".join(r["via"])]))
+            print("\n".join(emptying_lines(e)))
             return 0
         r = verify(a.run_dir, a.check)
     except ValueError as exc:
