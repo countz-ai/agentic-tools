@@ -88,6 +88,18 @@ yourself, and cite it with `span(frame=<your df>, run_dir=<run_dir>, ...)`, stat
 coordinates and each column's parse, description and unit (`EVIDENCE.md` § 1). The span
 writes it to the cache.
 
+Write your script early and grow it. Probe a source only for what the next part of the
+script needs. When a probe settles a rule (for example, how two registers join or what a
+column holds), write it into `workpapers/<check>.py` as the statement that uses it, run
+the script, and go on to the next part: one entity, class or table at a time. The script
+holds the design. A design held only in your reasoning is rebuilt at every new fact; on
+one fifteen-class check that cost five hours of probing before the script's first line.
+
+The docstrings of `scripts/sql.py` (the values a statement may type), `scripts/render.py`
+(the template), `scripts/items.py` (item tables), `scripts/check_prose.py` (numbers in
+sentences) and `scripts/check_workbook.py` (the tab) state what each gate refuses. Read
+the docstring and skip the code below it. When a gate refuses, fix what its message names.
+
 On any difference your procedure cannot explain, re-perform the read from the source
 file (DOCTRINE.md § Resolving issues, rung 1). A cache table that is wrong is recorded in
 your step record under `cache_defects`, one entry per id, `{id, what, fix}` with `fix` in
@@ -583,9 +595,8 @@ shows the value, and cites the passage (`scripts/sql.py`).
 
 ## 3. Figures
 
-Every number in the deliverable traces to a figure; the deliverable never cites a citation
-directly. One entry per stated figure. One entry per projected table, citing its span;
-that entry covers the table's cells.
+Every number in the deliverable traces to a figure or to a row of the statement that made
+its table; the deliverable never cites a citation directly. One entry per figure.
 
 ```yaml
 - id: F.tie_gl_tb.delta

@@ -164,9 +164,8 @@ shows the value, and cites the passage (`scripts/sql.py`).
 
 ## 3. Figures
 
-Every number in the deliverable traces to a figure; the deliverable never cites a citation
-directly. One entry per stated figure. One entry per projected table, citing its span;
-that entry covers the table's cells.
+Every number in the deliverable traces to a figure or to a row of the statement that made
+its table; the deliverable never cites a citation directly. One entry per figure.
 
 ```yaml
 - id: F.tie_gl_tb.delta
