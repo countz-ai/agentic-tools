@@ -30,7 +30,7 @@ Subcommands:
         and every family the approved steps run, in recipe order.
 
     dispatch <run_dir> --checks id1,id2 [--mode fresh|fix] [--extra '<one-line JSON>']
-    dispatch <run_dir> --step plan|recipe|arr_policy|review|report --args '<one-line JSON>'
+    dispatch <run_dir> --step plan|recipe|arr_policy|review|report|deck --args '<one-line JSON>'
     dispatch <run_dir> --briefs <brief.md> ...
         Open a wave: allocate seqs from next_seq, append one dispatch row per member
         (state "dispatched"), write every member's brief to dispatch/<NNNN>-<step>.md —
@@ -90,7 +90,8 @@ RUN_SCHEMA = "countz-accounting/run@1"
 # Steps that are not checks, and the skill each dispatches. Check kinds resolve through
 # check_playbook.KINDS.
 STEP_SKILLS = {"plan": "check-plan", "recipe": "create-recipe", "review": "check-review",
-               "report": "check-report", "arr_policy": "extract-arr-policy"}
+               "report": "check-report", "arr_policy": "extract-arr-policy",
+               "deck": "check-deck"}
 
 BRIEF = """\
 # countz-accounting dispatch {nnnn} — {step}
@@ -259,6 +260,10 @@ def step_say(step: str, args: dict) -> str:
             ids = [c for c in ids.split(",") if c.strip()]
         what = checks_phrase(len(ids)).replace(" in parallel", "") if ids else "the checks"
         return f"Reviewing {what} against the source files."
+    if step == "deck":
+        return "Reading the deck as its reader, for sentences to rewrite."
+    if args.get("mode") == "fix":
+        return "Rewording the deck's sentences on the review's findings."
     return "Assembling the workbook and the report deck from the check records."
 
 

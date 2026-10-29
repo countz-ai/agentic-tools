@@ -53,7 +53,7 @@ shape; run `scripts/preview.py <run_dir>` and send what it prints per
 3. When the user is done checking — or asks for the deliverable — run the standard tail
    per `RUN_CONTRACT.md § Review and report`: `check-review` over the unreviewed checks,
    its findings acted on without a ruling, then
-   `check-report`. Point at `out/workbook.xlsx`, `out/report.pptx`, `out/RUN_SUMMARY.md` and
+   `check-report`, then `check-deck` and the one rewrite its findings buy. Point at `out/workbook.xlsx`, `out/report.pptx`, `out/RUN_SUMMARY.md` and
    relay the summary's open items.
 
 ## "Save this playbook"

@@ -15,7 +15,23 @@ user-invocable: false
 The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.
 
 Arguments: `run_dir`, `seq`, and optionally `title` and `note` (from a playbook's `report`
-block — the note goes on the deck's first page).
+block — the note goes on the deck's first page), or `mode: fix` with `fix_input`.
+
+**`mode: fix`.** `fix_input` holds the deck review's findings (`check-deck`). You change the sentences they name and
+nothing else, so the rest of this file does not apply except where this paragraph sends
+you. Read § Voice (`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py DOCTRINE.md Voice`),
+`REPORT.md` § 3 and the sealed `out/report.yaml`. Copy `out/workbook.xlsx`,
+`out/report.yaml`, `out/report-plan.md` and `out/RUN_SUMMARY.md` into `out/.staging/`. Rewrite each named sentence of
+`out/.staging/report.yaml` to state what its finding's `must_state` names. A finding
+routed `recipe` names a section title the recipe fixes: leave it, and list it in
+`RUN_SUMMARY.md` as unchanged. A rewrite keeps
+every `{...}` reference the sentence carries and types no number. A sentence on a
+workbook tab goes through `reword.py` as § 3 says. Then build, and run `check_report.py`,
+plus `check_prose.py` when `reword.py` changed the workbook. Do not re-plan the deck,
+rebuild the workbook, run `sql.py verify`, or read the checks, ledgers or tabs: the
+figures are the sealed workbook's. Seal and record per § 6. Add each rewrite to
+`RUN_SUMMARY.md` under `## Wording changes`: the finding id, the old sentence and the
+new one.
 
 Follow `DOCTRINE.md` § Voice and § Number conventions. Read
 `${CLAUDE_PLUGIN_ROOT}/reference/WORKBOOK.md` (where the reader's eye lands on every tab —

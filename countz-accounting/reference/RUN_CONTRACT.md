@@ -231,13 +231,13 @@ twice, or a value starting with `"` that is not one JSON string.
 
 `<run_dir>/steps/<NNNN>-<step>.json`, `NNNN` the zero-padded seq from the dispatch args.
 Steps: `plan`, `recipe`, `arr_policy`, `extract`, `tie`, `recon`, `completeness`,
-`vouch`, `cutoff`, `analyze`, `review`, `report`.
+`vouch`, `cutoff`, `analyze`, `review`, `report`, `deck`.
 
 ```yaml
 schema: "countz-accounting/step@1"
 seq: 3
 step: "tie"
-check_id: "tie_gl_tb"               # null for plan / review / report
+check_id: "tie_gl_tb"               # null for plan / review / report / deck
 args: {}                            # exactly what you were handed
 started_at / completed_at: "<ISO 8601 UTC>"
 outcome: "complete"                 # complete | blocked
@@ -464,6 +464,14 @@ and the deliverable says so.
 
 Then `check-report` (`dispatch --step report`). Re-dispatch it whenever later checks or
 fixes land after a seal; the report step reassembles from all current records.
+
+The first time a report seals, dispatch `check-deck` (`dispatch --step deck`). It reads
+the sealed deck as its reader, with the writing rules and nothing else, and records
+findings on the deck's sentences. Where it records any, re-dispatch `check-report` once
+with all of them: `dispatch --step report --args '{"mode": "fix", "fix_input": [<the
+findings>]}'`. That dispatch changes only the sentences the findings name and recomputes
+no figure. The deck review runs once per run: no review follows the rewrite, and a later
+reseal is not reviewed again unless the user directs it.
 
 The relay relays. It does not open client files, compute figures, or summarize a step's
 output. The preview puts the deliverables and the review's findings in front of the
