@@ -465,13 +465,26 @@ and the deliverable says so.
 Then `check-report` (`dispatch --step report`). Re-dispatch it whenever later checks or
 fixes land after a seal; the report step reassembles from all current records.
 
-The first time a report seals, dispatch `check-deck` (`dispatch --step deck`). It reads
-the sealed deck as its reader, with the writing rules and nothing else, and records
-findings on the deck's sentences. Where it records any, re-dispatch `check-report` once
-with all of them: `dispatch --step report --args '{"mode": "fix", "fix_input": [<the
-findings>]}'`. That dispatch changes only the sentences the findings name and recomputes
-no figure. The deck review runs once per run: no review follows the rewrite, and a later
-reseal is not reviewed again unless the user directs it.
+The first time a report seals, review the deck, in at most two rounds:
+
+1. Dispatch `check-deck` (`dispatch --step deck`). It reads the sealed deck as its
+   reader, with the writing rules and nothing else, and records findings on its pages.
+   With none, the run is done.
+2. Re-dispatch `check-report` with every finding:
+   `dispatch --step report --args '{"mode": "fix", "fix_input": [<the findings>]}'`. It
+   fixes each finding with the report step's own means. A defect only a check can fix
+   ends it `blocked` naming the check, its other fixes kept in `out/.staging/`. Re-run
+   each named check once with `--mode fix` and the finding in `fix_input`, then
+   re-dispatch `check-report` in `mode: fix` with the same findings, never fresh: it
+   picks up the re-run tabs and finishes from its staging.
+3. Once that seals, dispatch `check-deck` again with `since` the deck the first round read
+   (`--args '{"since": "out/history/<NNNN>-report.pptx"}'`, `NNNN` the seq of the report it
+   reviewed). It judges only the pages that changed.
+4. Its findings go to one `check-report` in `mode: fix` with `"rerun": false`: wording is
+   fixed, and a defect only a check can fix is carried to the open items instead of
+   blocking. No review follows.
+
+A later reseal is reviewed again only when the user directs it.
 
 The relay relays. It does not open client files, compute figures, or summarize a step's
 output. The preview puts the deliverables and the review's findings in front of the

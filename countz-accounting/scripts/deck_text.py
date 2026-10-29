@@ -2,13 +2,17 @@
 """Print a built deck as its reader sees it: each slide's words and figures in reading
 order, for the deck review (skills/check-deck).
 
-    uv run --project ${CLAUDE_PLUGIN_ROOT} python3 scripts/deck_text.py <deck.pptx>
+    uv run --project ${CLAUDE_PLUGIN_ROOT} python3 scripts/deck_text.py <deck.pptx> [--since <old.pptx>]
 
 One block per slide, `=== slide N`, then one line per text shape as `[shape] text`
 (build_report.py names the shapes: kicker, title, message, body-text, body-note, ...).
 A table prints one line per row, its cells joined by ` | `. A drawn chart prints one line
 per bar, `[bar] <category>: <value>`. Gridlines, axis ticks and the footer band are left
 out; the footer's source line stays.
+
+With `--since`, a slide whose lines differ from the slide of the same title in the older
+deck, or that has no such slide, is headed `=== slide N (changed)`; the footer's page
+number is left out of the comparison.
 """
 from __future__ import annotations
 
@@ -45,14 +49,28 @@ def slide_lines(slide) -> list[str]:
     return out
 
 
+def title_of(lines: list[str]) -> str:
+    return next((ln for ln in lines if ln.startswith("[title] ")), "")
+
+
 def main(argv: list[str]) -> int:
-    if len(argv) != 2:
+    if len(argv) not in (2, 4) or (len(argv) == 4 and argv[2] != "--since"):
         print(__doc__, file=sys.stderr)
         return 2
-    deck = Presentation(argv[1])
-    for n, slide in enumerate(deck.slides, 1):
-        print(f"=== slide {n}")
-        print("\n".join(slide_lines(slide)))
+    slides = [slide_lines(s) for s in Presentation(argv[1]).slides]
+    old: dict[str, list[list[str]]] = {}
+    if len(argv) == 4:
+        for lines in (slide_lines(s) for s in Presentation(argv[3]).slides):
+            old.setdefault(title_of(lines), []).append(lines)
+    for n, lines in enumerate(slides, 1):
+        mark = ""
+        if len(argv) == 4:
+            twins = old.get(title_of(lines)) or []
+            mark = "" if lines in twins else " (changed)"
+            if lines in twins:
+                twins.remove(lines)
+        print(f"=== slide {n}{mark}")
+        print("\n".join(lines))
     return 0
 
 

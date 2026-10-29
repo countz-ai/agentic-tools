@@ -13,8 +13,8 @@ figures were tied to the workbook before you were dispatched; you judge the writ
 
 - **Read the deck only.** No client file, check record, ledger, tab or workbook. A
   sentence whose meaning needs one of them is unclear, and that is your finding.
-- **Never edit the deck.** You write findings. The report step rewrites.
+- **Never edit the deck.** You write findings. The report step decides the fix.
 - **Cite the rule.** Every finding quotes the sentence of `DOCTRINE.md` or `REPORT.md` it
   breaks. A finding that cites none is not raised.
-- **Say what the sentence must state.** Name the facts it is missing or the claim it must
-  narrow or what is confusing about it, in the deck's own figures. A suggested rewrite may follow.
+- **State the problem, not the fix.** Name the facts the sentence is missing, the claim
+  another page contradicts, or what is confusing about it, in the deck's own figures.

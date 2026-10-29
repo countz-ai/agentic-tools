@@ -12,7 +12,9 @@ user-invocable: false
 
 # Review the deck
 
-Arguments: `run_dir`, `seq`.
+Arguments: `run_dir`, `seq`, and optionally `since`: the deck an earlier round reviewed.
+With `since`, judge only the slides `deck_text.py` marks `(changed)`; read the others for
+the claims they share with a changed slide.
 
 Open the step: `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/step_record.py start <run_dir> <seq>`.
 
@@ -29,7 +31,7 @@ Open the step: `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/step_record.py start <run_
 2. The deck, as its reader sees it:
 
    ```
-   uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/deck_text.py <run_dir>/out/report.pptx
+   uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/deck_text.py <run_dir>/out/report.pptx [--since <run_dir>/<since>]
    ```
 
 Read nothing else.
@@ -58,11 +60,11 @@ the change or the adjustments by name.
   quote: "Headroom before plans"
   rule: "A sentence resting on one of the run's own nouns says what that noun is."
   problem: >-
-    One or two sentences: what the reader cannot follow or what the claim gets wrong.
-  must_state: >-
-    What the sentence must say, in the deck's figures. A suggested rewrite may follow.
-  route: reword                    # recipe, for a kicker: the section title is the recipe's
+    One or two sentences, in the deck's figures: what the reader cannot follow, or what
+    the claim gets wrong and which page shows it.
 ```
+
+A finding states the problem. How to fix it is the report step's to decide.
 
 Most consequential first: a claim another page contradicts, then a sentence the reader
 cannot follow, then a Voice or number-convention defect.
@@ -72,4 +74,4 @@ cannot follow, then a Voice or number-convention defect.
 Write the fields to `<run_dir>/out/.staging/deck-findings.json` as
 `{"conclusion": "...", "findings": [...]}` and close the step:
 `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/step_record.py finish <run_dir> <seq> --json <run_dir>/out/.staging/deck-findings.json`.
-`conclusion` gives the count of findings by route and the worst in one clause.
+`conclusion` gives the count of findings and the worst in one clause.
