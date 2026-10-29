@@ -145,7 +145,7 @@ with no other key.
 
 `metrics` is one mapping, `{"title": ...}`: the headline of the key-metrics page, the
 second page of the deck, naming the measure the report exists to state (`Adjusted
-EBITDA`, `Cash as substantiated`). `check_report.py` refuses a deck whose second page is
+EBITDA`, `Substantiated cash`). `check_report.py` refuses a deck whose second page is
 headed otherwise.
 
 `narrative` is optional: the narrative's sections in reading order, each the kicker its
