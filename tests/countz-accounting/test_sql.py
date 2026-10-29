@@ -476,6 +476,13 @@ def main() -> int:
                 or (moved / "catalog.orig.sql").read_text() != was \
                 or str(moved.resolve()) not in (moved / "catalog.sql").read_text():
             bad.append(f"countz-sql on a moved run: {r.returncode} {r.stdout!r} {r.stderr!r}")
+    # verify reads a table's rows as a set: another order or float noise is the same table
+    held = pl.DataFrame({"d": ["2025-01-01", "2025-01-01"], "c": ["bi", "mo"], "v": [1.0, 0.1 + 0.2]})
+    shuffled = pl.DataFrame({"d": ["2025-01-01", "2025-01-01"], "c": ["mo", "bi"], "v": [0.3, 1.0]})
+    if not sql._same_rows(held, shuffled):
+        bad.append("_same_rows: reordered rows with float noise read as other rows")
+    if sql._same_rows(held, shuffled.with_columns(v=pl.Series([0.31, 1.0]))):
+        bad.append("_same_rows: a changed value read as the same rows")
     if bad:
         print("sql.py self-check FAILED:")
         for b in bad:

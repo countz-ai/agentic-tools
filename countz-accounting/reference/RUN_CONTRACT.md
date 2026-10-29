@@ -473,13 +473,20 @@ The first time a report seals, review the deck, in at most two rounds:
 2. Re-dispatch `check-report` with every finding:
    `dispatch --step report --args '{"mode": "fix", "fix_input": [<the findings>]}'`. It
    fixes each finding with the report step's own means. A defect only a check can fix
-   ends it `blocked` naming the check, its other fixes kept in `out/.staging/`. Re-run
-   each named check once with `--mode fix` and the finding in `fix_input`, then
-   re-dispatch `check-report` in `mode: fix` with the same findings, never fresh: it
-   picks up the re-run tabs and finishes from its staging.
-3. Once that seals, dispatch `check-deck` again with `since` the deck the first round read
-   (`--args '{"since": "out/history/<NNNN>-report.pptx"}'`, `NNNN` the seq of the report it
-   reviewed). It judges only the pages that changed.
+   ends it `blocked` naming the check, its other fixes kept in `out/.staging/` with
+   `fix-blocked.json` listing the findings and checks. Re-run each named check once with
+   `--mode fix` and the finding in `fix_input`. A check that reads a re-run one may now
+   hold its old words or figures: once the re-runs complete, run
+   `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/sql.py verify <run_dir>`,
+   and re-run each check it names with `--mode fix`, its `FAIL:` lines in `fix_input`.
+   Repeat until verify exits 0 or names only checks already re-run this way; the report
+   step's own verify then blocks on those. Then re-dispatch `check-report` in `mode: fix` with the same
+   findings: it picks up the re-run tabs and finishes from its staging.
+3. Once that seals, dispatch `check-deck` again to verify the fixes:
+   `--args '{"since": "out/history/<NNNN>-report.pptx", "verify": "steps/<MMMM>-deck.json"}'`,
+   `NNNN` the seq of the report the first round reviewed and `MMMM` the first round's
+   seq. It raises a finding the fix left unresolved, or a defect in words the fix wrote,
+   and nothing else.
 4. Its findings go to one `check-report` in `mode: fix` with `"rerun": false`: wording is
    fixed, and a defect only a check can fix is carried to the open items instead of
    blocking. No review follows.

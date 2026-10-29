@@ -23,18 +23,25 @@ a page, the words it quotes, the rule they break and the problem. You fix each o
 this file's own means, and leave the rest of the deliverable as it was sealed. Read
 § Voice (`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py DOCTRINE.md Voice`),
 `REPORT.md` § 2 and § 3, and the sealed `out/report.yaml`; read a tab where a finding
-needs it. Copy `out/workbook.xlsx`, `out/report.yaml`, `out/report-plan.md` and
-`out/RUN_SUMMARY.md` into `out/.staging/`. Where an earlier `mode: fix` dispatch over
-the same findings ended blocked, its `out/.staging/` is your start instead: copy each
-check it named, re-run since, into the staged workbook as § 1 copies a tab, and finish
-the findings it left.
+needs it.
+
+Where `out/.staging/fix-blocked.json` exists and lists the same finding ids as
+`fix_input`, an earlier `mode: fix` dispatch ended blocked and its `out/.staging/` is
+your start: copy each check it names, re-run since, into the staged workbook as § 1
+copies a tab, and finish the findings it left. Otherwise start fresh: copy
+`out/workbook.xlsx`, `out/report.yaml`, `out/report-plan.md` and `out/RUN_SUMMARY.md`
+into `out/.staging/`, over whatever is there.
 
 You may change what § 3 lets you change on a gate refusal. Your own surfaces,
 `report.yaml` and the run-level tabs, you rewrite: a sentence, a page's note, a block. The words on a
-copied tab or a ledger tab go through `reword.py`. A defect only the check that wrote
-it can fix, a figure, a population or a row, ends the step `blocked` naming the cell and
-the check, as § 3 says; with `rerun: false` it is carried to the open items, naming the
-cell and the check, and the step seals. A section title the recipe fixes stays, and `RUN_SUMMARY.md`
+copied tab or a ledger tab go through `reword.py`. A finding names one page, but the
+measure or claim it fixes may stand on others: find each page and tab that states it and
+make them agree, per `REPORT.md` § 3 *One figure, one meaning*. A defect only the check
+that wrote it can fix, a figure, a population or a row, ends the step `blocked` naming
+the cell and the check, as § 3 says, and writes `out/.staging/fix-blocked.json` as
+`{"findings": [<the fix_input ids>], "checks": [<the checks to re-run>]}`; with
+`rerun: false` it is carried to the open items, naming the cell and the check, and the
+step seals. Delete `fix-blocked.json` before the seal. A section title the recipe fixes stays, and `RUN_SUMMARY.md`
 lists it as unchanged. Then build and run § 3's gates. Seal and record per § 6, and add
 each change to `RUN_SUMMARY.md` under `## Wording changes`: the finding id, the old
 words and the new.

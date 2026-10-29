@@ -12,9 +12,17 @@ user-invocable: false
 
 # Review the deck
 
-Arguments: `run_dir`, `seq`, and optionally `since`: the deck an earlier round reviewed.
-With `since`, judge only the slides `deck_text.py` marks `(changed)`; read the others for
-the claims they share with a changed slide.
+Arguments: `run_dir`, `seq`, and optionally `since` and `verify` for the second round:
+`since` the deck the first round reviewed, `verify` the first round's record
+(`steps/<NNNN>-deck.json`).
+
+The first round reads the whole deck and raises what matters most. The second round
+verifies the fixes and raises nothing else: for each `verify` finding, read the words on
+its page now, and on every page `deck_text.py` marks `(changed)`, read what the fix
+wrote. A finding is raised again when its problem remains, and a new finding is raised
+only on words the fix wrote that break a rule or contradict another page. A defect in
+words the fix did not touch is out of scope, even one the first round missed. A finding
+raised again keeps its first-round id; a new one continues the first round's numbering.
 
 Open the step: `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/step_record.py start <run_dir> <seq>`.
 
@@ -33,6 +41,8 @@ Open the step: `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/step_record.py start <run_
    ```
    uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/deck_text.py <run_dir>/out/report.pptx [--since <run_dir>/<since>]
    ```
+
+3. In the second round, the `verify` record's `findings`.
 
 Read nothing else.
 

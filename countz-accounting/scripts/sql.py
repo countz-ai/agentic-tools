@@ -68,7 +68,8 @@ over the same catalog and records nothing. Every table write rewrites `catalog.s
 - a figure or population whose value changed (money beyond half its minor unit, a count
   by any amount, anything else beyond 1e-9);
 - a check table whose rows its statement no longer returns, or that no statement made
-  (an item table written from rows);
+  (an item table written from rows). The rows are a set: the same rows in another order,
+  or with a float beyond 1e-9 of the stored one, are the same rows;
 - a figure or population computed outside SQL. A ledger entry may be minted outside SQL
   only when it is a tie's difference, a figure with no value, or a passthrough of stated
   cells (`as_stated`, every input a `cell` citation); a value a passage or the plan states
@@ -1507,6 +1508,38 @@ def _agrees(stored, now, unit: str) -> bool:
     return abs(a - b) <= 1e-9 * max(1.0, abs(a), abs(b))
 
 
+def _same_rows(held, now) -> bool:
+    """`now` holds the rows of `held`, in any order, each float within 1e-9 (relative) of
+    the stored one. A statement with no full ORDER BY, or a float sum taken in another
+    order, returns the same table."""
+    if held.columns != now.columns or held.dtypes != now.dtypes or held.height != now.height:
+        return False
+    pl = cache._pl()
+    floats = [c for c, t in zip(held.columns, held.dtypes) if t.is_float()]
+    keys = [f"__key_{c}" if c in floats else c for c in held.columns]
+
+    def canon(df):
+        return df.with_columns(pl.col(c).round(6).alias(f"__key_{c}") for c in floats) \
+                 .sort(keys, nulls_last=True)
+    try:
+        a, b = canon(held), canon(now)
+    except Exception:  # a column polars cannot sort (a list, a struct)
+        return False
+    for c in held.columns:
+        if c not in floats:
+            if not a[c].equals(b[c]):
+                return False
+            continue
+        x, y = a[c], b[c]
+        if not (x.is_null() == y.is_null()).all():
+            return False
+        x, y = x.drop_nulls(), y.drop_nulls()
+        if not all(math.isclose(p, q, rel_tol=1e-9, abs_tol=1e-9) or (p != p and q != q)
+                   for p, q in zip(x.to_list(), y.to_list())):
+            return False
+    return True
+
+
 def _keyed(names, rows, key: dict):
     def norm(x):
         return x.isoformat() if isinstance(x, (datetime.date, datetime.datetime)) else x
@@ -1557,7 +1590,7 @@ def verify(run_dir, check: str | None = None) -> dict:
         except ValueError as exc:
             failures.append(f"{t['name']}: its statement no longer runs - {exc}")
             continue
-        if cache.content_sha256(df) != m.get("content_sha256"):
+        if cache.content_sha256(df) != m.get("content_sha256") and not _same_rows(held, df):
             failures.append(f"{t['name']}: its statement now returns other rows ({df.height}, "
                             f"recorded {m.get('row_count')}) - re-run the check, or fix what moved")
     entries = []
