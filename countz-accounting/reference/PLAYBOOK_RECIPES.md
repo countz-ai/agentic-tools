@@ -107,9 +107,9 @@ classification, and what every wave owes the user.
 This is the run's first question, and it goes to the user before anything else is done:
 no file written, no folder made, no other question asked.
 
-1. Get the recipe your skill names. `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/bundled_recipe.py
-   <its name>` (your skill's first command runs it) prints `RECIPE:` and `VERSION:` when
-   the package carries a copy: that path is the recipe. On `NONE`, call
+1. Get the recipe of the catalog entry the ask matched (`skills/countz/SKILL.md`).
+   `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/bundled_recipe.py <its name>` prints `RECIPE:`
+   and `VERSION:` when the package carries a copy: that path is the recipe. On `NONE`, call
    `get_recipe_for_countz_analysis(recipe="<its name>")` on the `countz` server; the
    body is its `recipe_markdown`. Do not write the served body to a file: § 3 pins it after the
    user answers, from the saved result where the host saved one.
@@ -160,8 +160,11 @@ underscore or the code's own markup in front of the user.
 Once the user has picked what to run (§ 1), ask the rest in one message:
 
 - **The data sources**: a short id for each and what it is. Name the recipe's source
-  classes and the records each lists. Take what exists; the plan states what each
-  missing record costs. Do not press.
+  classes and the records each lists. Say how far the files must reach before and after
+  the period under review, as the recipe's `## The period set` states it (examples: one
+  full prior period of billing files, the twelve months before the period, the months
+  after the period end), so the user gathers them in one pass. Take what exists; the
+  plan states what each missing record costs. Do not press.
 - **The period end** covered, and **the period under review** in the user's words where
   they give one: a fiscal year, a quarter, the months of a close.
 - **Each option the recipe `declares`**: put it to the user in plain words (what it
@@ -193,8 +196,8 @@ the user in one line, register with `--recipe <the RECIPE path> --recipe-version
 VERSION>`, and call no recipe tool. `NONE` means nothing is bundled: fetch.
 
 Call `get_recipe_for_countz_analysis(recipe="<your recipe's name>")` on the `countz`
-server — a named shim knows its name; `countz`, given an ask, matches the catalog first
-(its SKILL.md). The result carries `recipe_markdown`, `recipe_name` and `recipe_version`.
+server. The recipe's name is the `name` of the catalog entry the ask matched
+(`skills/countz/SKILL.md`). The result carries `recipe_markdown`, `recipe_name` and `recipe_version`.
 Pin it one of two ways; either way the script copies the bytes to
 `<run_dir>/recipes/<recipe_name>.md` and refuses bytes whose sha does not match the
 version, so the run pins the bytes the server served:
@@ -205,15 +208,15 @@ version, so the run pins the bytes the server served:
   copying the body out by hand takes minutes.
 - **Otherwise**, write `recipe_markdown` to a file, exactly as returned, and register with
   `--recipe` pointing at that file and `--recipe-version` the served version. If
-  `--recipe-result` refused the file, do the same. A named shim sends no
-`ask`. `match: not_found` for a named recipe means the server no longer carries it: put
-that to the user and stop.
+  `--recipe-result` refused the file, do the same. A recipe fetched by name sends no
+`ask`. `match: not_found` for a recipe fetched by name means the server no longer carries
+it: put that to the user and stop.
 
 The registration:
 
 ```
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/setup_run.py \
-    --output-root <abs> --skill <your shim's name> --company "<the user's words>" \
+    --output-root <abs> --company "<the user's words>" \
     --goal <the recipe's name> --session ${CLAUDE_SESSION_ID} \
     --sources '[{"id": "gl", "path": "<abs>", "name": "<the user's words>"}, ...]' \
     --params '{"period_end": "<as collected>", "period": "<as collected, where given>",
@@ -226,12 +229,13 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/setup_run.py \
 Without a saved result, `--recipe <the file you wrote> --recipe-version <recipe_version>`
 stands in place of `--recipe-result`.
 
-The script mints `<output_root>/<skill>-<company slug>.<YYYYMMDD-HHMMSS>` and prints it
-as `RUN_DIR:`; that path is `<run_dir>` everywhere below. Never compose the name
+The script mints `<output_root>/<recipe name>-<company slug>.<YYYYMMDD-HHMMSS>`, where
+the recipe name is the pinned recipe's frontmatter `name`, and prints it as `RUN_DIR:`;
+that path is `<run_dir>` everywhere below. Never compose the name
 yourself. `--params` is everything § 2 collected, verbatim, as one JSON object — the
 ask included, so `run.json` records why the run was scoped as it was. The script reads
-no client file. A `countz` run on a catalog miss registers without `--recipe`
-and pins the generated recipe afterwards (its SKILL.md).
+no client file. A `countz` run on a catalog miss registers with `--skill countz` in
+place of `--recipe` and pins the generated recipe afterwards (its SKILL.md).
 
 **The scope.** `--scope` resolves the picks with every family they read from into
 `run.json.inputs.scope`, and prints `SCOPE:` and `SAY:`. Put the `SAY:` text to the user
@@ -242,7 +246,7 @@ before the plan is approved, run `setup_run.py <run_dir> --session ${CLAUDE_SESS
 change.
 
 Sources arriving after the plan is drafted: run the same script with `<run_dir>` in place
-of `--output-root`, `--skill` and `--company`, then re-dispatch `check-plan` with
+of `--output-root` and `--company`, then re-dispatch `check-plan` with
 `revise=` naming them.
 
 **The ARR policy.** Where the recipe declares `arr_policy`, pin an approved policy before
@@ -312,7 +316,8 @@ user left out.
 
 The deliverables are `out/workbook.xlsx` and `out/report.pptx`; the report wave's preview
 put them on screen as rendered cards. `out/RUN_SUMMARY.md` is in that wave's working
-bundle. Point at all three. Hand
+bundle. Point at all three. The same bundle carries `out/cost.html`, what the run cost;
+leave it there, and open it or relay its figures only when the user asks. Hand
 over the run archive `out/run_sync.tar.gz` per `RUN_CONTRACT.md` § Bringing the run home;
 extracted under the user's result root it lands at `<short_name>.<datetime>` with
 `sync.json` carrying the run's session ids. Relay the exception schedule and the open

@@ -10,7 +10,7 @@ next period's files unchanged. A playbook has one of two origins:
   playbook recipe (served by the Countz connector or generated for the run, pinned at
   `<run_dir>/recipes/<name>.md` — `RECIPE_FORMAT.md`). It lives at
   `<run_dir>/plan/<name>.json`, its slots are the run's own source ids, and once the user
-  approves the plan it executes like the other two. The recipe's shim skill owns when a
+  approves the plan it executes like the other two. The `countz` relay owns when a
   plan runs; `scripts/run_state.py approve-plan` records the approval.
 
 ## The file

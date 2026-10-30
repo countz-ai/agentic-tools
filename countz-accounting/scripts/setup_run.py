@@ -4,9 +4,10 @@
 The relay runs this before any dispatch (RUN_CONTRACT.md) — it is
 mechanical, not a dispatch: no seq, no step record.
 
-    setup_run.py --output-root <abs> --skill <launcher> --company "<the company>" \
+    setup_run.py --output-root <abs> --recipe <path> --company "<the company>" \
         --goal <goal> --session <session id> --sources '<one-line JSON>' \
-        [--params '<one-line JSON>']                       # start a run
+        [--params '<one-line JSON>']                       # start a recipe run
+    setup_run.py --output-root <abs> --skill <launcher> ...  # start a run with no recipe
     setup_run.py <run_dir> --session <session id> --sources '<one-line JSON>' \
         [--params '<one-line JSON>']                       # fold into / join a run
     setup_run.py ... --recipe <path> [--recipe-version <v>]  # pin the run's recipe
@@ -15,12 +16,16 @@ mechanical, not a dispatch: no seq, no step record.
     setup_run.py ... --scope <picks>                         # the families the run executes
 
 A new run's directory is MINTED here, never named by the relay:
-`<output_root>/<skill>-<company>.<YYYYMMDD-HHMMSS>` — `--skill` is the launcher skill
-the user invoked (it must name one of this plugin's inline skills), `--company` is the
+`<output_root>/<recipe or skill>-<company>.<YYYYMMDD-HHMMSS>`. The first half is the
+frontmatter `name` of the recipe the mint pins (`--recipe` or `--recipe-result`); a run
+minted with no recipe takes `--skill`, the launcher skill the user invoked (it must name
+one of this plugin's inline skills: `tieout`, `recon`, `playbook`, `countz` on a catalog
+miss). `--company` is the
 company whose books the run is over in the user's words (stored verbatim; the folder
 carries its slug: accents folded, lower-case, runs of anything but letters and digits
 become one hyphen, and a name in a script with no Latin letters becomes `co-<hash>`), and the stamp is the machine's local clock at minting. "Output to results" for
-a `qoe` run over Demo ZS lands at `results/qoe-demo-zs.20260904-104305`. The first
+a `quality-of-earnings` run over Demo ZS lands at
+`results/quality-of-earnings-demo-zs.20260904-104305`. The first
 stdout line is `RUN_DIR:\t<abs path>`; the relay takes every later `<run_dir>` from it.
 An existing run is addressed by that path, and a path that carries no `run.json` is
 refused — nothing but a mint creates a run directory.
@@ -588,12 +593,13 @@ def main() -> int:
     ap.add_argument("run_dir", type=pathlib.Path, nargs="?", default=None,
                     help="an existing run to fold sources into or join; omitted to "
                          "start a run (the directory is minted from --output-root, "
-                         "--skill and --company)")
+                         "the recipe's name or --skill, and --company)")
     ap.add_argument("--output-root", default=None,
                     help="where a new run's directory is minted (absolute)")
     ap.add_argument("--skill", default=None,
-                    help="the launcher skill the user invoked - one of this plugin's "
-                         "inline skills; the first half of the run directory's name")
+                    help="for a run minted without a recipe: the launcher skill the "
+                         "user invoked - one of this plugin's inline skills; the first "
+                         "half of the run directory's name")
     ap.add_argument("--company", default=None,
                     help="the company whose books the run is over, in the user's words; "
                          "its slug is the second half of the run directory's name")
@@ -646,7 +652,7 @@ def main() -> int:
         if not run_path.is_file():
             return fail(f"{run_dir} carries no run.json - an existing run is named by its "
                         f"path, and a new one is minted: leave the path off and use "
-                        f"--output-root, --skill and --company")
+                        f"--output-root, --company and --recipe or --skill")
         run = json.loads(run_path.read_text(encoding="utf-8"))
         if run.get("schema") != RUN_SCHEMA:
             return fail(f"run.json schema {run.get('schema')!r} is not {RUN_SCHEMA}")
@@ -719,32 +725,39 @@ def main() -> int:
         refresh_preview(run_dir, run)
         return 0
 
-    missing = [f for f, v in (("--output-root", a.output_root), ("--skill", a.skill),
-                              ("--company", a.company)) if not v]
+    missing = [f for f, v in (("--output-root", a.output_root), ("--company", a.company),
+                              ("--recipe or --skill", a.recipe or a.skill)) if not v]
     if missing:
         return fail(f"a new run needs {', '.join(missing)} - the directory is minted "
                     f"from them; an existing run is named by its path instead")
     output_root = pathlib.Path(a.output_root)
     if not output_root.is_absolute():
         return fail(f"--output-root is not absolute: {output_root}")
-    known = inline_skills()
-    if known is not None and a.skill not in known:
-        return fail(f"--skill {a.skill!r} is not one of this plugin's launchers "
-                    f"({', '.join(sorted(known))}) - give the skill the user invoked, "
-                    f"not the goal")
-    if known is None and not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", a.skill):
-        return fail(f"--skill {a.skill!r} is not a skill name")
+    if a.recipe is not None:
+        if not a.recipe.is_file():
+            return fail(f"--recipe: no such file: {a.recipe}")
+        prefix = recipe_name(a.recipe.read_text(encoding="utf-8", errors="replace"))
+        if not prefix or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", prefix):
+            return fail(f"--recipe: {a.recipe} carries no kebab-case frontmatter `name`")
+    else:
+        prefix = a.skill
+    if a.skill is not None:
+        known = inline_skills()
+        if known is not None and a.skill not in known:
+            return fail(f"--skill {a.skill!r} is not one of this plugin's launchers "
+                        f"({', '.join(sorted(known))}) - give the skill the user invoked, "
+                        f"not the goal")
+        if known is None and not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", a.skill):
+            return fail(f"--skill {a.skill!r} is not a skill name")
     if not str(a.company).strip():
         return fail("--company is empty - give the company's name in the user's words")
     if not incoming:
         return fail("a new run needs at least one source")
-    run_dir = mint_run_dir(output_root.resolve(), a.skill, a.company)
+    run_dir = mint_run_dir(output_root.resolve(), prefix, a.company)
     run_path = run_dir / "run.json"
     if run_dir.exists() and any(run_dir.iterdir()):
         return fail(f"{run_dir} already exists and is not empty - a run minted this "
                     f"same second; run the registration again")
-    if a.recipe is not None and not a.recipe.is_file():
-        return fail(f"--recipe: no such file: {a.recipe}")
     for d in SUBDIRS:
         (run_dir / d).mkdir(parents=True, exist_ok=True)
     print(f"RUN_DIR:\t{run_dir}")
@@ -757,7 +770,7 @@ def main() -> int:
         "degraded": False,
         "inputs": {"output_root": str(output_root.resolve()),
                    "run_dir": str(run_dir),
-                   "skill": a.skill,
+                   **({"skill": a.skill} if a.skill else {}),
                    "company": a.company,
                    "params": {"accounting_standard": DEFAULT_STANDARD,
                               **incoming_params},

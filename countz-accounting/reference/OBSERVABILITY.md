@@ -4,7 +4,8 @@ A run keeps three records:
 
 - `events.jsonl` (§ 1): what the machinery did. Append-only, written as the run goes.
 - `scripts/usage_report.py` (§ 2): what the run took in time, tokens and dollars. Read
-  from the session transcripts after the fact.
+  from the session transcripts after the fact. `scripts/cost_report.py` draws the same
+  figures per step as `out/cost.html`.
 - `<run_dir>/debug/` (§ 3): what each dispatch was told, did and got back. Written by
   `scripts/gather_debug.py`, run by hand.
 
@@ -73,6 +74,25 @@ Three time measures:
 
 To verify a cost, compare against the provider's usage console. It shares no inputs with
 this report.
+
+### The cost report — `out/cost.html`
+
+```
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/cost_report.py <run_dir> [--json]
+```
+
+`scripts/preview.py` writes it once per sealed deck and puts it in the working bundle, so
+the user can open it and the deck stays on screen. It prices every response as § 2 does
+and gives it to one step: a worker's to the dispatch whose brief it was last handed, a
+forked step's (plan, review, report) to the step its activity overlaps most, the main
+session's to the relay. The totals agree with § 2's.
+
+The page leads with five figures: total spend, elapsed from plan approval to the last
+step, the cost of the steps the plan priced as a multiple of its estimate, the costliest
+step, and the cost of re-runs (a check's or the report's second and later dispatches).
+Below them: each lane's steps on a timeline, spend by lane, each step's first pass
+against its estimate, and every step in a table. `--json` prints the figures and writes
+nothing.
 
 ## 3. The execution trace — `<run_dir>/debug/`
 
@@ -145,7 +165,7 @@ The exception is the **scrubbed pre-run description** on a `countz` catalog miss
 what it may carry is [SCRUB.md](SCRUB.md); how it is produced and shown before it is sent
 is `skills/countz/SKILL.md` § Relay a catalog match or a miss, step 2. Countz retains it (the connector's design, in
 the monorepo's `docs/arch/`, states the basis). The full ask stays local in
-`run.json.inputs.params.instructions`. A named shim and a matched generic run send
+`run.json.inputs.params.instructions`. A catalog match sends
 nothing. The user is told this once, at collection.
 
 The § 1 exclusions hold for `events.jsonl` whether or not it was gathered.

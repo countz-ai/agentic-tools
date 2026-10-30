@@ -3,11 +3,11 @@
 Interactive accounting checks over the user's own files, modeled on advisory-report's
 md-driven engine: the skill and reference files ARE the procedure, and the agent inspects
 the data before it binds anything. The user-facing skills run inline as the relay:
-`tieout`, `recon`, `countz` (the index, which also runs an analysis the user
-describes, matched to the catalog or authored on the spot), and one plan-driven launcher per recipe under
-`playbook-recipes/` — `ls` the directory for the recipes; each recipe's H1 says what its
-run establishes, `catalog.yaml` beside them lists them for the server, and its shim is the
-one inline skill under `skills/` that names it. The recipes are authored here and served
+`tieout`, `recon` and `countz`. `countz` is the index and the one entry for every
+analysis: it matches the user's ask against the catalog of recipes under `playbook-recipes/` and runs
+the matched one, or authors one on the spot. `ls` the directory for the recipes; each
+recipe's H1 says what its run establishes, and `catalog.yaml` beside them lists them for
+the server. The recipes are authored here and served
 by the Countz connector at run time (`reference/RECIPE_FORMAT.md`); the package ships
 none of them. The
 workspace is registered mechanically (`scripts/setup_run.py`, no dispatch), every worker
@@ -26,9 +26,9 @@ Layout:
   engine's escalation path: decides waves where `scripts/playbook_next.py` cannot,
   distills saved playbooks; opens no client file), `scrubber` (rewrites the one text that
   crosses to the connector, and reads it back blind; opens no client file)
-- `skills/` — the inline launchers (`tieout`, `recon`, `countz`,
-  one shim per recipe, and `create-arr-policy`, which settles the ARR policy a run that
-  computes ARR requires), the internal inline relay `playbook`, plus the forked workers
+- `skills/` — the inline launchers (`tieout`, `recon`, `countz`, and
+  `create-arr-policy`, which settles the ARR policy a run that computes ARR requires),
+  the internal inline relay `playbook`, plus the forked workers
   (`create-recipe`, `extract-arr-policy`, `check-plan`, `check-extract`, `check-tie`, `check-recon`,
   `check-completeness`, `check-vouch`, `check-cutoff`, `check-analyze`, `check-review`,
   `check-report`, `playbook-next`, `playbook-save`)
@@ -49,13 +49,13 @@ Layout:
   workbook number down to the data room, and reperforming it)
 - Playbooks — user-saved ones land in `$HOME/.countz-accounting/playbooks/`; a
   plan-driven run drafts its own at `<run_dir>/plan/<name>.json`. New packaged capability
-  is a playbook recipe (plus its shim skill — `reference/RECIPE_FORMAT.md`) composing the
+  is a playbook recipe and its catalog entry (`reference/RECIPE_FORMAT.md`) composing the
   check kinds; a new kind is a worker skill — its procedure and its item tables — plus a `KINDS` row and
   params contract in `scripts/check_playbook.py`.
 - `scripts/` — `arr_policy.py` (the ARR policy's one home: the catalog of purposes,
   positions, conventions and the 31 decisions, and the commands that resolve, render,
   approve and check a company's policy), `setup_run.py` (mechanical workspace registration — mints the run
-  directory `<skill>-<company>.<stamp>` with its `run.json`, or folds new sources into a
+  directory `<recipe>-<company>.<stamp>` with its `run.json`, or folds new sources into a
   run named by its path; the relay runs it, never a dispatch), `run_state.py` (the
   relay's pen for `run.json`: check registration, playbook binding, plan approval, wave
   dispatch, and classification with the one-retry rule — no agent hand-writes the state
@@ -90,7 +90,8 @@ Layout:
   `rework.py` (a fix pass: snapshot, ledger diff),
   `build_report.py` (renders `out/report.pptx`
   from `report.yaml` and the sealed workbook — the deck mints nothing;
-  `reference/REPORT.md`), `usage_report.py` (duration + estimated cost), `gather_debug.py`
+  `reference/REPORT.md`), `usage_report.py` (duration + estimated cost), `cost_report.py` (`out/cost.html`:
+  each step's cost and time against the plan's estimate), `gather_debug.py`
   (run by hand on a run under diagnosis: copies the session transcripts into `<run_dir>/debug/` and
   distils the per-dispatch timeline, the offloaded tool results and the instruction
   snapshot — `reference/OBSERVABILITY.md` § 3)

@@ -9,9 +9,11 @@ recipe**, which the `create-recipe` step writes on the user's machine for an ana
 the catalog does not cover. Either way a run reads its recipe from
 `<run_dir>/recipes/<name>.md`, the bytes it pinned (`RUN_CONTRACT.md`).
 
-A corpus recipe has exactly one shim skill (`context: inline`) that asks for it by its
-`name` and points at `PLAYBOOK_RECIPES.md`; `cash` is the exemplar. A new corpus recipe
-is the document, its `catalog.yaml` entry and its shim. A recipe composes check kinds
+`countz` matches the user's ask against `catalog.yaml`, fetches the matched recipe by its
+`name` and relays it under `PLAYBOOK_RECIPES.md`. A new corpus recipe is the document and its `catalog.yaml` entry,
+and it reaches every installed plugin with no release. The document carries everything
+the relay needs to run it. Examples: the records to ask for, how far the files must
+reach, the options to put to the user. A recipe composes check kinds
 from `KINDS` in `scripts/check_playbook.py` and adds no orchestration. One module,
 `scripts/recipe_format.py`, holds the shape rules below; `check-plugin.py` runs them over
 the corpus and `scripts/validate_recipe.py` runs them over a generated recipe.

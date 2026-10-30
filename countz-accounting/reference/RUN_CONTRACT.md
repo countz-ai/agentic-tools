@@ -1,13 +1,15 @@
 # RUN_CONTRACT — the run directory, its files, and how waves are dispatched
 
 A run is one directory. It accumulates sources and checks as the user asks for them.
-`scripts/setup_run.py` mints it as `<output_root>/<skill>-<company>.<YYYYMMDD-HHMMSS>`
-(the launcher skill invoked, the company's name as a slug, the minting machine's local
-clock) and prints the path as `RUN_DIR:`. The relay never composes that name; it
-addresses every later call by the printed path. A path without `run.json` is refused.
-Example: "output to results" for a `qoe` run over Demo ZS lands at
-`results/qoe-demo-zs.20260904-104305`. Every launcher skill under `skills/` drives the
-same workspace the same way; only where the check roster comes from differs.
+`scripts/setup_run.py` mints it as `<output_root>/<recipe>-<company>.<YYYYMMDD-HHMMSS>`
+(the name of the recipe the run pins, the company's name as a slug, the minting machine's
+local clock) and prints the path as `RUN_DIR:`. A run that pins no recipe when it is
+minted takes the launcher skill's name in place of the recipe's. The relay never composes
+that name; it addresses every later call by the printed path. A path without `run.json`
+is refused. Example: "output to results" for a quality-of-earnings run over Demo ZS lands
+at `results/quality-of-earnings-demo-zs.20260904-104305`. Every inline skill that opens a
+run drives the same workspace the same way; only where the check roster comes from
+differs.
 
 This document defines the step record's shape and states what the fields of `run.json`
 and the dispatch briefs mean. Their shape is enforced in `scripts/setup_run.py` and
@@ -57,7 +59,7 @@ On success, continue with the run. The result names the account and its tenant, 
 carries:
 
 - `catalog_yaml` — the server's catalog of analyses, one entry per recipe with `name`,
-  `skill`, `description` and `aliases` — with its `catalog_version`. Keep it: a skill
+  `description` and `aliases` — with its `catalog_version`. Keep it: a skill
   that matches an ask against the catalog reads this copy and calls nothing again.
 - `blocked_tools` — the MCP tools this session must not call, set for the tenant; the
   user cannot change it, and it is empty unless the tenant sets it. An entry is
@@ -111,14 +113,15 @@ them. Every write is write-to-`.tmp` then rename.
 
 ```yaml
 schema: "countz-accounting/run@1"
-run_id: "<the run directory's name: <skill>-<company>.<YYYYMMDD-HHMMSS>>"
+run_id: "<the run directory's name: <recipe or skill>-<company>.<YYYYMMDD-HHMMSS>>"
 goal: "checks"                      # or the playbook name a playbook or plan-driven run is executing
 created_at / updated_at: "<ISO 8601 UTC>"
 degraded: false                     # sticky; set when any step ends blocked or failed
 inputs:
   output_root: "<abs path>"
   run_dir: "<abs path>"             # redundant on purpose: the file self-locates if copied
-  skill: "qoe"                      # the launcher skill the run was minted for
+  skill: "tieout"                   # the launcher skill a run without a recipe was minted
+                                    # for; absent on a run minted with its recipe
   company: "Demo ZS"                # whose books, in the user's words; the directory carries its slug
   params: {}                        # run-level parameters collected at registration,
                                     # verbatim: period end, declared options, materiality.
@@ -358,7 +361,7 @@ After every wave, in this order:
    `tier`. The tier decides the send:
    - `working` (the engagement preview, the source inventory, the source profiles, the
      check records and check schedules of a run without families, the deck's plan, the
-     deck's source, the run summary): one SendUserFile call for the whole wave, every working path in its
+     deck's source, the run summary, the cost report): one SendUserFile call for the whole wave, every working path in its
      `files`, `display: attach`, the printed `BUNDLE:` line as its caption. One card per
      wave, never one per file.
    - `deliverable` (`plan.md`, each family's summary and then its workbook, the review findings,
