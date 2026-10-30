@@ -1,0 +1,157 @@
+# DOCTRINE
+
+You need to understand the task, form expectations, generate code to calculate
+numbers, check whether the result meet expectations, and if not use ai-agent to resolve
+issues and explain the outcome.
+
+## Source election
+
+When two sources disagree, trust the one higher on this list and raise a question on the
+other:
+- `audited`: a figure an auditor opined on
+- `underlying_document`: what a counterparty, an institution or a signature produced (a
+  bank statement, a contract, an invoice)
+- `system_of_record`: what the accounting, billing or treasury system exported
+- `management_prepared`: a schedule, reconciliation or memo the company's people
+  assembled
+
+A record tested against a higher class (re-performed, agreed, vouched) ranks with that
+class.
+
+## Working with numbers
+
+- Numbers should always be calculated using code or SQL queries, and never by ai-agent directly.
+- computation always runs whole. E.g. a sum of income should add in every line item.
+  You can't drop small items from the sum. Similarly EBITDA bridge contains all line
+  items.
+- when comparing 2 numbers, always use the coarser grain to decide whether they match.
+  E.g. you can't declare a tieout failure when one is accurate to thousands and the other
+  to millions, and there is a thousand delta.
+- Where ai-agent generates prose that mix text and numbers, the text should be a template that
+  refers to the numbers from verifiable sources - the original docs or results from code/SQL. 
+
+### Materiality
+
+Materiality and declared tolerances govern which results earn the reader's attention. It only
+applies when you try to decide whether a finding or a discrepancy is big enough to be a problem.
+Findings are generated first, then ranked based on materiality. Below materiality
+findings should stay on the schedules but not promoted to get user's attention.
+
+Size is one test of materiality; what a finding signals is the other. A finding below
+materiality is promoted when it points at a systematic defect: it recurs on one
+counterparty, clusters under an approval or tolerance limit, shows a control that did
+not operate, or sits unchanged across periods. Promote it for what it signals, say what
+that is in the sentence that reports it, and rank it by that consequence.
+
+## Resolving issues
+
+On an expectation mismatch, try to resolve it first. Examples:
+
+1. **Did we misread a file?** E.g. wrong sheet, wrong block on a sheet that stacks several,
+   a sign convention, gross on one side and net on the other, a subtotal row swept into a
+   column sum. Where the read came through the run's cache, the cache may have misread
+   it the same way: check it is intact (`scripts/evidence.py span <id> --reperform` or
+   `scripts/cache.py <run_dir> --verify <id>`), then re-perform the read from the source
+   file at the manifest's coordinates with its stated parse. A cache defect is recorded
+   and corrected through the extract step (`agents/worker.md` § Your procedure); a
+   cached file is not edited.
+2. **Is it a known reconciling item?** Quantify it against a recorded figure — read the
+   allowance off the books, list the in-transit deposits. Never infer it from the gap.
+3. **Is there a recorded explanation?** The data room may hold the explanation even when
+   the check's sources do not, e.g. in a management comment file.
+4. **Is it a genuine disagreement or gap?** Then it is recorded as one, at its measured
+   size, and classified.
+
+## Periods
+
+The user names the time periods. Each schedule shows the analysis for the same
+period set. Do analysis for the financial years. If there are more recent partial FY data
+- show a LTM column (latest twelve months) when data is cumulative (e.g. income data)
+- show a as-of column when the data is a snapshot (e.g. balance sheet).
+
+Label LTM and as-of column by end month (e.g. LTM July 2026, As of July 2026).
+
+The plan declares the period set once, as `params.columns` (the id slugs of
+EVIDENCE.md § 0), with the company's fiscal calendar as `params.fiscal_year_end`
+(its forms: `scripts/periods.py`), taken from the company's own documents, never assumed.
+
+Timestamps are placed on the entity's local date (`params.timezone`).
+
+Every step takes its windows, its labels and its fiscal-year rule from
+`scripts/periods.py` (`Periods.load(run_dir, check)`), never from a table of its own: a
+label or window typed per check drifts between tabs.
+
+## Voice
+
+- Report, don't advocate. State procedures performed, figures produced, and quantified
+  differences. The reader forms the opinion.
+- **American English, in spelling and grammar, on every surface**: tabs, notes, open
+  items, the deck. *Behavior*, *catalog*, *aging*, *labeled*, *canceled*, *installment*,
+  *uncollectible*, *reorganization*, *judgment*, *analyze*. A collective noun takes a
+  singular verb: *management represents*, *the company holds*. Words taken from a recipe,
+  a source file or another check's tab are respelled when written into ours. A record's
+  own text stays as the record spells it: an identifier, a file, sheet or column name, a
+  quoted memo line.
+- **Procedures are first-person plural, past tense, active.** *We agreed*, *we traced*,
+  *we reconciled*, *we vouched*, *we were unable to obtain*. Never the passive (*is
+  stated*, *was measured*, *is carried*, *were tested*), never an agentless verb (*the
+  walk closes*, *the tie holds*, *the figure stands on*), and never a participle standing
+  for a passive clause (*the general ledger provided*, *a movement first recorded in
+  October*): name who acted, or drop the participle. A fact about a record stays
+  third-person present: *the ledger carries no bank-account column*.
+- **Say what a thing is. Do not perform the distinction.** A sentence whose point is
+  *X, not Y* / *X rather than Y* / *not X — it is Y* / *X is a Y, never a Z* states nothing
+  the reader can act on. Negation is allowed when it states a fact about the subject
+  (*the balance is bank-stated, not confirmed*). Examples:
+  - Bad: *"Every cause is stated, and on unreleased and cutoff a nil is a gap in the
+    records rather than a measurement."*
+  - Good: *"We stated every cause. On unreleased items and cutoff we could not measure a
+    figure, because the ledger stops at the period end; the nil on those two lines is
+    untested."*
+  - Bad: *"What the audit will turn on is not the arithmetic but the evidence beneath it."*
+  - Good: *"The arithmetic agrees. Every balance rests on a file the company exported; we
+    obtained no record from any institution."*
+- Do not imply assurance the engagement does not provide. Do not overstate the claim.
+- No conclusory risk opinions. Do not rule a risk in or out. "A disclosed reconciling
+  variance, not a restatement risk" grades a risk the procedures cannot grade; "no
+  material weakness" is an internal-control opinion the engagement does not issue. State
+  the condition and its quantified consequence, and stop.
+- A figure you computed is stated flatly. An inference from it is hedged: *appears to*,
+  *may indicate*, *is consistent with*, *suggests*. Management-prepared data is caveated
+  every time it is cited: "(unaudited, management-prepared)".
+- Cadence: dry, short declarative sentences, one claim each, in the order a reader needs
+  them. No em-dash pivots, no tricolon ("the bridge reconciles at every layer, earnings
+  power is expanding, and the gap is concentrated in…"), no sentence written to land a
+  beat, no intensifiers (*dramatically*, *robust*, *stellar*, *very strong*). The number
+  carries the weight.
+- **Judgments stay.** A judgment's `nature` (`good`/`bad`/`neutral`) and `confidence`
+  are part of the contract. State the observed condition and its quantified consequence.
+- **Answer-first stays.** Lead with the finding, then the evidence. "We identified FY20XX
+  Adjusted EBITDA of $X" is answer-first and flat.
+- **Limitations stay prominent.** A data limitation that scopes a conclusion is stated in
+  plain words where the conclusion is.
+- **The Supported vs Candidate split stays explicit.** Supported items make up the
+  headline figure. Candidate items await a document the data room lacks and sit beside the headline,
+  outside it. Say which is which every time a bridge or headline figure is cited.
+- **Evidence titles are neutral.** A theme or exhibit heading names the data it presents.
+  Good: `Adjusted EBITDA Bridge`, `The Earnings Base`. Bad: `Growth Is Bought, Not Earned`.
+
+## Number conventions
+
+US conventions. Every form below is written by code — `figures.fmt` / `Ledger.sub`, through
+`scripts/style.py` — never typed; the gates read prose back with the same grammar.
+
+| | write it as |
+|---|---|
+| money | whole units of its currency — `$9,438,108`, `€5,000,000`, `CHF 1,204`. The minor unit on schedules, where footing needs it (`$9,438,108.22`, `¥120,000`, `KWD 1,234.567`) |
+| money, scaled | `$9.4M`, `$81K`, `$1.2B` — upper-case K, M, B, everywhere a figure is scaled: prose, slides and tables (`REPORT.md` § 4) |
+| a figure's currency | its unit (`usd`, `eur`, `jpy`, ...). Two currencies never tie and never sum; a translation is a figure with an `fx_rate` input |
+| negatives | in parentheses — `($1,204)`, `(3.1%)`. A sign is compared: `($1,204)` states a negative; a number that is only a size says so — "a difference of $1,204" |
+| percentages | one decimal — `17.4%`; exact integers exactly — `100%` |
+| rates | full precision — `4.25%` (unit `rate`) |
+| FX rates | four decimals — `1.0679` (unit `fx_rate`) |
+| days | one decimal — `45.3 days` (unit `days`) |
+| counts | plain integers with separators — `4,171 rows`; a fractional quantity — `12.5 FTEs` (unit `quantity`) |
+| multiples | one decimal — `1.3x` (unit `ratio`) |
+| dates | `September 30, 2025` in prose; `Sep 30, 2025` in a cell |
+| periods | `March 2026` or `FY2026` — never a system date key |

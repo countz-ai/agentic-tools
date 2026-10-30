@@ -2,7 +2,7 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-Agentic skills and tools for accounting analysis, backed by the Countz Accounting platform.
+Agentic skills and tools for accounting analysis, backed by the Countz platform.
 
 ## What is this?
 
@@ -28,7 +28,7 @@ https://github.com/countz-ai/agentic-tools
 ```
 
 Adding the marketplace only makes its plugins searchable. Search for `countz` in the
-plugin browser and add the **Countz Accounting** plugin.
+plugin browser and add the **Countz - accounting and diligence** plugin.
 
 ### Claude Code
 
@@ -36,7 +36,7 @@ Add this repository as a plugin marketplace, then install the plugin from it:
 
 ```
 /plugin marketplace add countz-ai/agentic-tools
-/plugin install countz-accounting@countz
+/plugin install countz@countz
 ```
 
 ### Countz Guard
@@ -44,7 +44,7 @@ Add this repository as a plugin marketplace, then install the plugin from it:
 The **Countz Guard** plugin (`countz-guard`) controls the data a session sends to the
 Countz connector. Its hook refuses the `countz` calls its policy blocks; as shipped,
 that is `create_countz_playbook_recipe`, and a recipe name longer than 32 characters.
-Install it next to Countz Accounting from the same marketplace:
+Install it next to the countz plugin from the same marketplace:
 
 ```
 /plugin install countz-guard@countz
@@ -58,20 +58,21 @@ In the ChatGPT desktop app, open the **Plugins** tab and choose **Add a marketpl
 
 - Marketplace: `countz-ai/agentic-tools`
 
-Then search for `countz` in the plugin directory and add **countz-accounting**.
+Then search for `countz` in the plugin directory and add **countz**.
 
 From the Codex CLI the same two steps are:
 
 ```
 codex plugin marketplace add countz-ai/agentic-tools
-codex plugin install countz-accounting@countz
+codex plugin install countz@countz
 ```
 
 On first use the plugin asks you to sign in to the Countz connector.
 
 ### First use
 
-Ask for `countz` inside a session to list the analyses and see how to start one.
+Run `/countz:analyze`, or ask for `countz` inside a session, to list the analyses and see how
+to start one.
 
 ## License
 

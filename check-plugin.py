@@ -46,8 +46,9 @@ CAP_LITERAL = [
 
 # The index skill: lists every user-invocable skill for the user, one row each, and runs
 # every catalogued analysis. Check 8r gates the list; check 8m exempts it from the
-# shared-doc rules, since it reaches every recipe by its catalog name.
-INDEX_SKILL = "countz"
+# shared-doc rules, since it reaches every recipe by its catalog name. countz renamed it
+# `analyze`; countz-accounting keeps `countz` until it is delisted.
+INDEX_SKILLS = {"countz-accounting": "countz", "countz": "analyze"}
 
 # The hosted upload refuses a skill or agent description carrying anything shaped
 # like an XML tag (measured 2026-09-17: `<description>` in a quoted example phrase).
@@ -77,6 +78,7 @@ def frontmatter(path: pathlib.Path) -> dict[str, str]:
 def check(root: pathlib.Path) -> list[str]:
     bad: list[str] = []
     rel = lambda p: str(p.relative_to(root.parent))
+    INDEX_SKILL = INDEX_SKILLS.get(root.name, "analyze")
 
     manifest = root / ".claude-plugin" / "plugin.json"
     mf: dict = {}
@@ -1071,7 +1073,7 @@ def check(root: pathlib.Path) -> list[str]:
                            f"(exit {r1.returncode}, missing {missing or 'nothing'}): "
                            f"{(r1.stdout or r1.stderr).strip()[:120]}")
             else:
-                if root.name == "countz-accounting":
+                if root.name in ("countz-accounting", "countz"):
                     tiers = {}
                     for s in shows:
                         cols = s.split("\t")
@@ -1113,7 +1115,7 @@ def check(root: pathlib.Path) -> list[str]:
                         bad.append(f"{rel(pv)}: a changed dataset must re-SHOW exactly "
                                    f"the datasets workbook, got "
                                    f"{[s.split(chr(9))[1] for s in shows3] or 'nothing'}")
-                if root.name == "countz-accounting":
+                if root.name in ("countz-accounting", "countz"):
                     def names(shows):
                         return sorted(pathlib.Path(s.split("\t")[1]).name for s in shows)
                     fam = rd / "out" / "families"

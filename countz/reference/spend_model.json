@@ -1,0 +1,1166 @@
+{
+ "schema": "countz-accounting/spend-model@1",
+ "fitted_at": "2026-10-26",
+ "training": {
+  "runs": 68,
+  "steps": 1262,
+  "steps_by_version": {
+   "0.20.2": 478,
+   "0.21.0": 719,
+   "0.20.3": 65
+  }
+ },
+ "features": [
+  "log_reads",
+  "log_from",
+  "log_steps",
+  "warm"
+ ],
+ "kinds": [
+  "analyze",
+  "completeness",
+  "cutoff",
+  "extract",
+  "plan",
+  "recon",
+  "report",
+  "tie",
+  "vouch"
+ ],
+ "versions": [
+  "0.20.2",
+  "0.20.3"
+ ],
+ "baseline_version": "0.21.0",
+ "targets": {
+  "cost_usd": {
+   "coef": {
+    "kind:analyze": 1.52035,
+    "kind:completeness": 1.65263,
+    "kind:cutoff": 1.71734,
+    "kind:extract": -0.11776,
+    "kind:plan": 1.05714,
+    "kind:recon": 1.77021,
+    "kind:report": 1.75136,
+    "kind:tie": 1.25326,
+    "kind:vouch": 1.54513,
+    "log_reads": 0.01308,
+    "log_from": -0.09769,
+    "log_steps": 0.13301,
+    "warm": -0.68912,
+    "version:0.20.2": 0.05564,
+    "version:0.20.3": -0.10199
+   },
+   "smear": 1.06878,
+   "resid_sd": 0.3743,
+   "range": {
+    "step": [
+     0.607,
+     1.497
+    ],
+    "run": [
+     0.866,
+     1.129
+    ],
+    "family_1": [
+     0.692,
+     1.694
+    ],
+    "family_2_5": [
+     0.609,
+     1.113
+    ],
+    "family_6_plus": [
+     0.78,
+     1.046
+    ]
+   },
+   "median_abs_error": {
+    "step": 0.194,
+    "family_1": 0.191,
+    "family_6_plus": 0.126,
+    "run": 0.057,
+    "family_2_5": 0.209
+   }
+  },
+  "minutes": {
+   "coef": {
+    "kind:analyze": 2.26552,
+    "kind:completeness": 2.44178,
+    "kind:cutoff": 2.47844,
+    "kind:extract": 0.28202,
+    "kind:plan": 1.67056,
+    "kind:recon": 2.49246,
+    "kind:report": 2.29464,
+    "kind:tie": 1.945,
+    "kind:vouch": 2.28609,
+    "log_reads": 0.02532,
+    "log_from": -0.22425,
+    "log_steps": 0.27382,
+    "warm": -0.8422,
+    "version:0.20.2": -0.08604,
+    "version:0.20.3": -0.26469
+   },
+   "smear": 1.10487,
+   "resid_sd": 0.4651,
+   "range": {
+    "step": [
+     0.532,
+     1.554
+    ],
+    "run": [
+     0.808,
+     1.184
+    ],
+    "family_1": [
+     0.644,
+     1.673
+    ],
+    "family_2_5": [
+     0.568,
+     1.164
+    ],
+    "family_6_plus": [
+     0.701,
+     1.21
+    ]
+   },
+   "median_abs_error": {
+    "step": 0.236,
+    "family_1": 0.222,
+    "family_6_plus": 0.15,
+    "run": 0.096,
+    "family_2_5": 0.246
+   }
+  }
+ },
+ "elapsed": {
+  "factor": 1.096,
+  "runs": 25,
+  "range": [
+   0.793,
+   1.242
+  ]
+ },
+ "rerun_share": {
+  "mean": 0.0415,
+  "p90": 0.1101
+ },
+ "history": {
+  "accounts-receivable": {
+   "runs": 6,
+   "families": {
+    "a0": {
+     "cost_usd": 6.089,
+     "minutes": 17.0,
+     "runs": 6
+    },
+    "a1": {
+     "cost_usd": 4.577,
+     "minutes": 10.85,
+     "runs": 6
+    },
+    "a2": {
+     "cost_usd": 2.962,
+     "minutes": 6.65,
+     "runs": 6
+    },
+    "a4": {
+     "cost_usd": 7.226,
+     "minutes": 18.01,
+     "runs": 6
+    },
+    "a3": {
+     "cost_usd": 6.741,
+     "minutes": 17.5,
+     "runs": 6
+    },
+    "a5": {
+     "cost_usd": 3.969,
+     "minutes": 8.5,
+     "runs": 6
+    },
+    "a7": {
+     "cost_usd": 22.815,
+     "minutes": 47.8,
+     "runs": 6
+    },
+    "a6": {
+     "cost_usd": 2.243,
+     "minutes": 5.1,
+     "runs": 6
+    },
+    "a8": {
+     "cost_usd": 6.894,
+     "minutes": 15.335,
+     "runs": 6
+    }
+   },
+   "overhead": {
+    "cost_usd": 14.143,
+    "minutes": 34.323
+   }
+  },
+  "arr-analysis": {
+   "runs": 6,
+   "families": {
+    "g0": {
+     "cost_usd": 7.648,
+     "minutes": 19.139,
+     "runs": 6
+    },
+    "g1": {
+     "cost_usd": 2.263,
+     "minutes": 5.07,
+     "runs": 6
+    },
+    "g2": {
+     "cost_usd": 7.91,
+     "minutes": 19.1,
+     "runs": 6
+    },
+    "g3": {
+     "cost_usd": 7.067,
+     "minutes": 18.6,
+     "runs": 6
+    },
+    "g4": {
+     "cost_usd": 9.642,
+     "minutes": 24.95,
+     "runs": 6
+    },
+    "g5": {
+     "cost_usd": 9.411,
+     "minutes": 25.8,
+     "runs": 6
+    },
+    "g8": {
+     "cost_usd": 7.109,
+     "minutes": 17.35,
+     "runs": 6
+    },
+    "g6": {
+     "cost_usd": 94.876,
+     "minutes": 244.2,
+     "runs": 6
+    },
+    "g7": {
+     "cost_usd": 11.947,
+     "minutes": 33.1,
+     "runs": 6
+    },
+    "g9": {
+     "cost_usd": 7.218,
+     "minutes": 15.35,
+     "runs": 6
+    },
+    "analyze": {
+     "cost_usd": 0.55,
+     "minutes": 0.7,
+     "runs": 1
+    }
+   },
+   "overhead": {
+    "cost_usd": 16.308,
+    "minutes": 39.25
+   }
+  },
+  "cash-substantiation": {
+   "runs": 1,
+   "families": {
+    "c0": {
+     "cost_usd": 6.319,
+     "minutes": 18.309,
+     "runs": 1
+    },
+    "c1": {
+     "cost_usd": 3.252,
+     "minutes": 8.283,
+     "runs": 1
+    },
+    "c2": {
+     "cost_usd": 8.747,
+     "minutes": 23.105,
+     "runs": 1
+    },
+    "c3": {
+     "cost_usd": 5.737,
+     "minutes": 21.034,
+     "runs": 1
+    },
+    "c4": {
+     "cost_usd": 40.685,
+     "minutes": 117.813,
+     "runs": 1
+    },
+    "c5": {
+     "cost_usd": 7.792,
+     "minutes": 20.489,
+     "runs": 1
+    },
+    "c6": {
+     "cost_usd": 7.5,
+     "minutes": 20.38,
+     "runs": 1
+    },
+    "c7": {
+     "cost_usd": 5.835,
+     "minutes": 14.604,
+     "runs": 1
+    },
+    "c8": {
+     "cost_usd": 22.814,
+     "minutes": 58.634,
+     "runs": 1
+    },
+    "c9": {
+     "cost_usd": 9.665,
+     "minutes": 21.797,
+     "runs": 1
+    }
+   },
+   "overhead": {
+    "cost_usd": 16.302,
+    "minutes": 62.884
+   }
+  },
+  "contract-costs": {
+   "runs": 11,
+   "families": {
+    "m0": {
+     "cost_usd": 5.889,
+     "minutes": 15.65,
+     "runs": 10
+    },
+    "m1": {
+     "cost_usd": 2.833,
+     "minutes": 7.3,
+     "runs": 10
+    },
+    "m2": {
+     "cost_usd": 4.348,
+     "minutes": 10.5,
+     "runs": 10
+    },
+    "m4": {
+     "cost_usd": 5.651,
+     "minutes": 13.0,
+     "runs": 11
+    },
+    "m3": {
+     "cost_usd": 2.609,
+     "minutes": 6.0,
+     "runs": 11
+    },
+    "m5": {
+     "cost_usd": 2.808,
+     "minutes": 5.2,
+     "runs": 11
+    },
+    "m6": {
+     "cost_usd": 5.095,
+     "minutes": 12.4,
+     "runs": 11
+    },
+    "m7": {
+     "cost_usd": 7.434,
+     "minutes": 16.4,
+     "runs": 11
+    },
+    "m8": {
+     "cost_usd": 3.446,
+     "minutes": 8.0,
+     "runs": 11
+    }
+   },
+   "overhead": {
+    "cost_usd": 11.697,
+    "minutes": 27.2
+   }
+  },
+  "debt": {
+   "runs": 2,
+   "families": {
+    "b0": {
+     "cost_usd": 6.473,
+     "minutes": 18.418,
+     "runs": 2
+    },
+    "b1": {
+     "cost_usd": 4.225,
+     "minutes": 10.572,
+     "runs": 2
+    },
+    "b3": {
+     "cost_usd": 5.868,
+     "minutes": 17.111,
+     "runs": 2
+    },
+    "b2": {
+     "cost_usd": 7.887,
+     "minutes": 24.086,
+     "runs": 2
+    },
+    "b5": {
+     "cost_usd": 5.483,
+     "minutes": 15.694,
+     "runs": 2
+    },
+    "b4": {
+     "cost_usd": 2.206,
+     "minutes": 3.488,
+     "runs": 2
+    },
+    "b6": {
+     "cost_usd": 7.755,
+     "minutes": 22.342,
+     "runs": 2
+    },
+    "b7": {
+     "cost_usd": 7.589,
+     "minutes": 21.688,
+     "runs": 2
+    },
+    "b8": {
+     "cost_usd": 31.039,
+     "minutes": 83.156,
+     "runs": 2
+    },
+    "b9": {
+     "cost_usd": 9.109,
+     "minutes": 18.418,
+     "runs": 2
+    }
+   },
+   "overhead": {
+    "cost_usd": 13.485,
+    "minutes": 36.946
+   }
+  },
+  "fixed-assets": {
+   "runs": 2,
+   "families": {
+    "f0": {
+     "cost_usd": 6.574,
+     "minutes": 16.457,
+     "runs": 2
+    },
+    "f1": {
+     "cost_usd": 4.855,
+     "minutes": 14.713,
+     "runs": 2
+    },
+    "f3": {
+     "cost_usd": 5.49,
+     "minutes": 14.495,
+     "runs": 2
+    },
+    "f4": {
+     "cost_usd": 8.985,
+     "minutes": 24.304,
+     "runs": 2
+    },
+    "f2": {
+     "cost_usd": 8.158,
+     "minutes": 20.38,
+     "runs": 2
+    },
+    "f6": {
+     "cost_usd": 7.312,
+     "minutes": 19.181,
+     "runs": 2
+    },
+    "f8": {
+     "cost_usd": 34.446,
+     "minutes": 91.329,
+     "runs": 2
+    },
+    "f5": {
+     "cost_usd": 5.618,
+     "minutes": 14.495,
+     "runs": 2
+    },
+    "f7": {
+     "cost_usd": 1.907,
+     "minutes": 3.052,
+     "runs": 2
+    },
+    "f9": {
+     "cost_usd": 8.63,
+     "minutes": 21.47,
+     "runs": 2
+    }
+   },
+   "overhead": {
+    "cost_usd": 15.312,
+    "minutes": 36.292
+   }
+  },
+  "going-concern": {
+   "runs": 2,
+   "families": {
+    "n0": {
+     "cost_usd": 5.666,
+     "minutes": 17.983,
+     "runs": 2
+    },
+    "n1": {
+     "cost_usd": 6.394,
+     "minutes": 16.893,
+     "runs": 2
+    },
+    "n3": {
+     "cost_usd": 9.227,
+     "minutes": 27.355,
+     "runs": 2
+    },
+    "n2": {
+     "cost_usd": 4.855,
+     "minutes": 14.495,
+     "runs": 2
+    },
+    "n4": {
+     "cost_usd": 8.291,
+     "minutes": 20.38,
+     "runs": 2
+    },
+    "n5": {
+     "cost_usd": 8.869,
+     "minutes": 25.829,
+     "runs": 2
+    },
+    "n6": {
+     "cost_usd": 5.977,
+     "minutes": 15.476,
+     "runs": 2
+    },
+    "n8": {
+     "cost_usd": 34.152,
+     "minutes": 93.291,
+     "runs": 2
+    },
+    "n7": {
+     "cost_usd": 7.151,
+     "minutes": 18.854,
+     "runs": 2
+    },
+    "n9": {
+     "cost_usd": 7.989,
+     "minutes": 16.348,
+     "runs": 2
+    }
+   },
+   "overhead": {
+    "cost_usd": 12.677,
+    "minutes": 36.51
+   }
+  },
+  "income-taxes": {
+   "runs": 2,
+   "families": {
+    "i0": {
+     "cost_usd": 7.24,
+     "minutes": 21.688,
+     "runs": 2
+    },
+    "i1": {
+     "cost_usd": 5.634,
+     "minutes": 16.021,
+     "runs": 2
+    },
+    "i2": {
+     "cost_usd": 8.755,
+     "minutes": 22.56,
+     "runs": 2
+    },
+    "i4": {
+     "cost_usd": 9.786,
+     "minutes": 29.753,
+     "runs": 2
+    },
+    "i8": {
+     "cost_usd": 36.939,
+     "minutes": 100.266,
+     "runs": 2
+    },
+    "i5": {
+     "cost_usd": 5.073,
+     "minutes": 12.642,
+     "runs": 2
+    },
+    "i3": {
+     "cost_usd": 8.738,
+     "minutes": 27.573,
+     "runs": 2
+    },
+    "i7": {
+     "cost_usd": 5.677,
+     "minutes": 15.912,
+     "runs": 2
+    },
+    "i6": {
+     "cost_usd": 6.889,
+     "minutes": 19.29,
+     "runs": 2
+    },
+    "i9": {
+     "cost_usd": 11.906,
+     "minutes": 27.464,
+     "runs": 2
+    }
+   },
+   "overhead": {
+    "cost_usd": 13.401,
+    "minutes": 33.567
+   }
+  },
+  "journal-entry-review": {
+   "runs": 7,
+   "families": {
+    "j0": {
+     "cost_usd": 5.812,
+     "minutes": 16.239,
+     "runs": 7
+    },
+    "j1": {
+     "cost_usd": 2.94,
+     "minutes": 7.5,
+     "runs": 7
+    },
+    "j2": {
+     "cost_usd": 4.757,
+     "minutes": 13.9,
+     "runs": 7
+    },
+    "j3": {
+     "cost_usd": 20.678,
+     "minutes": 45.7,
+     "runs": 7
+    },
+    "j4": {
+     "cost_usd": 6.966,
+     "minutes": 14.3,
+     "runs": 7
+    },
+    "j9": {
+     "cost_usd": 6.587,
+     "minutes": 17.7,
+     "runs": 7
+    }
+   },
+   "overhead": {
+    "cost_usd": 12.303,
+    "minutes": 33.131
+   }
+  },
+  "opening-balances": {
+   "runs": 2,
+   "families": {
+    "o0": {
+     "cost_usd": 5.219,
+     "minutes": 15.694,
+     "runs": 2
+    },
+    "o1": {
+     "cost_usd": 4.851,
+     "minutes": 14.168,
+     "runs": 2
+    },
+    "o2": {
+     "cost_usd": 8.627,
+     "minutes": 25.938,
+     "runs": 2
+    },
+    "o3": {
+     "cost_usd": 17.236,
+     "minutes": 39.889,
+     "runs": 2
+    },
+    "o7": {
+     "cost_usd": 4.649,
+     "minutes": 12.86,
+     "runs": 2
+    },
+    "o8": {
+     "cost_usd": 40.842,
+     "minutes": 110.402,
+     "runs": 2
+    },
+    "o4": {
+     "cost_usd": 2.933,
+     "minutes": 4.141,
+     "runs": 2
+    },
+    "o5": {
+     "cost_usd": 7.255,
+     "minutes": 17.547,
+     "runs": 2
+    },
+    "o6": {
+     "cost_usd": 6.732,
+     "minutes": 18.418,
+     "runs": 2
+    },
+    "o9": {
+     "cost_usd": 9.59,
+     "minutes": 20.707,
+     "runs": 2
+    }
+   },
+   "overhead": {
+    "cost_usd": 14.7,
+    "minutes": 35.965
+   }
+  },
+  "payroll": {
+   "runs": 4,
+   "families": {
+    "w0": {
+     "cost_usd": 8.181,
+     "minutes": 23.105,
+     "runs": 4
+    },
+    "w1": {
+     "cost_usd": 5.816,
+     "minutes": 14.386,
+     "runs": 4
+    },
+    "w2": {
+     "cost_usd": 9.65,
+     "minutes": 24.958,
+     "runs": 4
+    },
+    "w3": {
+     "cost_usd": 6.8,
+     "minutes": 18.745,
+     "runs": 4
+    },
+    "w5": {
+     "cost_usd": 6.058,
+     "minutes": 17.329,
+     "runs": 4
+    },
+    "w6": {
+     "cost_usd": 6.132,
+     "minutes": 15.912,
+     "runs": 4
+    },
+    "w4": {
+     "cost_usd": 1.759,
+     "minutes": 3.161,
+     "runs": 4
+    },
+    "w8": {
+     "cost_usd": 38.772,
+     "minutes": 105.824,
+     "runs": 4
+    },
+    "w7": {
+     "cost_usd": 4.681,
+     "minutes": 14.277,
+     "runs": 4
+    },
+    "w9": {
+     "cost_usd": 9.851,
+     "minutes": 19.181,
+     "runs": 4
+    }
+   },
+   "overhead": {
+    "cost_usd": 14.724,
+    "minutes": 44.575
+   }
+  },
+  "prepaid-expenses": {
+   "runs": 4,
+   "families": {
+    "p0": {
+     "cost_usd": 7.903,
+     "minutes": 19.617,
+     "runs": 4
+    },
+    "p1": {
+     "cost_usd": 3.786,
+     "minutes": 9.7,
+     "runs": 4
+    },
+    "p2": {
+     "cost_usd": 6.147,
+     "minutes": 15.803,
+     "runs": 4
+    },
+    "p4": {
+     "cost_usd": 8.208,
+     "minutes": 22.342,
+     "runs": 4
+    },
+    "p5": {
+     "cost_usd": 6.155,
+     "minutes": 17.111,
+     "runs": 4
+    },
+    "p3": {
+     "cost_usd": 6.815,
+     "minutes": 16.893,
+     "runs": 4
+    },
+    "p6": {
+     "cost_usd": 32.472,
+     "minutes": 92.31,
+     "runs": 4
+    },
+    "p7": {
+     "cost_usd": 6.605,
+     "minutes": 18.2,
+     "runs": 4
+    }
+   },
+   "overhead": {
+    "cost_usd": 12.608,
+    "minutes": 44.793
+   }
+  },
+  "related-parties": {
+   "runs": 2,
+   "families": {
+    "y0": {
+     "cost_usd": 5.693,
+     "minutes": 16.13,
+     "runs": 2
+    },
+    "y1": {
+     "cost_usd": 4.076,
+     "minutes": 10.136,
+     "runs": 2
+    },
+    "y2": {
+     "cost_usd": 8.456,
+     "minutes": 26.047,
+     "runs": 2
+    },
+    "y3": {
+     "cost_usd": 9.352,
+     "minutes": 23.541,
+     "runs": 2
+    },
+    "y4": {
+     "cost_usd": 6.795,
+     "minutes": 17.329,
+     "runs": 2
+    },
+    "y5": {
+     "cost_usd": 4.959,
+     "minutes": 12.751,
+     "runs": 2
+    },
+    "y6": {
+     "cost_usd": 31.802,
+     "minutes": 83.918,
+     "runs": 2
+    },
+    "y7": {
+     "cost_usd": 5.543,
+     "minutes": 11.879,
+     "runs": 2
+    },
+    "y8": {
+     "cost_usd": 7.438,
+     "minutes": 20.816,
+     "runs": 2
+    }
+   },
+   "overhead": {
+    "cost_usd": 13.026,
+    "minutes": 36.946
+   }
+  },
+  "revenue-leak": {
+   "runs": 6,
+   "families": {
+    "r0": {
+     "cost_usd": 6.852,
+     "minutes": 20.8,
+     "runs": 5
+    },
+    "r3": {
+     "cost_usd": 3.707,
+     "minutes": 9.9,
+     "runs": 5
+    },
+    "r1": {
+     "cost_usd": 4.41,
+     "minutes": 13.2,
+     "runs": 5
+    },
+    "r2": {
+     "cost_usd": 3.533,
+     "minutes": 13.1,
+     "runs": 5
+    },
+    "r4": {
+     "cost_usd": 3.346,
+     "minutes": 8.1,
+     "runs": 5
+    },
+    "r6": {
+     "cost_usd": 54.022,
+     "minutes": 147.8,
+     "runs": 5
+    },
+    "r5": {
+     "cost_usd": 5.502,
+     "minutes": 14.1,
+     "runs": 5
+    },
+    "r7": {
+     "cost_usd": 5.617,
+     "minutes": 14.6,
+     "runs": 5
+    },
+    "r8": {
+     "cost_usd": 6.993,
+     "minutes": 15.3,
+     "runs": 5
+    }
+   },
+   "overhead": {
+    "cost_usd": 15.018,
+    "minutes": 44.25
+   }
+  },
+  "stock-based-compensation": {
+   "runs": 1,
+   "families": {
+    "s0": {
+     "cost_usd": 7.908,
+     "minutes": 24.413,
+     "runs": 1
+    },
+    "s1": {
+     "cost_usd": 5.192,
+     "minutes": 12.206,
+     "runs": 1
+    },
+    "s2": {
+     "cost_usd": 6.794,
+     "minutes": 17.656,
+     "runs": 1
+    },
+    "s4": {
+     "cost_usd": 4.754,
+     "minutes": 13.187,
+     "runs": 1
+    },
+    "s3": {
+     "cost_usd": 8.489,
+     "minutes": 21.797,
+     "runs": 1
+    },
+    "s5": {
+     "cost_usd": 5.86,
+     "minutes": 17.656,
+     "runs": 1
+    },
+    "s6": {
+     "cost_usd": 9.588,
+     "minutes": 27.028,
+     "runs": 1
+    },
+    "s7": {
+     "cost_usd": 31.196,
+     "minutes": 82.066,
+     "runs": 1
+    },
+    "s8": {
+     "cost_usd": 7.002,
+     "minutes": 16.893,
+     "runs": 1
+    },
+    "s9": {
+     "cost_usd": 7.647,
+     "minutes": 20.598,
+     "runs": 1
+    }
+   },
+   "overhead": {
+    "cost_usd": 12.016,
+    "minutes": 31.824
+   }
+  },
+  "stockholders-equity": {
+   "runs": 9,
+   "families": {
+    "e0": {
+     "cost_usd": 7.51,
+     "minutes": 19.1,
+     "runs": 9
+    },
+    "e1": {
+     "cost_usd": 3.623,
+     "minutes": 8.2,
+     "runs": 9
+    },
+    "e2": {
+     "cost_usd": 8.018,
+     "minutes": 21.8,
+     "runs": 9
+    },
+    "e4": {
+     "cost_usd": 3.259,
+     "minutes": 9.7,
+     "runs": 9
+    },
+    "e3": {
+     "cost_usd": 5.673,
+     "minutes": 15.4,
+     "runs": 9
+    },
+    "e5": {
+     "cost_usd": 5.54,
+     "minutes": 13.9,
+     "runs": 9
+    },
+    "e6": {
+     "cost_usd": 6.244,
+     "minutes": 17.0,
+     "runs": 9
+    },
+    "e8": {
+     "cost_usd": 21.049,
+     "minutes": 78.3,
+     "runs": 9
+    },
+    "e7": {
+     "cost_usd": 6.606,
+     "minutes": 15.7,
+     "runs": 9
+    },
+    "e9": {
+     "cost_usd": 5.639,
+     "minutes": 12.2,
+     "runs": 9
+    }
+   },
+   "overhead": {
+    "cost_usd": 15.183,
+    "minutes": 34.9
+   }
+  },
+  "unrecorded-liabilities": {
+   "runs": 1,
+   "families": {
+    "u0": {
+     "cost_usd": 8.425,
+     "minutes": 21.47,
+     "runs": 1
+    },
+    "u1": {
+     "cost_usd": 4.57,
+     "minutes": 11.879,
+     "runs": 1
+    },
+    "u3": {
+     "cost_usd": 9.441,
+     "minutes": 27.246,
+     "runs": 1
+    },
+    "u2": {
+     "cost_usd": 6.958,
+     "minutes": 18.636,
+     "runs": 1
+    },
+    "u4": {
+     "cost_usd": 8.908,
+     "minutes": 25.394,
+     "runs": 1
+    },
+    "u5": {
+     "cost_usd": 6.12,
+     "minutes": 15.258,
+     "runs": 1
+    },
+    "u6": {
+     "cost_usd": 14.767,
+     "minutes": 39.562,
+     "runs": 1
+    },
+    "u7": {
+     "cost_usd": 6.136,
+     "minutes": 17.874,
+     "runs": 1
+    },
+    "u8": {
+     "cost_usd": 41.365,
+     "minutes": 112.255,
+     "runs": 1
+    },
+    "u9": {
+     "cost_usd": 4.484,
+     "minutes": 10.136,
+     "runs": 1
+    }
+   },
+   "overhead": {
+    "cost_usd": 14.654,
+    "minutes": 42.395
+   }
+  }
+ },
+ "typical": {
+  "analyze": {
+   "log_reads": 2.1972,
+   "log_from": 1.6094,
+   "log_steps": 2.8332,
+   "warm": 0.0
+  },
+  "completeness": {
+   "log_reads": 2.5649,
+   "log_from": 1.0986,
+   "log_steps": 2.8332,
+   "warm": 0.0
+  },
+  "cutoff": {
+   "log_reads": 2.8904,
+   "log_from": 1.3863,
+   "log_steps": 2.7726,
+   "warm": 0.0
+  },
+  "extract": {
+   "log_reads": 3.8067,
+   "log_from": 0.0,
+   "log_steps": 2.8332,
+   "warm": 0.0
+  },
+  "plan": {
+   "log_reads": 0.0,
+   "log_from": 0.0,
+   "log_steps": 2.8332,
+   "warm": 0.0
+  },
+  "recon": {
+   "log_reads": 2.7081,
+   "log_from": 1.3863,
+   "log_steps": 2.9444,
+   "warm": 0.0
+  },
+  "report": {
+   "log_reads": 0.0,
+   "log_from": 0.0,
+   "log_steps": 2.8332,
+   "warm": 0.0
+  },
+  "tie": {
+   "log_reads": 2.4849,
+   "log_from": 1.0986,
+   "log_steps": 2.8332,
+   "warm": 0.0
+  },
+  "vouch": {
+   "log_reads": 2.3979,
+   "log_from": 1.6094,
+   "log_steps": 2.7726,
+   "warm": 0.0
+  }
+ },
+ "elapsed_per_work": 0.707
+}
