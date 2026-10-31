@@ -311,8 +311,10 @@ def _stream(df: pl.DataFrame, name: str, scale: int, used: set[str]) -> pl.DataF
     keep = [c for c in df.columns if c in used | set(OPTIONAL) and c not in ("id", "date", "value")]
     for c in keep:
         _keyable(name, c, df[c].dtype)
-    out = df.select(pl.col(c).cast(pl.Utf8) for c in keep)
-    out = out.with_columns(id=ids, day=d.cast(pl.Date).cast(pl.Int32), c=x.round().cast(pl.Int64))
+    # Add the derived columns to df before selecting: polars 2 will not broadcast a Series onto the
+    # zero-height frame that selecting no kept columns leaves.
+    out = df.with_columns(id=ids, day=d.cast(pl.Date).cast(pl.Int32), c=x.round().cast(pl.Int64)) \
+        .select(*(pl.col(c).cast(pl.Utf8) for c in keep if c not in ("day", "c")), "id", "day", "c")
     for c in OPTIONAL:
         if c not in out.columns:
             out = out.with_columns(pl.lit(None, pl.Utf8).alias(c))

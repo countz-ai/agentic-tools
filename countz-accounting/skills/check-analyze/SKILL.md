@@ -13,6 +13,8 @@ user-invocable: false
 
 # Perform one analysis
 
+The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.
+
 Arguments: `run_dir`, `seq`, `check` (the check id), `sources` (comma-joined source ids),
 `goal` (the stated goal, or `(none)`), `params`, `mode` (`fresh` | `fix`), and on `fix`,
 `findings_from`.
@@ -42,13 +44,16 @@ assumed.
 ## 2. Compute
 
 Per DOCTRINE.md: code computes every figure, at full precision, from the sources and
-the declared dependency reads — you transcribe nothing. One citation per read in
+the declared dependency reads — you transcribe nothing; compute in SQL
+(`CONDUCT.md` § Libraries). One citation per read in
 `workpapers/evidence-<check>.yaml`; every number that may reach the deliverable as a
 figure in `workpapers/figures-<check>.yaml`, populations stated with exclusions named.
-Item-grain work lands as `checks/<check>-<table>.csv` tables with their manifest blocks
+Item-grain work lands as `checks/<check>-<table>.parquet` tables with their manifest blocks
 per EVIDENCE.md § 5. No size threshold narrows the computation: every member of the
 stated population enters the schedules at full precision, whatever its amount
-(DOCTRINE.md § Materiality).
+(DOCTRINE.md § Materiality). Take every period window from `scripts/periods.py`
+(DOCTRINE.md § Periods), including a trailing window beside a snapshot column
+(`p.trailing(3)`); never bound one with date arithmetic on the snapshot date.
 
 ## 3. Rule
 
@@ -70,7 +75,7 @@ Where the procedure classifies members — accounts, cost lines, adjustment cand
 
 - `checks/<check>.md` — the definition, the procedure as resolved, each schedule, every
   ruling with its basis, the exceptions and the open items.
-- `checks/<check>-<table>.csv` — the item-grain tables of § 2, each with its manifest
+- `checks/<check>-<table>.parquet` — the item-grain tables of § 2, each with its manifest
   block.
 - `out/tabs/<check>.xlsx` — your tab, blocks per `WORKBOOK.md` § 4, with the schedules as
   the primary table, the rulings and their bases, and the exceptions. The recipe's
@@ -95,4 +100,4 @@ what you disagree with, rewrite only your own files — the item tables included
 Write `steps/<NNNN>-analyze.json` per `RUN_CONTRACT.md`: `check_id` set, `produced`
 naming your files, `consumed` every file you opened with its mtime, `blockers` for
 anything you could not reach. `conclusion` names what the analysis established and the
-largest open matter, in two sentences. Return at most ten lines.
+largest open matter, in two sentences.

@@ -11,6 +11,8 @@ user-invocable: false
 
 # Perform one tie-out
 
+The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.
+
 Arguments: `run_dir`, `seq`, `check` (the check id), `sources` (comma-joined source ids),
 `goal` (the user's stated goal, or `(none)`), `params`, `mode` (`fresh` | `fix`), and on
 `fix`, `findings_from` (the review record whose findings name this check).
@@ -123,4 +125,4 @@ Write `steps/<NNNN>-tie.json` per `RUN_CONTRACT.md`: `check_id` set, `produced` 
 your files,
 `consumed` listing every file you opened with its mtime, `blockers` for anything you could
 not reach. `conclusion` names what tied and what did not, with the worst difference in
-dollars, in two sentences. Return at most ten lines.
+dollars, in two sentences.

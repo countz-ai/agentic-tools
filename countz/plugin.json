@@ -1,0 +1,56 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "countz",
+  "version": "0.21.0",
+  "description": "Accounting and diligence analyses on the Countz platform: tie out ledgers, sub-ledgers and schedules; reconcile cash to bank and payables to supplier statements; prove out cash ahead of an audit; build a quality-of-earnings EBITDA bridge; test ASC 606 revenue recognition and ASC 842 lease accounting; trace revenue leakage from invoice to cash and many more. You get a workbook and a report deck with every figure traceable to its source file.",
+  "author": {
+    "name": "Countz",
+    "url": "https://www.countz.ai"
+  },
+  "homepage": "https://www.countz.ai",
+  "repository": "https://github.com/countz-ai/agentic-tools",
+  "license": "Apache-2.0",
+  "keywords": [
+    "accounting",
+    "audit",
+    "finance",
+    "tie-out",
+    "reconciliation",
+    "bank-reconciliation",
+    "cash",
+    "quality-of-earnings",
+    "ebitda",
+    "financial-due-diligence",
+    "asc-606",
+    "revenue-recognition",
+    "asc-842",
+    "lease-accounting",
+    "arr",
+    "net-revenue-retention",
+    "saas-metrics",
+    "dso",
+    "receivables",
+    "countz"
+  ],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Countz - accounting and diligence",
+        "shortDescription": "Audit-grade accounting analyses over your own files, every figure traceable to its source.",
+        "longDescription": "Accounting and diligence analyses on the Countz platform: tie out ledgers, sub-ledgers and schedules; reconcile cash to bank and payables to supplier statements; prove out cash ahead of an audit; build a quality-of-earnings EBITDA bridge; test ASC 606 revenue recognition and ASC 842 lease accounting; trace revenue leakage from invoice to cash and many more. You get a workbook and a report deck with every figure traceable to its source file.",
+        "developerName": "Countz",
+        "category": "Productivity",
+        "capabilities": [
+          "Read",
+          "Write"
+        ],
+        "websiteURL": "https://www.countz.ai",
+        "defaultPrompt": [
+          "Tie out my trial balance to the general ledger.",
+          "Reconcile my GL cash account to the bank statement.",
+          "Build a quality-of-earnings EBITDA bridge from these files."
+        ]
+      }
+    }
+  }
+}

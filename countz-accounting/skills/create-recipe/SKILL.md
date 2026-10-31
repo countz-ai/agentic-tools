@@ -45,6 +45,10 @@ State no method: no step order, no item-table recipe, no `params` plumbing beyon
 method pattern to one Toolbox bullet. Write each rule once, as the general rule. Write
 no rule for a single data room.
 
+**State no rule of the accounting standard**: no definition, criterion, formula or
+disclosure requirement, and no framework name (ASC 842, IFRS 16). Where a ruling turns on
+it, write "under the accounting standard".
+
 ## Research
 
 Research from your knowledge of the profession's practice. Use no web search or web fetch.
@@ -80,10 +84,12 @@ Write the sections in this order. Sections `RECIPE_FORMAT.md` requires are marke
 
 1. Frontmatter per `RECIPE_FORMAT.md` § The document.
 2. Intro: who uses the recipe, the readers, the scope.
-3. `Rules`: numbered; each rule opens with its instruction, with no title. Include
-   these where they apply: pattern before size; nothing left in prose (an untested
-   pattern becomes a proposed hypothesis or a `D.`); claims stated as hypotheses with
-   the test fixed before the result.
+3. `Rules`: numbered; each rule opens with its instruction, with no title. State only
+   rules specific to the analysis: a convention it chooses between defensible options,
+   a trap its records set, a test its claims need. Never restate `PLAYBOOK_RECIPES.md`
+   § What every recipe inherits, `DOCTRINE.md`, `CONDUCT.md`, or practice an accountant
+   follows unprompted. A partial restatement is worse than none: the worker follows the
+   narrower text.
 4. `Population`* with its closed ruling list.
 5. A client-policy section where the analysis turns on a client policy. Example: `The ARR
    policy`.

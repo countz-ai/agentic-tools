@@ -15,8 +15,8 @@ sections it needs; `DOCTRINE.md` § Working with numbers and `DOCTRINE.md` § Vo
 every step whatever the skill names.
 
 - Judge only what accounting supports. No valuation, deal, or investment calls.
-- Every figure is computed by code over the sources, never by you.
 - Every figure traces to a file the user supplied. Name the file, the sheet, and the range.
+  Fetch no external record; a record the data room lacks is a data request (`D.`).
 - **Never supply a number the data does not carry.** Report the gap instead.
 - Mark each claim measured, inferred, or unknown. Let unknown stand.
 - A missing input is a GAP: skip or degrade, and say so. Data that is present but the
@@ -30,8 +30,6 @@ every step whatever the skill names.
 - Write only inside the run directory you were given.
 - **Never write `run.json`.** The relay owns it. Read it when your skill says to; touch
   nothing.
-- Write your step record last, to `steps/<NNNN>-<step>.json.tmp`, then rename. Its shape
-  is in `${CLAUDE_PLUGIN_ROOT}/reference/RUN_CONTRACT.md` § The step record.
 
 ## Reading a plugin document
 
@@ -79,25 +77,31 @@ Do both of these on every file:
 
 ### Libraries
 
-Prefer, in order: the plugin's own scripts in `${CLAUDE_PLUGIN_ROOT}/scripts/` where one
-fits; SQL (`scripts/evidence.py`'s `select()`); polars and the other libraries below;
-custom Python last, only for what none of those express. Before writing code for a job,
-list `scripts/` and read the module docstrings: each docstring is its module's API.
-Import a module; never copy or rewrite it. A join, a group-by or a window is a library
-call, never a hand-written loop.
+**Parse in Python (`scripts/cache.py`), compute in SQL (`scripts/sql.py`).** Python reads
+files into tables and writes the tab and the prose; every figure, population and item
+table is a SQL statement over the run's tables, and the statement is its lineage. Each
+table a step makes says what one row of it is (`COMMENT ON TABLE`, or `write_items`'s
+`about`); the reader sees it beside the statement on the Tables tab. A value
+a document states, a plan parameter or a value the step chooses is a row of
+`room.constants` (`Ledger.constants`), read with `const('name')`; a statement types no
+other number, date or record id. A result or a status is a column the statement computes.
+A tab and its prose take every number, count, result and status from a figure or a
+query's row. `sql.py verify` fails one minted outside SQL. Never loop over queries where
+one aggregate does the job. Explore with
+`${CLAUDE_PLUGIN_ROOT}/scripts/countz-sql -agent -init <run_dir>/catalog.sql -c "<sql>"`:
+`countz.tables` and `countz.columns` describe every table. Read a module's docstring
+before using it, then import it; never copy or rewrite it.
 
 - **uv** — use `uv` instead of `pip` wherever possible. The preferred packages are
   pinned in the plugin root's `pyproject.toml` / `uv.lock`; run a script with
   `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 <script>`. Never install into the
-  user's environment. numpy and polars are pinned; scipy is not installed.
-- **polars** — use polars for dataframe manipulation and calculation. Use `scan_csv` for
-  large csv files. On a run whose plan scheduled an `extract` step, a file your step
-  reads is already parsed and typed under `<run_dir>/cache/`: read each population with
-  one SQL statement through `scripts/evidence.py`'s `select()`, which returns the rows
-  and the citation of the same rows (`EVIDENCE.md` § 1), instead of parsing
-  the source again.
-- **openpyxl** — the workbook: every tab script and the assembler write through it,
-  importing the kit from `scripts/wbkit.py` (`${CLAUDE_PLUGIN_ROOT}/reference/WORKBOOK.md` § 7).
+  user's environment. duckdb, numpy and polars are pinned; scipy is not installed.
+- **polars** — parse files with polars, and write every parsed table to the cache
+  (`cache.write`, or `evidence.span(frame=..., run_dir=...)`). Use `scan_csv` for large
+  csv files.
+- **openpyxl** — the workbook: `scripts/render.py`, which renders a check's tab from its
+  template, and the assembler write through it, with the kit in `scripts/wbkit.py`
+  (`${CLAUDE_PLUGIN_ROOT}/reference/WORKBOOK.md` § 7).
 - **figures and periods** — every figure ledger is written through `scripts/figures.py`
   (`EVIDENCE.md` § 3) and every period column through `scripts/periods.py`
   (`DOCTRINE.md` § Periods).

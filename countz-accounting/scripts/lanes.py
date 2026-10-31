@@ -38,7 +38,7 @@ a new holder. `fix` is a fix round after the playbook (RUN_CONTRACT.md § Review
 report): it dispatches the re-runs through `run_state.py dispatch --checks` and sends each
 to the lane that ran its check, warm on that lane's holder; a lane with several takes them
 one at a time, `done` launching the next, and prints `ROUND DONE:` when the round's last
-re-run is recorded. State lives in <run_dir>/lanes.json. Standard library only.
+re-run is recorded. State lives in <run_dir>/lanes.json.
 """
 from __future__ import annotations
 
@@ -232,9 +232,9 @@ def place(run_dir: pathlib.Path, definition: dict, ready: list[dict], bound: dic
         briefs.append(brief)
         lines.append(_to_holder(run_dir, st, lane, brief, s.get("params"), seq0 + i, s["id"]))
     save(run_dir, st)
-    head = (f"RECORD: python3 {_q(pathlib.Path(run_state.__file__).resolve())} dispatch "
+    head = (f"RECORD: {run_state.relay_python()} {_q(pathlib.Path(run_state.__file__).resolve())} dispatch "
             f"{_q(run_dir)} --briefs " + " ".join(_q(b) for b in briefs))
-    tail = (f"AWAIT: when a lane's agent reports back, run python3 {_q(HERE)} done {_q(run_dir)} "
+    tail = (f"AWAIT: when a lane's agent reports back, run {run_state.relay_python()} {_q(HERE)} done {_q(run_dir)} "
             f"--agent <its agentId> and execute what it prints")
     return [head] + lines + [tail]
 
@@ -331,7 +331,7 @@ def cmd_done(a) -> int:
         save(run_dir, st)
         return 0
     save(run_dir, st)
-    print(f"THEN: python3 {_q(HERE.parent / 'playbook_next.py')} {_q(run_dir)} {_q(st['definition'])}")
+    print(f"THEN: {run_state.relay_python()} {_q(HERE.parent / 'playbook_next.py')} {_q(run_dir)} {_q(st['definition'])}")
     return 0
 
 
@@ -375,7 +375,7 @@ def cmd_fix(a) -> int:
     lines = [ln for lane in st["lanes"] if (ln := _next_queued(run_dir, st, lane))]
     save(run_dir, st)
     print("\n".join(lines))
-    print(f"AWAIT: when a lane's agent reports back, run python3 {_q(HERE)} done {_q(run_dir)} "
+    print(f"AWAIT: when a lane's agent reports back, run {run_state.relay_python()} {_q(HERE)} done {_q(run_dir)} "
           f"--agent <its agentId> and execute what it prints")
     return 0
 

@@ -44,9 +44,11 @@ CAP_LITERAL = [
 ]
 
 
-# The index skill: lists every user-invocable skill for the user, one row each. Check 8r
-# gates the list, and check 8m exempts it from the one-launcher rule for that reason.
-INDEX_SKILL = "countz"
+# The index skill: lists every user-invocable skill for the user, one row each, and runs
+# every catalogued analysis. Check 8r gates the list; check 8m exempts it from the
+# shared-doc rules, since it reaches every recipe by its catalog name. countz renamed it
+# `analyze`; countz-accounting keeps `countz` until it is delisted.
+INDEX_SKILLS = {"countz-accounting": "countz", "countz": "analyze"}
 
 # The hosted upload refuses a skill or agent description carrying anything shaped
 # like an XML tag (measured 2026-09-17: `<description>` in a quoted example phrase).
@@ -76,6 +78,7 @@ def frontmatter(path: pathlib.Path) -> dict[str, str]:
 def check(root: pathlib.Path) -> list[str]:
     bad: list[str] = []
     rel = lambda p: str(p.relative_to(root.parent))
+    INDEX_SKILL = INDEX_SKILLS.get(root.name, "analyze")
 
     manifest = root / ".claude-plugin" / "plugin.json"
     mf: dict = {}
@@ -1070,7 +1073,7 @@ def check(root: pathlib.Path) -> list[str]:
                            f"(exit {r1.returncode}, missing {missing or 'nothing'}): "
                            f"{(r1.stdout or r1.stderr).strip()[:120]}")
             else:
-                if root.name == "countz-accounting":
+                if root.name in ("countz-accounting", "countz"):
                     tiers = {}
                     for s in shows:
                         cols = s.split("\t")
@@ -1112,7 +1115,7 @@ def check(root: pathlib.Path) -> list[str]:
                         bad.append(f"{rel(pv)}: a changed dataset must re-SHOW exactly "
                                    f"the datasets workbook, got "
                                    f"{[s.split(chr(9))[1] for s in shows3] or 'nothing'}")
-                if root.name == "countz-accounting":
+                if root.name in ("countz-accounting", "countz"):
                     def names(shows):
                         return sorted(pathlib.Path(s.split("\t")[1]).name for s in shows)
                     fam = rd / "out" / "families"
@@ -1562,17 +1565,20 @@ def check(root: pathlib.Path) -> list[str]:
             bad.append(f"{rel(wf)}: reads client files and names neither scripts/peek.py "
                        f"nor reference/CONDUCT.md - the bounded first look is unwired here")
 
-    # 8m. Recipes are executed by agents reading them, and every launcher is a shim naming
-    #     one. The document's shape (countz-accounting/reference/RECIPE_FORMAT.md § The
+    # 8m. Recipes are executed by agents reading them, and `countz` is the one entry to
+    #     every recipe: it matches the ask against catalog.yaml and relays the match. The
+    #     document's shape (countz-accounting/reference/RECIPE_FORMAT.md § The
     #     document) is ONE module, scripts/recipe_format.py — shared with the run-time
     #     gate scripts/validate_recipe.py a generated recipe passes — so the rules are
     #     stated once. This check runs that module over the corpus and adds the tree
-    #     rules the module cannot know: exactly one inline shim asks for each recipe by
-    #     its catalog name (`recipe="<name>"`), and no shared doc lists recipes. A README,
-    #     reference doc, agent file or non-shim skill names at most one recipe and one
-    #     shim, as its exemplar. A second is a list, and a list is a hand edit per recipe
-    #     (root CLAUDE.md § Documentation discipline: no hand-maintained file lists).
-    #     catalog.yaml is the one mechanical list and is exempt.
+    #     rules the module cannot know: a skill that still asks for a recipe by name
+    #     (`recipe="<name>"`, a retired per-recipe skill) names one the corpus carries
+    #     and is `user-invocable: false`, so the user reaches the recipe through `countz`
+    #     only; and no shared doc lists recipes. A README, reference doc, agent file or
+    #     other skill names at most one recipe and one per-recipe skill, as its exemplar.
+    #     A second is a list, and a list is a hand edit per recipe (root CLAUDE.md
+    #     § Documentation discipline: no hand-maintained file lists). catalog.yaml is the
+    #     one mechanical list and is exempt.
     recipes = sorted(root.glob("playbook-recipes/*.md"))
     rfmod = None
     if recipes:
@@ -1603,12 +1609,13 @@ def check(root: pathlib.Path) -> list[str]:
                 continue
             for name in set(re.findall(r'recipe="([a-z0-9-]+)"', f.read_text())):
                 shims.setdefault(name, []).append(f.parent.name)
-        for name, rf_ in sorted(names.items()):
-            owners = [o for o in shims.get(name, []) if o != INDEX_SKILL]
-            if len(owners) != 1:
-                bad.append(f"{rel(rf_)}: {len(owners)} inline skills ask for `{name}` "
-                           f"({', '.join(owners) or 'none'}); a recipe has exactly one shim")
         for name, owners in sorted(shims.items()):
+            for o in owners:
+                if o != INDEX_SKILL and frontmatter(root / "skills" / o / "SKILL.md").get(
+                        "user-invocable", "true").lower() != "false":
+                    bad.append(f"skills/{o}/SKILL.md: asks for recipe `{name}` by name and "
+                               f"is user-invocable - the user reaches a recipe through "
+                               f"`{INDEX_SKILL}`; mark it `user-invocable: false`")
             if name not in names and name not in ("<name>", "<the entry's name>"):
                 bad.append(f"skills/{owners[0]}/SKILL.md: asks for recipe `{name}`, which "
                            f"no recipe in playbook-recipes/ carries as its frontmatter name")
@@ -1626,8 +1633,9 @@ def check(root: pathlib.Path) -> list[str]:
                            f"is the list")
             named = [s for s in sorted(shim_names) if f"`{s}`" in ft]
             if len(named) > 1:
-                bad.append(f"{rel(f)}: names {len(named)} launchers ({', '.join(named)}) - "
-                           f"a shared doc names at most one, as its exemplar")
+                bad.append(f"{rel(f)}: names {len(named)} per-recipe skills "
+                           f"({', '.join(named)}) - a shared doc names at most one, as its "
+                           f"exemplar")
         for readme in readmes:
             if "playbook-recipes/" not in readme.read_text():
                 bad.append(f"{rel(readme)}: does not point at playbook-recipes/ - the "
@@ -1640,8 +1648,9 @@ def check(root: pathlib.Path) -> list[str]:
 
     # 8t. catalog.yaml is what the server serves and the agent matches on
     #     (docs/schemas/API_MCP_TOOLS.yaml::RecipeCatalog): every entry names a recipe by
-    #     its frontmatter `name`, every recipe has an entry, a `skill` is the inline shim
-    #     that asks for that recipe, aliases are non-empty and lower-case, and the
+    #     its frontmatter `name`, every recipe has an entry, no entry carries a `skill`
+    #     (`countz` relays every entry; a `skill` would route an installed plugin around
+    #     it to a retired per-recipe skill), aliases are non-empty and lower-case, and the
     #     matching fixture's expected names exist. A drift here is a served catalog that
     #     promises a recipe the server cannot return.
     cat = root / "playbook-recipes" / "catalog.yaml"
@@ -1677,13 +1686,9 @@ def check(root: pathlib.Path) -> list[str]:
                     for a in al:
                         if str(a) != str(a).strip().lower():
                             bad.append(f"{rel(cat)}: `{n}` alias {a!r} is not lower-case and trimmed")
-                    sk = e.get("skill")
-                    if sk:
-                        sf = root / "skills" / str(sk) / "SKILL.md"
-                        if not sf.is_file() or frontmatter(sf).get("context") != "inline":
-                            bad.append(f"{rel(cat)}: `{n}` names skill `{sk}`, not an inline skill")
-                        elif f'recipe="{n}"' not in sf.read_text():
-                            bad.append(f"{rel(cat)}: skill `{sk}` does not ask for recipe `{n}`")
+                    if e.get("skill"):
+                        bad.append(f"{rel(cat)}: `{n}` names skill `{e['skill']}` - "
+                                   f"`{INDEX_SKILL}` relays every entry; drop the key")
                 for n in sorted(set(names) - seen):
                     bad.append(f"{rel(cat)}: recipe `{n}` ({rel(names[n])}) has no catalog entry")
                 fx = root.parent / "smoke" / "catalog_phrasings.yaml"
@@ -2212,19 +2217,23 @@ def check(root: pathlib.Path) -> list[str]:
                                f"before its record - or its ledger defects surface at "
                                f"the next check's gate, blamed on that check")
 
-    # 8o. setup_run.py mints the run directory - `<skill>-<company>.<YYYYMMDD-HHMMSS>`
-    #     under the output root - and nothing else creates one: a relay-composed path
+    # 8o. setup_run.py mints the run directory - `<recipe>-<company>.<YYYYMMDD-HHMMSS>`
+    #     under the output root, the recipe's frontmatter `name` first, or `--skill` for a
+    #     run that pins no recipe - and nothing else creates one: a relay-composed path
     #     without run.json is refused, and so is a --skill that names a goal rather than
-    #     one of the plugin's launchers. Four fixture calls hold the contract: a mint lands
-    #     at the minted name and prints it as RUN_DIR:, a fold by that path joins a second
-    #     session, an unminted path is refused, a foreign --skill is refused.
+    #     one of the plugin's launchers. Six fixture calls hold the contract: a skill mint
+    #     lands at the minted name and prints it as RUN_DIR:, a fold by that path joins a
+    #     second session, an unminted path is refused, a foreign --skill is refused, a
+    #     recipe mint lands at the recipe's name with no inputs.skill, and a mint with
+    #     neither is refused.
     su = root / "scripts" / "setup_run.py"
     if su.is_file():
         import subprocess
         import tempfile
         launchers = sorted(frontmatter(f)["name"] for f in root.glob("skills/*/SKILL.md")
                            if frontmatter(f).get("context") == "inline"
-                           and frontmatter(f).get("name"))
+                           and frontmatter(f).get("name")
+                           and 'recipe="' not in f.read_text())
         with tempfile.TemporaryDirectory() as td:
             tdp = pathlib.Path(td)
             src = tdp / "gl.csv"
@@ -2283,6 +2292,28 @@ def check(root: pathlib.Path) -> list[str]:
                 if r4.returncode == 0:
                     bad.append(f"{rel(su)}: --skill accepted a name that is not one of the "
                                f"plugin's inline skills")
+                rec = tdp / "recipe.md"
+                rec.write_text("---\nname: demo-recipe\nobjective: >-\n  establish x\n---\n")
+                r5 = run_su("--output-root", str(results), "--recipe", str(rec),
+                            "--company", "Demo ZS Co.", "--goal", "demo-recipe",
+                            "--session", "s1", "--sources", srcs)
+                m5 = re.fullmatch(r"RUN_DIR:\t(.+)", (r5.stdout.splitlines() or [""])[0])
+                d5 = pathlib.Path(m5.group(1)) if m5 else None
+                if r5.returncode != 0 or d5 is None \
+                        or not re.fullmatch(r"demo-recipe-demo-zs-co\.\d{8}-\d{6}", d5.name):
+                    bad.append(f"{rel(su)}: a mint with --recipe did not land at <output_root>/"
+                               f"demo-recipe-demo-zs-co.<stamp> (exit {r5.returncode}): "
+                               f"{(r5.stdout or r5.stderr).strip()[:120]}")
+                else:
+                    i5 = json.loads((d5 / "run.json").read_text()).get("inputs", {})
+                    if "skill" in i5 or (i5.get("recipe") or {}).get("name") != "demo-recipe":
+                        bad.append(f"{rel(su)}: a recipe mint's run.json carries inputs.skill, "
+                                   f"or not the pinned recipe")
+                r6 = run_su("--output-root", str(results), "--company", "Demo",
+                            "--session", "s1", "--sources", srcs)
+                if r6.returncode == 0:
+                    bad.append(f"{rel(su)}: a mint with neither --recipe nor --skill was "
+                               f"accepted - the directory has no name to take")
 
     # 8q. The report deck mints nothing: build_report.py renders it from report.yaml and
     #     the sealed workbook, check_report.py refuses a deck that says what the workbook
@@ -2337,13 +2368,16 @@ def check(root: pathlib.Path) -> list[str]:
     #     the gates read with), figures.py (units per currency, cross-currency ties
     #     refused), periods.py (fiscal calendars, windows, time zones), step_record.py,
     #     check_prose.py's gate cases, cache.py (the cache's bookkeeping: refusals, stated
-    #     totals, the exact re-check), wbkit.py (8w), arr_policy.py (8y), and the shared
+    #     totals, the exact re-check), wbkit.py (8w), render.py (the check's page from its
+    #     template), ledger_tabs.py (the Sources, Tables and Evidence tabs), arr_policy.py (8y),
+    #     cost_report.py (each response given to one step), and the shared
     #     helpers a worker computes with instead of retyping them (reference/CONDUCT.md
     #     § Libraries).
     tests = root.parent / "tests" / root.name
     for name in ("style.py", "figures.py", "periods.py", "step_record.py", "check_prose.py",
                  "rework.py", "items.py", "matching.py", "resolve.py", "match_tabs.py",
-                 "cache.py", "wbkit.py", "arr_policy.py"):
+                 "cache.py", "wbkit.py", "arr_policy.py", "sql.py", "render.py",
+                 "ledger_tabs.py", "reword.py", "cost_report.py"):
         if (root / "scripts" / name).is_file() and not (tests / f"test_{name}").is_file():
             bad.append(f"{rel(root / 'scripts' / name)}: has no test at {rel(tests / f'test_{name}')}")
     for t in sorted(tests.glob("test_*.py")):
@@ -2395,9 +2429,13 @@ def check(root: pathlib.Path) -> list[str]:
                 "                   'amount': [100.0, 200.0, 300.0, 50.0]})\n"
                 f"cache.write({str(rd)!r}, 'ar', df, file='ar.csv', source='dataroom',\n"
                 "            file_role='management_prepared', header_at='A4', rows='5:7,9:9',\n"
-                "            columns={'customer': {'at': 'A', 'parse': 'as written'},\n"
-                "                     'region': {'at': 'B', 'parse': 'as written'},\n"
-                "                     'amount': {'at': 'C', 'parse': 'as written'}},\n"
+                "            what='AR by customer', grain='one customer',\n"
+                "            columns={'customer': {'at': 'A', 'parse': 'as written',\n"
+                "                                  'description': 'the customer'},\n"
+                "                     'region': {'at': 'B', 'parse': 'as written',\n"
+                "                                'description': 'the sales region'},\n"
+                "                     'amount': {'at': 'C', 'parse': 'as written',\n"
+                "                                'description': 'the balance', 'unit': 'usd'}},\n"
                 "            control='amount', stated={'value': 600.0, 'where': 'C8 (Total)'})\n")
             r = subprocess.run(["uv", "run", "--project", str(root), "python3", "-c", land],
                                capture_output=True, text=True)
@@ -2415,7 +2453,7 @@ def check(root: pathlib.Path) -> list[str]:
                 if r.returncode != 0 or not all(w in r.stdout for w in want):
                     bad.append(f"{rel(ev)}: `select` must return the span of the rows the "
                                f"statement selects - file, anchors, letters and parses from "
-                               f"the manifest, the WHERE as filter, count and control "
+                               f"the table's metadata, the WHERE as filter, count and control "
                                f"measured (exit {r.returncode}): "
                                f"{(r.stdout + r.stderr).strip()[:200]}")
                 r = subprocess.run(["uv", "run", "--project", str(root), "python3", str(ev),
@@ -2472,42 +2510,37 @@ def check(root: pathlib.Path) -> list[str]:
         if r.returncode:
             bad.append(f"{rel(ba)}: {(r.stderr or r.stdout).strip()[:200]}")
 
-    # 8r. The index skill lists every user-facing skill as a static row — the list the
-    #     user sees when the server is not reachable — and calls `get_countz_config` once, so a
-    #     recipe added server-side (an entry whose `skill` is not a row) reaches every
-    #     installed plugin with no release. Re-keyed 2026-09-17 (operator: the index
-    #     must be fast and work unsigned-in): a row per local skill is required, a
-    #     catalogued skill included; the catalog contributes only what has no local
-    #     skill. Mechanical: every user-facing skill has a row, no row names a
-    #     non-facing skill, the catalog call is present.
+    # 8r. The index skill carries a table of every user-facing skill: its slash command
+    #     and its description up to `Invoke when` (the sentence the host selects on) —
+    #     the list the user sees, signed in or not — and calls `get_countz_config` once
+    #     for the analyses, so a recipe added server-side reaches every installed plugin
+    #     with no release. Re-keyed 2026-10-29 (operator: `countz` is the one entry to
+    #     every analysis; the table is written in the skill and held to the skills'
+    #     frontmatter). Mechanical: the index makes the catalog call, and its rows are
+    #     exactly the user-facing skills other than the index, each with its description.
     idx = root / "skills" / INDEX_SKILL / "SKILL.md"
     if idx.is_file():
         itext = idx.read_text()
-        listed = set(re.findall(r"^\| `([a-z-]+)` \|", itext, re.M))
-        facing = {f.parent.name for f in root.glob("skills/*/SKILL.md")
-                  if f.parent.name != INDEX_SKILL
-                  and frontmatter(f).get("user-invocable", "true").lower() != "false"}
-        catalogued: set[str] = set()
-        cat = root / "playbook-recipes" / "catalog.yaml"
-        if cat.is_file():
-            try:
-                import yaml
-                for e in (yaml.safe_load(cat.read_text()) or {}).get("recipes") or []:
-                    if (e or {}).get("skill"):
-                        catalogued.add(str(e["skill"]))
-            except Exception:  # noqa: BLE001 — 8t reports the parse failure
-                pass
-            if "get_countz_config" not in itext:
-                bad.append(f"{rel(idx)}: does not call `get_countz_config` - the catalogued "
-                           f"analyses are fetched, never listed by hand")
-        for name in sorted(facing - listed):
-            bad.append(f"{rel(idx)}: does not list user-facing skill `{name}` - one table row "
-                       f"per local skill, the list the user sees when the server is unreachable")
-        for name in sorted(catalogued - facing):
-            bad.append(f"{rel(idx)}: catalog.yaml names skill `{name}`, which is not a "
-                       f"user-facing skill in this plugin")
-        for name in sorted(listed - facing):
-            bad.append(f"{rel(idx)}: lists `{name}`, which is not a user-facing skill")
+        if "get_countz_config" not in itext:
+            bad.append(f"{rel(idx)}: does not call `get_countz_config` - the catalogued "
+                       f"analyses are fetched, never listed by hand")
+        listed = dict(re.findall(r"^\| `/([a-z-]+)` \| (.*) \|$", itext, re.M))
+        facing = {}
+        for f in root.glob("skills/*/SKILL.md"):
+            fm = frontmatter(f)
+            if f.parent.name == INDEX_SKILL or fm.get("user-invocable", "true").lower() == "false":
+                continue
+            desc = re.sub(r"^[>|]-?\s*", "", fm.get("description", "")).strip("'\"")
+            desc = re.split(r"\s*\bInvoke when\b", desc, maxsplit=1)[0].replace("|", "\\|")
+            facing[fm.get("name") or f.parent.name] = desc
+        for name in sorted(facing.keys() - listed.keys()):
+            bad.append(f"{rel(idx)}: the skills table does not list user-facing skill `{name}`")
+        for name in sorted(listed.keys() - facing.keys()):
+            bad.append(f"{rel(idx)}: the skills table lists `{name}`, which is not a user-facing skill")
+        for name in sorted(listed.keys() & facing.keys()):
+            if listed[name] != facing[name]:
+                bad.append(f"{rel(idx)}: the skills table's row for `{name}` differs from its "
+                           f"description up to `Invoke when`")
 
     # 8s. The Countz connector declaration (docs/arch/AUTH_MCP_OAUTH.md in the monorepo):
     #     `.mcp.json` declares exactly the `countz` server, and no skill hardcodes a
@@ -2580,7 +2613,7 @@ def check(root: pathlib.Path) -> list[str]:
         text = sk.read_text(encoding="utf-8")
         if '"Running a recipe"' in text and 'echo "CLAUDE_PLUGIN_ROOT=$R"' not in text:
             bad.append(f"{rel(sk)}: a relay skill opens with the CLAUDE_PLUGIN_ROOT= command "
-                       f"(skills/cash/SKILL.md), not a read under ${{CLAUDE_PLUGIN_ROOT}}")
+                       f"(skills/countz/SKILL.md), not a read under ${{CLAUDE_PLUGIN_ROOT}}")
 
     return bad
 

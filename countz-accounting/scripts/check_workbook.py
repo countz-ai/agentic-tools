@@ -96,22 +96,27 @@ Every figure row on Sources must let the reader re-perform in one hop:
   - every `F.` row's `To reperform` cell is non-empty.
 
 Also refused, per tab: a pane frozen deeper than the title band (more than 3 rows or
-2 columns). Excel freezes everything above the split, so a preamble stacked over the
+2 columns), or than the band and the header of the tab's only table (4 rows). Excel freezes everything above the split, so a preamble stacked over the
 header rides into the frozen band — measured on a live run: a 29-row frozen Evidence
 header filled a laptop screen and left the data unreachable by scrolling. The preamble
-belongs below the data (check-report SKILL § 1). A table header row is never frozen:
-the row-4 header belongs to the primary table alone, not to the tables below it.
+belongs below the data (check-report SKILL § 1). A table header row is frozen only on a
+tab holding that one table: on a tab of several, the row-4 header belongs to the primary
+table alone, not to the tables below it.
 
 GATE 5 — the map, on a workbook that has an Exec Summary. The tab strip is the reader's
 path (reference/WORKBOOK.md § 2): Exec Summary first; then the lead tabs — the check
 tabs the Exec Summary's numbers stand on, in the recipe's `lead` order, by default the
 headline family's tab alone; then Basis of Preparation and every other check tab in
-roster order; then Coverage, Open Items, Sources, Evidence. A check's match tabs follow
+roster order; then Coverage, Open Items, Sources, Tables, Constants, Evidence. A check's match tabs follow
 its own tab, together, each summary before its schedule. Without `--run-dir` the gate
 holds the shape — Exec Summary first, the tail last. With `--run-dir` it reads
 `run.json` (the roster, each check's `params.family`, `plan.recipe`) and the recipe's
 frontmatter, and refuses any other strip, naming the one wanted. A check tab it cannot
-match to a rostered check is refused too: the name opens with the roster token.
+match to a rostered check is refused too: the name opens with the roster token. On a
+check's file staged before assembly (`out/.staging/<check>.xlsx`, `--run-dir`), the gate
+holds the names alone: every tab in the file pairs with that check, so a misnamed tab is
+refused at the check's own gate, not at the seal. Measured on two runs: 10 and 3 check
+tabs refused at the seal for names the map could not pair.
 
 GATE 6 — the match tabs (reference/WORKBOOK.md § 6, scripts/match_tabs.py), on any
 workbook that holds them. Every line of a match summary is its schedule filtered on the
@@ -157,7 +162,8 @@ CELL = re.compile(r'<c r="([A-Z]+\d+)"[^>]*>(?:(?!</c>).)*?<f[^>]*>.*?</f>\s*(<v
 ANY_CELL = re.compile(r"<c\b([^>]*?)(?:/>|>((?:(?!</c>).)*)</c>)", re.S)
 HYPERLINK = re.compile(r"<hyperlink\b[^>]*/?>")
 PANE_EL = re.compile(r"<pane\b[^>]*/?>")
-# The most a frozen pane may hold: the title band (rows 1-3) and the margin column.
+# The most a frozen pane may hold: the title band (rows 1-3) and the margin column; on a
+# tab holding one table, its header (row 4) too.
 # Never a table header row - the row-4 header describes the primary table alone.
 FROZEN_ROWS_MAX = 3
 FROZEN_COLS_MAX = 2
@@ -173,6 +179,8 @@ ATTR = lambda name: re.compile(rf'\b{name}="([^"]*)"')
 ID_TOKEN = re.compile(
     r"\b(?:RI|[EFPTSXCDQ])\.(?:\d+|[A-Za-z0-9_][A-Za-z0-9_.-]*[A-Za-z0-9])")
 SOURCES = "Sources"
+TABLES = "Tables"
+CONSTANTS = "Constants"
 EVIDENCE = "Evidence"
 EXEC = "Exec Summary"
 # Which ledger tab an id prefix resolves on. Mirrors link_workbook.py — change both.
@@ -275,7 +283,7 @@ def sheet_order(z: zipfile.ZipFile) -> list[tuple[str, str]]:
             continue
         target = rels.get(rid.group(1), "")
         part = "xl/" + target.lstrip("/").removeprefix("xl/")
-        out.append((part, name.group(1)))
+        out.append((part, html.unescape(name.group(1))))   # `&amp;` in the XML is `&`
     return out
 
 
@@ -350,7 +358,7 @@ def sheet_links(z: zipfile.ZipFile, part: str, xml: str):
         rid = ATTR("r:id").search(el)
         if ref:
             out.append((ref.group(1),
-                        loc.group(1) if loc else None,
+                        html.unescape(loc.group(1)) if loc else None,
                         rels.get(rid.group(1)) if rid else None))
     return out
 
@@ -381,6 +389,12 @@ def sheet_tables(z: zipfile.ZipFile, part: str) -> list[tuple[str, str, list[str
         out.append((name.group(1) if name else "", ref.group(1) if ref else "", cols,
                     style.group(1) if style else ""))
     return out
+
+
+def one_table(z: zipfile.ZipFile, part: str) -> bool:
+    """Whether a worksheet holds one Excel table, with its header on row 4 (wbkit.one_table)."""
+    tables = sheet_tables(z, part)
+    return len(tables) == 1 and _span(tables[0][1])[1] == 4
 
 
 def _span(ref: str) -> tuple[int, int, int, int]:
@@ -468,13 +482,14 @@ def audit_links(z: zipfile.ZipFile, declared: set[str] | None = None) -> dict:
         numbers[tab] = sheet_numbers(xml)
         links[tab] = sheet_links(z, part, xml)
         rows, cols = frozen_pane(xml)
-        if rows > FROZEN_ROWS_MAX or cols > FROZEN_COLS_MAX:
+        rows_max = FROZEN_ROWS_MAX + (1 if one_table(z, part) else 0)
+        if rows > rows_max or cols > FROZEN_COLS_MAX:
             pane_fails.append(
                 f"{tab}: frozen pane holds {rows} row(s) x {cols} column(s) — freeze the "
                 f"title band only (<= {FROZEN_ROWS_MAX} rows, <= {FROZEN_COLS_MAX} "
-                f"columns), never a table header row, and move any preamble below the "
-                f"data; a deep frozen band fills a laptop screen and blocks scrolling "
-                f"(check-report SKILL § 1)")
+                f"columns), with the header of the tab's only table at most, and move any "
+                f"preamble below the data; a deep frozen band fills a laptop screen and "
+                f"blocks scrolling (check-report SKILL § 1)")
     has_sources = SOURCES in texts
     has_evidence = EVIDENCE in texts
 
@@ -555,8 +570,9 @@ def audit_links(z: zipfile.ZipFile, declared: set[str] | None = None) -> dict:
                 fails.append(f"dead-end id `{i}` — cited at {tokens[i][0]}!{tokens[i][1]}, "
                              f"on no {ledger} row")
                 continue
+            home = next(c for c in cells if c[0] == ledger)
             for at in cells:
-                if at[0] != ledger:
+                if at != home:
                     err = link_states(at, i, require_tab=ledger)
                     if err:
                         fails.append(err)
@@ -593,8 +609,8 @@ def audit_links(z: zipfile.ZipFile, declared: set[str] | None = None) -> dict:
         few = ", ".join(f"`{i}`" for i in no_evidence_tab[:4])
         more = f", … and {len(no_evidence_tab) - 4} more" if len(no_evidence_tab) > 4 else ""
         fails.append(f"workbook cites {len(no_evidence_tab)} evidence id(s) ({few}{more}) "
-                     f"but has no '{EVIDENCE}' tab — merge workpapers/evidence-*.yaml "
-                     f"into one (check-report SKILL § 1)")
+                     f"but has no '{EVIDENCE}' tab — write the ledger tabs with "
+                     f"ledger_tabs.write (check-report SKILL § 1)")
     if has_sources:
         fails.extend(audit_reperform(texts))
 
@@ -605,8 +621,8 @@ def audit_links(z: zipfile.ZipFile, declared: set[str] | None = None) -> dict:
 # GATE 4 — the design (reference/WORKBOOK.md § 8, WORKBOOK_STYLE.md § 10). Parsed from
 # styles.xml and each sheet's XML, so the gate sees the stored formatting.
 BASIS = "Basis of Preparation"
-RUN_LEVEL_TABS = {EXEC, BASIS, "Coverage", "Open Items", SOURCES, EVIDENCE}
-LEDGER_TABS = {SOURCES, EVIDENCE}
+RUN_LEVEL_TABS = {EXEC, BASIS, "Coverage", "Open Items", SOURCES, TABLES, CONSTANTS, EVIDENCE}
+LEDGER_TABS = {SOURCES, TABLES, CONSTANTS, EVIDENCE}
 DESIGN_FONT = "Arial"
 DESIGN_SIZES = {9.0, 10.0, 11.0, 12.0, 14.0}
 BAND_FILL = "0A5F6A"
@@ -671,7 +687,7 @@ def get_col(n: int) -> str:
 STYLE_CELL = re.compile(r'<c r="([A-Z]+)(\d+)"([^>]*?)(?:/>|>(.*?)</c>)', re.S)
 # GATE 5 — the map (reference/WORKBOOK.md § 2): Exec Summary, the lead tabs, Basis of
 # Preparation, the other check tabs in roster order, then the tail in this order.
-TAIL_TABS = ["Coverage", "Open Items", SOURCES, EVIDENCE]
+TAIL_TABS = ["Coverage", "Open Items", SOURCES, TABLES, CONSTANTS, EVIDENCE]
 
 
 def style_table(z: zipfile.ZipFile) -> dict:
@@ -871,9 +887,12 @@ def audit_design(z: zipfile.ZipFile) -> list[str]:
                 rule(tab, "the sheet's AutoFilter overlaps an Excel table — each table carries "
                           "its own filter", [], "WORKBOOK.md § 4")
         rows, cols = frozen_pane(xml)
-        if (rows, cols) != (3, 1):              # the band alone; never a table header row
-            rule(tab, f"freeze panes at B4 — the title band, never a table header "
-                      f"(found {rows} row(s) x {cols} column(s))", [],
+        single = len(spans) == 1 and spans[0][1] == 4
+        if (rows, cols) != ((4, 1) if single else (3, 1)):
+            rule(tab, (f"freeze panes at B5 — the title band and the header of the tab's only "
+                       f"table" if single else f"freeze panes at B4 — the title band; a tab "
+                       f"of several tables freezes no table header")
+                 + f" (found {rows} row(s) x {cols} column(s))", [],
                  "WORKBOOK.md § 6" if summary else "WORKBOOK_STYLE.md § 4")
         grid_off = re.search(r'<sheetView\b[^>]*showGridLines="0"', xml) is not None
         if grid_off == ledger:
@@ -1042,12 +1061,39 @@ def wanted_order(run_dir: pathlib.Path, tabs: list[str], pairs=()) -> tuple[list
     return want, lead, fails
 
 
-def audit_order(z: zipfile.ZipFile, run_dir: pathlib.Path | None = None) -> list[str]:
-    """GATE 5 — the map. Empty on a tab staged before assembly (no Exec Summary)."""
+def audit_staged_names(run_dir: pathlib.Path, check: str, tabs: list[str]) -> list[str]:
+    """GATE 5 on a check's file staged before assembly (`<check>.xlsx`): every tab in it
+    pairs with that check, as the map pairs it at the seal. Empty when `check` is not on
+    the roster (the assembled `workbook.xlsx`)."""
+    try:
+        run = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    checks = [c for c in run.get("checks") or [] if c.get("id")]
+    if check not in {c["id"] for c in checks}:
+        return []
+    family = next((c.get("params") or {}).get("family") for c in checks if c["id"] == check)
+    alone = family and sum((c.get("params") or {}).get("family") == family for c in checks) == 1
+    token = family if alone else check.replace("_", " ")
+    owner, fails = tab_owners(checks, tabs)
+    out = [f for f in fails if "names no check" not in f]
+    for tab in tabs:
+        if tab in RUN_LEVEL_TABS or owner.get(tab) == check:
+            continue
+        paired = f"pairs with {owner[tab]}" if owner.get(tab) else "pairs with no check in run.json"
+        out.append(f"{tab}: the name {paired}, and this file is {check}'s — the name opens "
+                   f"with `{token}` (WORKBOOK.md § 2)")
+    return out
+
+
+def audit_order(z: zipfile.ZipFile, run_dir: pathlib.Path | None = None,
+                check: str | None = None) -> list[str]:
+    """GATE 5 — the map. On a tab staged before assembly (no Exec Summary), the names
+    alone, when `run_dir` and the staged file's check are given."""
     order = sheet_order(z)
     tabs = [tab for _, tab in order]
     if EXEC not in tabs:
-        return []
+        return audit_staged_names(run_dir, check, tabs) if run_dir and check else []
     fails: list[str] = []
     strip = " · ".join(tabs)
     if tabs[0] != EXEC:
@@ -1320,7 +1366,6 @@ def audit_formulas(z: zipfile.ZipFile, mapped: dict[str, set[str]]) -> list[str]
     values: dict[str, dict[str, object]] = {}
     xmls: dict[str, str] = {}
     for part, tab in order:
-        tab = html.unescape(tab)
         xml = z.read(part).decode("utf-8", "replace")
         xmls[tab] = xml
         texts, _ = sheet_cells(xml, shared)
@@ -1335,7 +1380,8 @@ def audit_formulas(z: zipfile.ZipFile, mapped: dict[str, set[str]]) -> list[str]
         formulas: set[str] = set()
         for m in FORMULA_EL.finditer(xml):
             ref, text_, cached = m.group(1), html.unescape(m.group(2)), m.group(3)
-            formulas.add(ref)
+            if fx.constant_of("=" + text_) is None:      # a linked number (link_workbook.py § 8) is a value
+                formulas.add(ref)
             if cached in (None, ""):
                 continue                        # GATE 1 refuses an empty result
             try:
@@ -1415,7 +1461,7 @@ def audit(path: pathlib.Path, declared: set[str] | None = None,
                "tabs": list(names.values())}
         rep["links"] = audit_links(z, declared)
         rep["design"] = audit_design(z)
-        rep["order"] = audit_order(z, run_dir)
+        rep["order"] = audit_order(z, run_dir, path.stem)
         rep["match"] = audit_match(z)
         rep["recon"] = audit_recon(z, path.stem, run_dir)
         rep["formulas"] = audit_formulas(z, cell_maps(path, run_dir))
@@ -1528,10 +1574,10 @@ def main() -> int:
         if len(design_fails) > a.max_report:
             print(f"    … and {len(design_fails) - a.max_report} more")
         print("\n  Fix: write the tab from the kit in WORKBOOK.md § 7 — one font, the band on")
-        print("  row 4, freeze B4, every number formatted, a claim per cell.")
+        print("  row 4, freeze B4 (B5 on a tab of one table), every number formatted, a claim per cell.")
     else:
         print(f"{a.workbook.name}: every tab built to the design — Arial, the band on row 4, "
-              f"freeze B4, no General number, no merged cell, no paragraph in a cell.")
+              f"freeze B4 (B5 on a tab of one table), no General number, no merged cell, no paragraph in a cell.")
     if order_fails:
         print(f"{a.workbook.name}: {len(order_fails)} map failure(s) — the tab strip is not "
               f"the reader's path.\n")
@@ -1541,7 +1587,7 @@ def main() -> int:
             print(f"    … and {len(order_fails) - a.max_report} more")
         print(f"\n  Fix: order the tabs {EXEC}, the lead tabs (the recipe's `lead`, else its")
         print(f"  headline family), {BASIS}, the other check tabs in roster order — each check's")
-        print("  match tabs after its own tab — then Coverage, Open Items, Sources, Evidence")
+        print("  match tabs after its own tab — then Coverage, Open Items, Sources, Tables, Constants, Evidence")
         print("  (WORKBOOK.md § 2). Pass --run-dir and the gate names the strip it wants.")
     elif EXEC in rep.get("tabs", []):
         print(f"{a.workbook.name}: the tab strip is the reader's path — {EXEC}, the lead "

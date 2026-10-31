@@ -10,8 +10,8 @@ yourself between the snapshot and the diff.
     d = diff_ledger(snap, RUN, "a5_bridge")      # {"moved": [...], "added": [...], ...}
 
 **The check's files** are the ones `step_record.py` counts as produced (`own_files`):
-`checks/<check>.md`, `checks/<check>-*.csv`, `workpapers/figures-<check>.yaml`,
-`workpapers/evidence-<check>.yaml`, `out/tabs/<check>.xlsx`. A check id is
+`checks/<check>.md`, `checks/<check>-*.parquet`, `tables/<check>/*.parquet`,
+`workpapers/figures-<check>.yaml`, `workpapers/evidence-<check>.yaml`, `out/tabs/<check>.xlsx`. A check id is
 `check_playbook.CHECK_ID` (`[a-z0-9][a-z0-9_]*`); any other is refused.
 
 **Refusals** raise ReworkRefused and write nothing: a check id outside CHECK_ID; a

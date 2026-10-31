@@ -26,7 +26,16 @@ def main() -> int:
              "='T U'!E119": 47.3, "='O''Brien'!B2": 2.0, "=-G6+1": 4.5,
              '=SUMIFS(G5:G6,$N$5:$N$6,"supported")': 10.0,
              '=SUMIFS(G5:G6,$N$5:$N$6,"supported")+SUMIFS(G5:G6,$N$5:$N$6,"REJECTED")': 6.5,
-             "=AVERAGE(G5:G6)": None, "=G5*2": None, "=VLOOKUP(G5,A:B,2)": None}
+             "=AVERAGE(G5:G6)": None, "=VLOOKUP(G5,A:B,2)": None,
+             # products, quotients, parentheses, counts and a criterion read from a cell
+             "=G5*2": 20.0, "=(G5+G6)/2": 3.25, "=G5-G6*2": 17.0, "=-(G5+G6)": -6.5,
+             "=G5/0": None, "=(G5": None,
+             '=COUNTIFS($N$5:$N$6,"supported")': 1.0,
+             '=COUNTIFS($N$5:$N$6,"supported",G5:G6,10)': 1.0,
+             "=SUMIFS(G5:G6,$N$5:$N$6,N6)": -3.5,
+             "=SUMIFS(G5:G6,$N$5:$N$6,N5:N6)": None,
+             '=SUMIFS(G5:G6,$N$5:$N$5,"supported")': None,
+             '=SUMIFS(G5:G6,$N$5:$N$6,">0")': None}
     for f, want in cases.items():
         got = fx.evaluate(f, "S", get)
         if got != want:

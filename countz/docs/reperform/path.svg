@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="640" viewBox="0 0 880 640" font-family="Arial, Helvetica, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#0A5F6A"/>
+    </marker>
+  </defs>
+  <rect width="880" height="640" fill="#FFFFFF"/>
+  <text x="24" y="34" font-size="18" font-weight="bold" fill="#1F2933">The path from a number down to the data room</text>
+  <text x="24" y="56" font-size="13" fill="#52606D">Each arrow is one click on a linked cell (teal text).</text>
+
+  <!-- left column: the tabs -->
+  <g font-size="14">
+    <rect x="24" y="80" width="300" height="56" rx="6" fill="#F0F4F8" stroke="#9FB3C8"/>
+    <text x="40" y="104" font-weight="bold" fill="#1F2933">Exec Summary</text>
+    <text x="40" y="124" font-size="12" fill="#52606D">the number as the reader sees it</text>
+
+    <rect x="24" y="164" width="300" height="56" rx="6" fill="#F0F4F8" stroke="#9FB3C8"/>
+    <text x="40" y="188" font-weight="bold" fill="#1F2933">Check tab that uses it</text>
+    <text x="40" y="208" font-size="12" fill="#52606D">a copy: the formula names the cell it reads</text>
+
+    <rect x="24" y="248" width="300" height="56" rx="6" fill="#F0F4F8" stroke="#9FB3C8"/>
+    <text x="40" y="272" font-weight="bold" fill="#1F2933">Check tab that computes it</text>
+    <text x="40" y="292" font-size="12" fill="#52606D">the number in its schedule</text>
+
+    <rect x="24" y="332" width="300" height="56" rx="6" fill="#E6F2F3" stroke="#0A5F6A"/>
+    <text x="40" y="356" font-weight="bold" fill="#0A5F6A">Sources</text>
+    <text x="40" y="376" font-size="12" fill="#52606D">the figure: its SQL and what it reads</text>
+
+    <rect x="24" y="416" width="300" height="56" rx="6" fill="#E6F2F3" stroke="#0A5F6A"/>
+    <text x="40" y="440" font-weight="bold" fill="#0A5F6A">Tables</text>
+    <text x="40" y="460" font-size="12" fill="#52606D">each table: what a row is, its SQL, what it reads</text>
+
+    <rect x="24" y="500" width="300" height="56" rx="6" fill="#E6F2F3" stroke="#0A5F6A"/>
+    <text x="40" y="524" font-weight="bold" fill="#0A5F6A">Evidence · Constants</text>
+    <text x="40" y="544" font-size="12" fill="#52606D">the read of a file; a value a document states</text>
+
+    <rect x="24" y="584" width="300" height="44" rx="6" fill="#FFFFFF" stroke="#52606D" stroke-dasharray="5,4"/>
+    <text x="40" y="611" font-weight="bold" fill="#1F2933">The file in your data room</text>
+  </g>
+
+  <!-- arrows -->
+  <g stroke="#0A5F6A" stroke-width="2" fill="none" marker-end="url(#arrow)">
+    <line x1="174" y1="136" x2="174" y2="160"/>
+    <line x1="174" y1="220" x2="174" y2="244"/>
+    <line x1="174" y1="304" x2="174" y2="328"/>
+    <line x1="174" y1="388" x2="174" y2="412"/>
+    <line x1="174" y1="472" x2="174" y2="496"/>
+    <line x1="174" y1="556" x2="174" y2="580"/>
+  </g>
+  <!-- loop on Tables -->
+  <path d="M324,430 C370,410 370,470 324,456" stroke="#0A5F6A" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+  <text x="366" y="447" font-size="12" fill="#0A5F6A">repeat: a table reads another</text>
+
+  <!-- right column: what you do at each -->
+  <g font-size="13" fill="#1F2933">
+    <text x="572" y="104" font-weight="bold">At each step</text>
+    <text x="572" y="124" fill="#52606D" font-size="12">Click the number.</text>
+    <text x="572" y="190">Read the row label and the note.</text>
+    <text x="572" y="208" fill="#52606D" font-size="12">What the number is and why it is there.</text>
+    <text x="572" y="274">Check the schedule adds up.</text>
+    <text x="572" y="292" fill="#52606D" font-size="12">Totals are live formulas over their rows.</text>
+    <text x="572" y="358">Read the SQL: the logic of this step.</text>
+    <text x="572" y="376" fill="#52606D" font-size="12">Its reads are the inputs, one link each.</text>
+    <text x="572" y="442">Read what one row is, then the SQL.</text>
+    <text x="572" y="460" fill="#52606D" font-size="12">Rows and totals check your re-run.</text>
+    <text x="572" y="526">Open the file named; check rows and total.</text>
+    <text x="572" y="544" fill="#52606D" font-size="12">A constant shows the sentence it came from.</text>
+  </g>
+  <g stroke="#CBD2D9" stroke-width="1">
+    <line x1="552" y1="80" x2="552" y2="560"/>
+  </g>
+</svg>

@@ -123,6 +123,12 @@ def main() -> int:
         (Period.parse("fy2025", w53).label(), "FY2025"),
         (Period.parse("ltm_2025-06", w53).months[0], "2024-07"),
         (Period.parse("ltm_2025-06", w53).label(), "LTM June 2025"),
+        # a trailing window beside a snapshot column: whole calendar months, never March 30
+        ((Period.parse("2025-06").trailing(3).start, Period.parse("2025-06").trailing(3).end),
+         (D(2025, 4, 1), D(2025, 6, 30))),
+        (Period.parse("2025-06").trailing(3).days, 91),
+        (Period.parse("2025-02").trailing(3).months, ("2024-12", "2025-01", "2025-02")),
+        (Period.parse("2025-06").trailing(12).start, D(2024, 7, 1)),
         # a single timestamp is placed on the local date, as a column is
         (fy_of(aware, "09-30", timezone=NY), "fy2025"),
         (fy_of(naive, "09-30"), "fy2026"),                          # naive: wall time

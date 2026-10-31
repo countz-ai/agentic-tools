@@ -6,7 +6,7 @@ from the repository root; it lives outside the plugin so it never ships.
 
 A run of four check tabs: two written before the cells maps existed (retrofitted on
 evidence alone) and two with maps (wired by figure id). After the pass every total is a
-formula over its rows, every copy a reference to its producer's cell, a copy that
+formula over its rows, every copy a reference to its producer's cell and a link to it, a copy that
 disagrees with its producer is reported and left, every formula's result is cached, and
 check_workbook.py GATE 8 has nothing to refuse.
 """
@@ -59,11 +59,15 @@ def main() -> int:
                             ("F.b1.add", "Add: billed", 10.0, None, None),
                             ("F.b1.less", "Less: cash received", 4.56, None, None),
                             (None, "= Closing", 1240.0, None, None)])
-        tab(wb, "m1 Producer", [("F.m1.x", "Produced figure", 500.25, None, None)])
+        tab(wb, "m1 Producer", [("F.m1.x", "Produced figure", 500.25, None, None),
+                                ("F.m1.y", "Over the table above", 500.25, None, None)])
+        wb["m1 Producer"]["D6"] = "=SUM($D$5:$D$5)"   # render.py: a figure over a table on its tab
         tab(wb, "c1 Mapped", [("F.c1.copy", "Copied figure", 500.25, None, None),
                               ("F.c1.wrong", "Copied, but wrong", 501.0, None, None),
                               ("F.c1.lost", "Copied from nowhere", 9.0, None, None)])
-        maps = {"m1_producer": {"m1 Producer": {"D5": {"fid": "F.m1.x"}}},
+        maps = {"m1_producer": {"m1 Producer": {"D5": {"fid": "F.m1.x"},
+                                                "D6": {"fid": "F.m1.y", "formula": "=SUM($D$5:$D$5)",
+                                                       "over": "$B$5:$D$5"}}},
                 "c1_mapped": {"c1 Mapped": {"D5": {"src": "F.m1.x"}, "D6": {"src": "F.m1.x"},
                                             "D7": {"src": "F.zz.none"}}}}
         for name, sheets in maps.items():           # one map per placed tab, as place_tab leaves them
@@ -71,9 +75,21 @@ def main() -> int:
                 json.dumps({"schema": "countz-accounting/cells@1", "sheets": sheets}))
         src_tab = wb.create_sheet("Sources")
         band(src_tab, "Sources", "Fixture", None)
+        header(src_tab, 4, ["id", "label"], ["id", "description"])
+        ident(src_tab.cell(5, 2), "F.m1.x")
+        text(src_tab.cell(5, 3), "Produced figure")
+        ident(src_tab.cell(6, 2), "F.m1.y")
+        text(src_tab.cell(6, 3), "Over the table above")
+        # a sentence citing figures, mapped by the assembly's own cells map
+        ex = wb.create_sheet("Exec Summary", 0)
+        band(ex, "Exec Summary", "Fixture")
+        text(ex.cell(5, 2), "Produced 500.25 over the table above, and 9.00 copied from nowhere.")
         path = rd / "out" / ".staging" / "workbook.xlsx"
         path.parent.mkdir(parents=True)
         wb.save(path)
+        path.with_name("workbook.cells.json").write_text(json.dumps(
+            {"schema": "countz-accounting/cells@1",
+             "sheets": {"Exec Summary": {"B5": {"cites": ["F.zz.none", "F.m1.y", "F.m1.x"]}}}}))
 
         r = subprocess.run([sys.executable, str(SCRIPTS / "link_workbook.py"), str(path), "--run-dir", str(rd),
                             "--json"], capture_output=True, text=True)
@@ -94,6 +110,35 @@ def main() -> int:
                                 ("b1 Walk", "D5"): 1234.56, ("c1 Mapped", "D5"): 500.25}.items():
             if v[sh][co].value is None or abs(v[sh][co].value - value) > 1e-9:
                 bad.append(f"{sh}!{co} caches {v[sh][co].value!r}, want {value}")
+        for (sh, co), loc in {("b1 Walk", "D5"): "'a1 Base'!D5", ("c1 Mapped", "D5"): "'m1 Producer'!D5"}.items():
+            h = f[sh][co].hyperlink
+            if h is None or h.location != loc:
+                bad.append(f"{sh}!{co}: a copy links to {loc}, got {h and h.location!r}")
+            elif f[sh][co].font.underline:
+                bad.append(f"{sh}!{co}: a linked amount takes no underline")
+        h = f["m1 Producer"]["D5"].hyperlink
+        if h is None or h.location != "'Sources'!B5":
+            bad.append(f"a figure's cell links to its Sources row, got {h and h.location!r}")
+        if f["m1 Producer"]["D5"].value != "=500.25" or v["m1 Producer"]["D5"].value != 500.25:
+            bad.append(f"a linked number is a formula of itself, cached: {f['m1 Producer']['D5'].value!r}")
+        h = f["m1 Producer"]["D6"].hyperlink
+        if h is None or h.location != "'m1 Producer'!$B$5:$D$5":
+            bad.append(f"a figure over a table links to that table, got {h and h.location!r}")
+        if v["m1 Producer"]["D6"].value != 500.25:
+            bad.append(f"a figure over a table caches its result: {v['m1 Producer']['D6'].value!r}")
+        h = f["Sources"]["B6"].hyperlink
+        if h is None or h.location not in ("'m1 Producer'!B6", "'m1 Producer'!D6"):
+            bad.append(f"its Sources row still links back to it, got {h and h.location!r}")
+        h = f["Exec Summary"]["B5"].hyperlink
+        if h is None or h.location != "'m1 Producer'!D6":
+            bad.append(f"a sentence links to the first figure it states that has a cell, got {h and h.location!r}")
+        elif f["Exec Summary"]["B5"].font.underline:
+            bad.append("a linked sentence takes no underline")
+        h = f["Sources"]["B5"].hyperlink
+        if h is None or h.location != "'m1 Producer'!B5":
+            bad.append(f"the id links back to the cell citing it, got {h and h.location!r}")
+        if rep["copy_links"] != 2:
+            bad.append(f"copy_links: {rep['copy_links']}, want 2")
         if f["c1 Mapped"]["D6"].value != 501.0 or not any("c1 Mapped!D6" in p for p in rep["copy_problems"]):
             bad.append(f"a copy that disagrees with its producer is left and reported: {rep['copy_problems']}")
         if not any("F.zz.none" in p for p in rep["copy_problems"]):
@@ -103,6 +148,15 @@ def main() -> int:
         if (rep["copies_wired"], rep["copies_retrofitted"], rep["totals_made_live"]) != (1, 1, 2):
             bad.append(f"counts: {rep['copies_wired']} wired, {rep['copies_retrofitted']} retrofitted, "
                        f"{rep['totals_made_live']} totals")
+        again = subprocess.run([sys.executable, str(SCRIPTS / "link_workbook.py"), str(path), "--run-dir",
+                                str(rd), "--json"], capture_output=True, text=True)
+        f2 = load_workbook(path)
+        changed = [f"{ws.title}!{c.coordinate}" for ws in f.worksheets for row in ws.iter_rows() for c in row
+                   if c.value != f2[ws.title][c.coordinate].value
+                   or (c.hyperlink and c.hyperlink.location) != (f2[ws.title][c.coordinate].hyperlink
+                                                                  and f2[ws.title][c.coordinate].hyperlink.location)]
+        if again.returncode != 0 or changed:
+            bad.append(f"a second pass changes nothing: {changed[:5]}")
         gate = subprocess.run([sys.executable, str(SCRIPTS / "check_workbook.py"), str(path), "--run-dir",
                                str(rd), "--json"], capture_output=True, text=True)
         g = json.loads(gate.stdout[gate.stdout.index("{"):])

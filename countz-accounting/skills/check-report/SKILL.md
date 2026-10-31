@@ -12,8 +12,39 @@ user-invocable: false
 
 # Assemble the deliverable
 
+The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.
+
 Arguments: `run_dir`, `seq`, and optionally `title` and `note` (from a playbook's `report`
-block — the note goes on the deck's first page).
+block — the note goes on the deck's first page), or `mode: fix` with `fix_input` and
+optionally `rerun: false`.
+
+**`mode: fix`.** `fix_input` holds the deck review's findings (`check-deck`): each names
+a page, the words it quotes, the rule they break and the problem. You fix each one with
+this file's own means, and leave the rest of the deliverable as it was sealed. Read
+§ Voice (`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py DOCTRINE.md Voice`),
+`REPORT.md` § 2 and § 3, and the sealed `out/report.yaml`; read a tab where a finding
+needs it.
+
+Where `out/.staging/fix-blocked.json` exists and lists the same finding ids as
+`fix_input`, an earlier `mode: fix` dispatch ended blocked and its `out/.staging/` is
+your start: copy each check it names, re-run since, into the staged workbook as § 1
+copies a tab, and finish the findings it left. Otherwise start fresh: copy
+`out/workbook.xlsx`, `out/report.yaml`, `out/report-plan.md` and `out/RUN_SUMMARY.md`
+into `out/.staging/`, over whatever is there.
+
+You may change what § 3 lets you change on a gate refusal. Your own surfaces,
+`report.yaml` and the run-level tabs, you rewrite: a sentence, a page's note, a block. The words on a
+copied tab or a ledger tab go through `reword.py`. A finding names one page, but the
+measure or claim it fixes may stand on others: find each page and tab that states it and
+make them agree, per `REPORT.md` § 3 *One figure, one meaning*. A defect only the check
+that wrote it can fix, a figure, a population or a row, ends the step `blocked` naming
+the cell and the check, as § 3 says, and writes `out/.staging/fix-blocked.json` as
+`{"findings": [<the fix_input ids>], "checks": [<the checks to re-run>]}`; with
+`rerun: false` it is carried to the open items, naming the cell and the check, and the
+step seals. Delete `fix-blocked.json` before the seal. A section title the recipe fixes stays, and `RUN_SUMMARY.md`
+lists it as unchanged. Then build and run § 3's gates. Seal and record per § 6, and add
+each change to `RUN_SUMMARY.md` under `## Wording changes`: the finding id, the old
+words and the new.
 
 Follow `DOCTRINE.md` § Voice and § Number conventions. Read
 `${CLAUDE_PLUGIN_ROOT}/reference/WORKBOOK.md` (where the reader's eye lands on every tab —
@@ -24,13 +55,14 @@ statuses), the latest review record, every `checks/<check>.md`, and the ledgers.
 check wrote its own tab; **you copy tabs, cached values intact — never rewrite one.** A
 rostered check with no tab gets no empty tab; it is stated in coverage. An `extract`
 step is such a row: kind `extract`, its status, and under *what was examined* the count
-of tables it cached, from `cache/manifest.json`.
+of tables it cached, from `countz.tables`.
 
 ## 1. The workbook — `out/workbook.xlsx`
 
 The tab strip, the band and the content of every run-level tab are `WORKBOOK.md` § 2
 and § 6. Copy each check's tab cell by cell with its resolved formatting — every sheet
-of its tab file, the match tabs included; write the run-level tabs yourself. Each
+of its tab file, the match tabs included; write the other run-level tabs yourself, and
+the ledger tabs with the kit (**Sources, Tables, Constants, Evidence** below). Each
 check's match tabs follow its own tab (`WORKBOOK.md` § 2); where the Exec Summary tells
 how much of the population is matched, copy the match summary's walk.
 
@@ -50,19 +82,22 @@ recipe tells the story its objective and results support. Read `${CLAUDE_PLUGIN_
 § Voice again before writing its sentences
 (`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py DOCTRINE.md Voice`).
 
-**Sources.** Collapse the roots first, never by hand:
+**Sources, Tables, Constants, Evidence.** Run the root collapse first:
 
 ```
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/resolve_roots.py <run_dir>
 ```
 
-It renders, per figure, the root citation ids, the derived citations crossed, the
-declared fields relied on and the collapsed depth, and per ledger file the entries it
-contributed. An `unresolved` entry is a ledger reference nothing defines — a blocker
-against the check that cited it, never patched here. Exit 2 is a refused ledger — a
-top level that is not a list, an id outside the grammar (EVIDENCE.md § 0) — named on
-stderr with its file: the owning check's to rewrite. Do not normalize a copy and
-proceed; end the step `blocked` naming that check (§ 6).
+An `unresolved` entry is a ledger reference nothing defines — a blocker against the check
+that cited it, never patched here. Exit 2 is a refused ledger — a top level that is not a
+list, an id outside the grammar (EVIDENCE.md § 0) — named on stderr with its file: the
+owning check's to rewrite. Do not normalize a copy and proceed; end the step `blocked`
+naming that check (§ 6). Then, as the last tabs of the assembly, one call writes them all:
+
+```
+from ledger_tabs import write
+write(wb, RUN, "<entity> · <the period set, as the band's subtitle states it>")
+```
 
 **Links.** After assembly:
 
@@ -140,35 +175,10 @@ Every sentence the plan and the pages carry — a `title`, `message`, `text`, `b
 Read `${CLAUDE_PLUGIN_ROOT}/reference/REPORT.md` § 3 for the words and § 4 for the
 numbers before writing pages; no other check reads either. Rules a finished deck got wrong:
 
-- Write to the company's own executives and operators unless the run declares a
-  transaction reader.
-- State the basis only where the user chose it, and in the reader's words: *as instructed*,
-  not *as the user declared*. Say nothing about a parameter the recipe set by default. Write
-  *this report*, not *this run*, and a category, not a *bucket*. Retitle a copied table with
-  `title:` where its own title carries one of these.
-- Call a measure what the workbook calls it: *best-possible days sales outstanding*, not
-  *the floor*.
-- Cut a line whose point is its phrasing; state the finding instead.
-- Name the population a share is of.
 - Write figures in US form, as `scripts/style.py` does: `$50.5M`, `$81K`, `$1.2B`, `57.8 days`,
   `September 30, 2025` — in the book's currency where it is not dollars (`€50.5M`), never a
   scaled number without one — and declare `scale: thousands` on a schedule of money; the
   builder states the scale once, in the table's title, so leave it out of the title you write.
-- Define an object where it first appears — the record it comes from, how many there are,
-  what they are called, the amount behind it — and carry that name on every page after.
-- Build the page on what is open from the Open Items tab: each item with its size, the
-  function that answers it, and what the answer decides.
-- Put on the `Executive summary` page every matter the recipe's `## Exec summary` names
-  beside the headline, and every open question or pattern whose amount is material to
-  the answer — a balance the ledger does not carry, an integrity pattern, a receipt with
-  no deposit — each with its amount. A late page may explain it; it may not be the only
-  place it appears.
-- Gloss the status words a table shows in a `note` under it; name counterparties as the
-  tab names them; lead an actions page with the actions carrying most of the cash
-  (REPORT.md § 3).
-- A table appears once. A narrative page that needs a schedule's figure references the
-  cell or states it in a stat tile; it does not copy the rows a schedule page already
-  shows.
 - Headline a total by what it rests on. Where most of an amount rests on causes inferred
   from behavior, the opening states the documented part first and the rest as subject to
   management's confirmation — never one "supported" figure.
@@ -176,56 +186,15 @@ numbers before writing pages; no other check reads either. Rules a finished deck
   undermines a trend, is stated on the page that shows the figure it limits, and on the
   Executive summary where it limits the answer. A trend the run could not rely on is not
   a finding.
-- One basis per measure. Where the workbook carries a measure on two bases (past due
-  gross and net of unapplied cash), the deck uses one and shows the walk to the other
-  once.
 - State each limitation once — on the page it limits, or on one limitations page — never
   again on each page it touches.
-- Size the headline: beside it, materiality and the figure it changes as reported, and
-  the corrected figure stated as their sum, computed with `{= [ref] + [ref] | $}` (REPORT.md
-  § 2, References) — never left to the reader to add. Split it by nature from the walk's cause
-  subtotals — between lines or periods, non-cash, misstatement — and never add amounts of
-  unlike kinds into one figure (REPORT.md § 1).
-- Amounts on one page add, or the page says which contains which; a list of pattern
-  amounts states, on that page, what is not already inside the headline. Pending
-  adjustments are gross, never netted.
-- An integrity pattern goes on `Matters for your attention`, in plain words of what it may
-  indicate, only where a record ties it to the person or the money; a resemblance alone (a
-  shared surname, a similar name) or a pattern the workbook rules benign is an open question
-  instead (REPORT.md § 1). On every page, a matter about a role's own entries, approvals, pay or dealings
-  is answered to the audit committee or the board; the role concerned supplies records.
-- A narrative list shows at most eight items, ranked by the amount each can move in the
-  reported figures, never by the Open Items tab's `Size`, and states the count of the rest
-  with the tab that lists them.
 - A walk charted as a waterfall carries `labels:` in plain words for its causes.
-- None of the run's working words on a slide: *minted*, *recipe*, *skill*, *rule 5*, a
-  step token, *this run* (REPORT.md § 3 Run vocabulary).
-- None of the working-paper terms in what you write on a slide (*walk*, *as supported*,
-  *candidate*, *boundary*, *ruled*, *routed*): say what happened to each item in the terms
-  practitioners of this area use, name the schedule what the area calls it, and write
-  *adjusted* for as supported (REPORT.md § 3 Working-paper terms).
-  No page states the count of expectations or patterns tested, the files read,
-  performance materiality or a testing threshold; state a limit as the amount left
-  untested and what it could change.
-- The `Executive summary` message states the headline figure, sized, and nothing else;
-  never join an integrity matter to it. The integrity matters follow directly under it,
-  each on its own line with its amount; then a covenant, liquidity or going-concern
-  consequence; then the balance arithmetic. State the consequence the workbook
-  establishes as a fact (REPORT.md § 1, The order and What it means).
-- The scope page states the date the records run to, referenced, and that events after it
-  were not examined.
 
 Before building, read `report.yaml` back as its reader, page by page, against the
 workbook: a measure stated on two pages is one figure; every list said to make a total
 adds to it; every *raise* or *lower* agrees with the tab's sign convention; every count in
 a headline equals the items under it; every ratio set against its threshold shows which
 side it falls (REPORT.md § 3, One figure, one meaning). Fix what does not hold, then build.
-
-After building, read the built deck's text back slide by slide (`REPORT.md` § 1, rule 4):
-list every item, count and total that appears on more than one page with the figure each
-page states. One item carries one figure from one cell everywhere, and an appendix total
-that differs from the headline is reconciled on its page. Fix `report.yaml` and rebuild
-until the list has no conflict.
 
 Then build:
 
@@ -246,14 +215,17 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/check_prose.py <run_dir>/out/.staging/work
     --run-dir <run_dir>
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/check_report.py <run_dir>/out/.staging/report.pptx \
     --run-dir <run_dir>
+uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/sql.py verify <run_dir>
 ```
+
+A `sql.py verify` failure is the owning check's to fix: end the step `blocked` naming it.
 
 `check_workbook.py` gates the workbook: cached values, the id links § 1 wires, and the
 reperformance contract — it refuses an external or broken link, an unwired id cell, a
 dead-end id (one cited but resolving nowhere), a number on the Exec Summary with no link
 to what it was copied from, an `E.` id in a workbook with no Evidence tab, a Sources tab missing the `root source` / `To reperform` columns, a figure row
 whose `To reperform` cell is empty, a pane frozen deeper than the title band
-(3 rows / 2 columns — never a table header row) on any tab, and a tab strip that is not the reader's path
+(3 rows / 2 columns; 4 rows on a tab holding one table) on any tab, and a tab strip that is not the reader's path
 (WORKBOOK.md § 2) —
 with `--run-dir` it computes the order from the roster and the recipe's `lead` and
 names the strip it wants. `check_report.py` gates the deck (`REPORT.md` § 5): every number on
@@ -262,11 +234,18 @@ tabs in the footer, every title a headline and every sentence complete, no worki
 term in what you wrote, the structure the recipe declares, and no table showing two rows that read alike — a copied tab's twin rows
 are the owning check's to name apart. **A non-zero exit is a stop — the deliverable does not
 seal (§ 6).** On a surface YOU wrote — a run-level tab, `report.yaml` — fix it and
-re-gate. On a copied tab you may not repair it: name the cell or the id,
-name the check that wrote it, and end the step `blocked` so the run re-runs that check. A
+re-gate. On a copied tab or a ledger tab, fix a defect of wording alone yourself: the words
+of a label, a heading, a sentence or a constant's basis, where every number, id, status
+and row stays as the check wrote it. Write each change to `out/.staging/wording.yaml` and
+run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/reword.py <run_dir> <run_dir>/out/.staging/wording.yaml`
+(its docstring gives the entry shape), then rebuild the deck and re-gate. Example: `check_prose.py`
+reads `Customer C10007, days beyond terms` as a typed day count; reword `, days` to
+`: days` on the tab. Any other defect on a copied tab — a figure, a population, a status
+or verdict, an id, a tab name, a row — you may not repair: name the cell or the id, name
+the check that wrote it, and end the step `blocked` so the run re-runs that check. A
 dead-end ledger id is the owning check's record to write even when the citation sits on
-the Sources or Evidence tab you assembled — those tabs are merged from
-`workpapers/*.yaml`, so an id no record declares cannot be repaired here either. Also
+the Sources, Tables, Constants or Evidence tab — those tabs are written from the run's records, so
+an id no record declares cannot be repaired here either. Also
 assert the open-item
 accounting balances (every finding `fixed`, `carried_to_open_items` or `withheld`; the
 counts sum; every carried item names its `from_finding`) and that the deck and the
@@ -285,8 +264,9 @@ answer, the Exec Summary and the deck say so.
 ## 5. The run summary — `out/RUN_SUMMARY.md`
 
 For the user, not the reader: the roster with statuses, findings that did not close
-(`fix_attempted`, withheld figures) and what would close each, data gaps, and how the run
-ended. Then paste, unedited, under `## What this run took`, the rendering of:
+(`fix_attempted`, withheld figures) and what would close each, data gaps, every wording
+change `reword.py` made (`out/wording.json`: tab, cell count, old, new, why), and how the
+run ended. Then paste, unedited, under `## What this run took`, the rendering of:
 
 ```
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/usage_report.py <run_dir>
@@ -312,4 +292,4 @@ put those checks in `conclusion`. Never put the gate's output in `error`: `error
 you could not do your work, and a failed step is retried — a re-run of the same gate to
 the same answer.
 Write `steps/<NNNN>-report.json` with `produced` naming the workbook, the deck, its
-plan and source, the summary and the snapshots. Return at most ten lines.
+plan and source, the summary and the snapshots.

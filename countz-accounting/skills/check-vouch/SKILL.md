@@ -12,6 +12,8 @@ user-invocable: false
 
 # Perform one vouch
 
+The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.
+
 Arguments: `run_dir`, `seq`, `check` (the check id), `sources` (comma-joined source ids —
 the target sources the items are traced INTO, subsequent statements typically), `goal`,
 `params` (must name where the items come from — see below), `mode` (`fresh` | `fix`),
@@ -33,13 +35,13 @@ consume the whole list — every item on it ends with a classification, none dro
 
 ## 2. Trace each item
 
-Trace with polars joins, one join per matching round; check the assignment with
+Trace with SQL joins, one per matching round; check the assignment with
 `${CLAUDE_PLUGIN_ROOT}/scripts/matching.py`'s `check_assignment()`, and classify every
 item left unmatched after the last round per § 3.
 
 Into the target source at item grain: the clearing or supporting line's citation, its
 date and amount. One-to-many is allowed and recorded (a deposit clearing as two credits).
-Write `checks/<check>-items.csv` — item, origin reference, amount, target citation,
+Write `checks/<check>-items.parquet` — item, origin reference, amount, target citation,
 cleared date, days outstanding where the origin carries its date, classification — with
 its manifest block in `checks/<check>.md` per EVIDENCE.md § 5.
 
@@ -56,7 +58,7 @@ exception.
 
 - `checks/<check>.md` — the item population and the record it came from, the tracing, and
   every item's classification.
-- `checks/<check>-items.csv` — the items table of § 2, with its manifest block.
+- `checks/<check>-items.parquet` — the items table of § 2, with its manifest block.
 - `out/tabs/<check>.xlsx` — your tab, blocks per `WORKBOOK.md` § 4, with the vouch
   schedule as the primary table and the exceptions.
 
@@ -76,4 +78,4 @@ files — the items table included.
 Write `steps/<NNNN>-vouch.json` per `RUN_CONTRACT.md`: `check_id`, `produced`,
 `consumed` with mtimes (the dependency's record included), `blockers`. `conclusion`
 states items traced over items listed and the untraced amount in dollars, in two
-sentences. Return at most ten lines.
+sentences.

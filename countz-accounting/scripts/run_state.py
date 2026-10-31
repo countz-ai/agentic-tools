@@ -30,7 +30,7 @@ Subcommands:
         and every family the approved steps run, in recipe order.
 
     dispatch <run_dir> --checks id1,id2 [--mode fresh|fix] [--extra '<one-line JSON>']
-    dispatch <run_dir> --step plan|recipe|arr_policy|review|report --args '<one-line JSON>'
+    dispatch <run_dir> --step plan|recipe|arr_policy|review|report|deck --args '<one-line JSON>'
     dispatch <run_dir> --briefs <brief.md> ...
         Open a wave: allocate seqs from next_seq, append one dispatch row per member
         (state "dispatched"), write every member's brief to dispatch/<NNNN>-<step>.md —
@@ -82,6 +82,7 @@ import sys
 import check_playbook  # sibling: the one home of KINDS, SLUG and definition validation
 import handoff  # sibling: what a step's inputs already hold, appended to its brief
 import recipe_format  # sibling: the recipe's sections and its `## Report` block
+import setup_run  # sibling: DEFAULT_STANDARD
 
 PLUGIN_ROOT = pathlib.Path(__file__).resolve().parent.parent
 RUN_SCHEMA = "countz-accounting/run@1"
@@ -89,12 +90,15 @@ RUN_SCHEMA = "countz-accounting/run@1"
 # Steps that are not checks, and the skill each dispatches. Check kinds resolve through
 # check_playbook.KINDS.
 STEP_SKILLS = {"plan": "check-plan", "recipe": "create-recipe", "review": "check-review",
-               "report": "check-report", "arr_policy": "extract-arr-policy"}
+               "report": "check-report", "arr_policy": "extract-arr-policy",
+               "deck": "check-deck"}
 
 BRIEF = """\
 # countz-accounting dispatch {nnnn} — {step}
 
 This file is your entire instruction.
+
+{standard}
 
 `${{CLAUDE_PLUGIN_ROOT}}` is `{plug}`. Every file you read below writes paths with that
 token; expand it to that directory each time, including on a path you reach from inside
@@ -111,6 +115,9 @@ Your arguments:
     run_dir={run_dir}
     seq={seq}
 {args}"""
+
+# Opens every brief and the recipe's rules file.
+STANDARD_LINE = "The accounting standard we use is {standard}; follow it where applicable."
 
 # Step 1 of a brief. A sub-agent of the skill's agent type already has the agent file as
 # its system prompt (for the worker, with CONDUCT, DOCTRINE and EVIDENCE appended by
@@ -253,6 +260,10 @@ def step_say(step: str, args: dict) -> str:
             ids = [c for c in ids.split(",") if c.strip()]
         what = checks_phrase(len(ids)).replace(" in parallel", "") if ids else "the checks"
         return f"Reviewing {what} against the source files."
+    if step == "deck":
+        return "Reading the deck as its reader, for sentences to rewrite."
+    if args.get("mode") == "fix":
+        return "Rewording the deck's sentences on the review's findings."
     return "Assembling the workbook and the report deck from the check records."
 
 
@@ -353,6 +364,10 @@ def load_run(run_dir: pathlib.Path) -> dict:
     run = json.loads(path.read_text(encoding="utf-8"))
     if run.get("schema") != RUN_SCHEMA:
         raise Refuse(f"run.json schema {run.get('schema')!r} is not {RUN_SCHEMA}")
+    # A run registered before accounting_standard existed: the next save_run writes it.
+    params = run.setdefault("inputs", {}).setdefault("params", {})
+    if not str(params.get("accounting_standard") or "").strip():
+        params["accounting_standard"] = setup_run.DEFAULT_STANDARD
     return run
 
 
@@ -406,6 +421,7 @@ def render_brief(run_dir: pathlib.Path, seq: int, step: str, skill: str,
     family = str(((args.get("params") or {}) if isinstance(args.get("params"), dict)
                   else {}).get("family") or "")
     body = BRIEF.format(nnnn=f"{seq:04d}", step=step, plug=PLUGIN_ROOT, standing=standing,
+                        standard=STANDARD_LINE.format(standard=accounting_standard(run_dir)),
                         recipe=recipe_block(run_dir, family), skill=skill,
                         run_dir=_arg(str(run_dir)), seq=seq, args="".join(lines))
     # What the step's inputs already hold (scripts/handoff.py): a fresh worker otherwise
@@ -416,6 +432,16 @@ def render_brief(run_dir: pathlib.Path, seq: int, step: str, skill: str,
     except Exception as exc:  # noqa: BLE001 - the brief must still be written
         body += f"\n(no handoff: {type(exc).__name__}: {exc})\n"
     return body
+
+
+def accounting_standard(run_dir: pathlib.Path) -> str:
+    """The run's accounting_standard; DEFAULT_STANDARD where run.json holds none."""
+    try:
+        run = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+        held = ((run.get("inputs") or {}).get("params") or {}).get("accounting_standard")
+    except (OSError, ValueError):
+        held = None
+    return held.strip() if isinstance(held, str) and held.strip() else setup_run.DEFAULT_STANDARD
 
 
 def pinned_recipe(run_dir: pathlib.Path) -> tuple[pathlib.Path, str] | None:
@@ -451,6 +477,7 @@ def write_recipe_rules(run_dir: pathlib.Path, recipe: pathlib.Path, text: str) -
             f"`${{CLAUDE_PLUGIN_ROOT}}/reference/PLAYBOOK_RECIPES.md` § {INHERITS}, then the "
             f"recipe at `{recipe}` from its start to `## {FAMILIES}`. Your family section is "
             f"in your brief.\n\n"
+            f"{STANDARD_LINE.format(standard=accounting_standard(run_dir))}\n\n"
             f"## {INHERITS}\n{inherits.rstrip()}\n\n"
             f"---\n\nThe recipe, from its start to `## {FAMILIES}`:\n\n{head}\n")
     path = run_dir / RULES_REL
@@ -556,6 +583,12 @@ def _q(p) -> str:
     """A path as a printed command carries it: unchanged when it is shell-safe, quoted
     when it holds a space or a shell character (`OneDrive - Firm/Clients`)."""
     return shlex.quote(str(p))
+
+
+def relay_python() -> str:
+    """The interpreter a printed relay command runs a plugin script with: the plugin's own
+    environment, where polars is (handoff.py reads item tables with it)."""
+    return f"uv run --project {_q(PLUGIN_ROOT)} python3"
 
 
 def _plain(s: str) -> bool:
@@ -1073,7 +1106,7 @@ def cmd_record(a) -> int:
               next_line(run_dir, line, run_dir / line["brief"] if briefed else None,
                         label="RETRY"))
     if retries:
-        print(f"THEN: python3 {_q(pathlib.Path(__file__).resolve())} record {_q(run_dir)}")
+        print(f"THEN: {relay_python()} {_q(pathlib.Path(__file__).resolve())} record {_q(run_dir)}")
     return 0
 
 

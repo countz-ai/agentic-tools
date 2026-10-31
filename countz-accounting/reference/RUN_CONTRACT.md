@@ -1,13 +1,15 @@
 # RUN_CONTRACT — the run directory, its files, and how waves are dispatched
 
 A run is one directory. It accumulates sources and checks as the user asks for them.
-`scripts/setup_run.py` mints it as `<output_root>/<skill>-<company>.<YYYYMMDD-HHMMSS>`
-(the launcher skill invoked, the company's name as a slug, the minting machine's local
-clock) and prints the path as `RUN_DIR:`. The relay never composes that name; it
-addresses every later call by the printed path. A path without `run.json` is refused.
-Example: "output to results" for a `qoe` run over Demo ZS lands at
-`results/qoe-demo-zs.20260904-104305`. Every launcher skill under `skills/` drives the
-same workspace the same way; only where the check roster comes from differs.
+`scripts/setup_run.py` mints it as `<output_root>/<recipe>-<company>.<YYYYMMDD-HHMMSS>`
+(the name of the recipe the run pins, the company's name as a slug, the minting machine's
+local clock) and prints the path as `RUN_DIR:`. A run that pins no recipe when it is
+minted takes the launcher skill's name in place of the recipe's. The relay never composes
+that name; it addresses every later call by the printed path. A path without `run.json`
+is refused. Example: "output to results" for a quality-of-earnings run over Demo ZS lands
+at `results/quality-of-earnings-demo-zs.20260904-104305`. Every inline skill that opens a
+run drives the same workspace the same way; only where the check roster comes from
+differs.
 
 This document defines the step record's shape and states what the fields of `run.json`
 and the dispatch briefs mean. Their shape is enforced in `scripts/setup_run.py` and
@@ -57,7 +59,7 @@ On success, continue with the run. The result names the account and its tenant, 
 carries:
 
 - `catalog_yaml` — the server's catalog of analyses, one entry per recipe with `name`,
-  `skill`, `description` and `aliases` — with its `catalog_version`. Keep it: a skill
+  `description` and `aliases` — with its `catalog_version`. Keep it: a skill
   that matches an ask against the catalog reads this copy and calls nothing again.
 - `blocked_tools` — the MCP tools this session must not call, set for the tenant; the
   user cannot change it, and it is empty unless the tenant sets it. An entry is
@@ -80,12 +82,17 @@ ask, on a catalog miss only, scrubbed by an agent under [SCRUB.md](SCRUB.md)
 | `<run_dir>/engagement-preview.md` | `scripts/setup_run.py`, on every registration: the collected parameters, each source's location, and a metadata-only directory summary of every folder source (3 levels, file counts, KB) | the user, via preview, right after registration and before the first dispatch |
 | `<run_dir>/file_index.json` | the plan step: every registered file with its relevance verdict (`relevant: true`, `"context"` for a file kept for later explanation, or `false`). Plan-driven runs only | dispatched steps, `scripts/preview.py` |
 | `<run_dir>/sources/<id>.md` (+ `<id>.entities.json` where the source stacks several accounts, statements or entities) | the plan step, for each source its roster binds. Plan-driven runs only | the check steps |
-| `<run_dir>/cache/<id>.parquet` + `<run_dir>/cache/manifest.json` | the `extract` step's script (`workpapers/extract-<check>.py`), through `scripts/cache.py`: each table the plan's steps read, parsed once into typed parquet, and the manifest (schema `cache@3`) — per table its source file, sha256 and bytes, header and row coordinates in the file, columns with where each sits and how it was parsed, row count, control total and any stated total, and the parquet's own sha256 (`parquet_sha256`) that `cache.py --verify` re-checks; tables seen and not extracted under `not_extracted`. `cache.py` refuses a manifest of another schema. Plan-driven runs whose plan scheduled an extraction | the steps that name it in `params.cache_from` (`scripts/cache.py read`), `scripts/evidence.py select` for their citations. Excluded from `run_sync.tar.gz`: rebuilt by re-running the step's script, cited by nothing |
+| `<run_dir>/cache/<id>.parquet` + `<run_dir>/cache/not_extracted.json` | the `extract` step's script (`workpapers/extract-<check>.py`), through `scripts/cache.py`: each table the plan's steps read, parsed once into typed parquet holding its metadata (schema `cache@4`) — what one row is, its source file, sha256 and bytes, header and row coordinates in the file, each column's description, unit, location and parse, row count, control total and any stated total, and the rows' sha256 that `cache.py --verify` re-checks; tables seen and not extracted in `not_extracted.json`. Plan-driven runs whose plan scheduled an extraction | the steps that name it in `params.cache_from`, which read it in SQL as `room.<id>` (`scripts/sql.py`). |
+| `<run_dir>/tables/<check>/<name>.parquet` | the check step, through `run_sql("CREATE ... TABLE <check>.<name> AS SELECT ...")`: one table it derived, holding the statement and what it read | later statements, as `<check>.<name>`; `sql.py verify`, which re-runs the statement |
+| `<run_dir>/constants/<check>.json` | the check step, through `Ledger.constants`: the values a document states (with file, locator and quote) and the values the step chose (with its basis) | later statements, as rows of `room.constants`; `sql.py verify`, which re-checks each quote |
+| `<run_dir>/catalog.sql` | `scripts/sql.py`, after every table, ledger or constants write: the views over every table, `room.constants`, `countz.*`, the macros | `scripts/countz-sql -init` |
 | `<run_dir>/recipes/<recipe-name>.md` | `scripts/setup_run.py --recipe` (a served recipe, byte for byte) or the `create-recipe` step (a generated one, validated by `scripts/validate_recipe.py`); written once, never edited | the plan, review and report steps, through `run.json.plan.recipe` |
 | `<run_dir>/plan.md` + `<run_dir>/plan/<name>.json` | the plan step, once per draft; a revised draft rewrites both | the user (via preview), the relay, the playbook engine (the definition it executes) |
+| `<run_dir>/plan/spend-estimate.json` | `scripts/spend_model.py estimate`, run by the plan step on each draft: predicted cost and minutes per step and family, the run total and elapsed time, each with its range, from `reference/spend_model.json` | the plan step, which copies its table into `plan.md` |
 | `<run_dir>/steps/<NNNN>-<step>.json` | the step that produced it, once, at its end | the relay (`run_state.py record`), the playbook engine, the review step |
-| `<run_dir>/checks/<check>.md` (and `<check>-*.csv`) | the check step that owns that check id | the review and report steps |
-| `<run_dir>/checks/<check>-summary.md` | a plan-driven check step: whether its procedure worked and where it stands, in an accountant's words (`agents/worker.md` § Files) | `scripts/family_artifacts.py` |
+| `<run_dir>/workpapers/<check>.tpl.md` | the check step that owns that check id: its page, one template (`WORKBOOK.md` § 7) | `scripts/render.py` |
+| `<run_dir>/checks/<check>.md` (and `<check>-*.parquet`, its item tables) | the check step that owns that check id; the md rendered from its template | the review and report steps; SQL as `<check>.<table>` |
+| `<run_dir>/checks/<check>-summary.md` | a plan-driven check step, rendered from its template's `## Summary`: whether its procedure worked and where it stands, in an accountant's words (`agents/worker.md` § Files) | `scripts/family_artifacts.py` |
 | `<run_dir>/out/families/<NN>-<title>.md` + `.xlsx` | `scripts/family_artifacts.py`, after every wave, for each family whose checks are all terminal: the family's summary and its workbook, its check tabs in one file | the user, via preview |
 | `<run_dir>/workpapers/*.yaml` | the step named in the file's suffix | the review and report steps, `scripts/check_prose.py` |
 | `<run_dir>/dispatch/<NNNN>-<step>.md` | `run_state.py dispatch` and `record`, one per dispatch row (a wave of one, a `--step` and a retry included), or `scripts/playbook_next.py`; on escalation, the playbook-engine agent drafts it from `run_state.py`'s `BRIEF` template and `dispatch --briefs` re-renders it from its argument block. A plan-driven step's brief carries its family section and the schedules the deck takes from its tab | that dispatch's sub-agent, as its entire launch instruction. On a plain Skill call nobody reads it at launch; it is the archive of what the fork was told |
@@ -106,14 +113,15 @@ them. Every write is write-to-`.tmp` then rename.
 
 ```yaml
 schema: "countz-accounting/run@1"
-run_id: "<the run directory's name: <skill>-<company>.<YYYYMMDD-HHMMSS>>"
+run_id: "<the run directory's name: <recipe or skill>-<company>.<YYYYMMDD-HHMMSS>>"
 goal: "checks"                      # or the playbook name a playbook or plan-driven run is executing
 created_at / updated_at: "<ISO 8601 UTC>"
 degraded: false                     # sticky; set when any step ends blocked or failed
 inputs:
   output_root: "<abs path>"
   run_dir: "<abs path>"             # redundant on purpose: the file self-locates if copied
-  skill: "qoe"                      # the launcher skill the run was minted for
+  skill: "tieout"                   # the launcher skill a run without a recipe was minted
+                                    # for; absent on a run minted with its recipe
   company: "Demo ZS"                # whose books, in the user's words; the directory carries its slug
   params: {}                        # run-level parameters collected at registration,
                                     # verbatim: period end, declared options, materiality.
@@ -156,7 +164,7 @@ next_seq: 8                         # the next unused seq; seqs are never reused
 
 `checks[].id` is an id the run mints (`tie_gl_tb`, `recon_cash`), `[a-z0-9][a-z0-9_]*`;
 it names the check's files and its tab. It takes no `-`, which separates the check id
-from the table name in `checks/<check>-<table>.csv`. It is at most 31 characters, the
+from the table name in `checks/<check>-<table>.parquet`. It is at most 31 characters, the
 longest tab name Excel holds: the check's tab opens with the id, and the workbook gate
 traces each tab to its check by that opening. `checks[].goal` is kept verbatim;
 `playbook-save` distills it into the saved playbook.
@@ -226,13 +234,13 @@ twice, or a value starting with `"` that is not one JSON string.
 
 `<run_dir>/steps/<NNNN>-<step>.json`, `NNNN` the zero-padded seq from the dispatch args.
 Steps: `plan`, `recipe`, `arr_policy`, `extract`, `tie`, `recon`, `completeness`,
-`vouch`, `cutoff`, `analyze`, `review`, `report`.
+`vouch`, `cutoff`, `analyze`, `review`, `report`, `deck`.
 
 ```yaml
 schema: "countz-accounting/step@1"
 seq: 3
 step: "tie"
-check_id: "tie_gl_tb"               # null for plan / review / report
+check_id: "tie_gl_tb"               # null for plan / review / report / deck
 args: {}                            # exactly what you were handed
 started_at / completed_at: "<ISO 8601 UTC>"
 outcome: "complete"                 # complete | blocked
@@ -353,7 +361,7 @@ After every wave, in this order:
    `tier`. The tier decides the send:
    - `working` (the engagement preview, the source inventory, the source profiles, the
      check records and check schedules of a run without families, the deck's plan, the
-     deck's source, the run summary): one SendUserFile call for the whole wave, every working path in its
+     deck's source, the run summary, the cost report): one SendUserFile call for the whole wave, every working path in its
      `files`, `display: attach`, the printed `BUNDLE:` line as its caption. One card per
      wave, never one per file.
    - `deliverable` (`plan.md`, each family's summary and then its workbook, the review findings,
@@ -379,7 +387,7 @@ read and wrote; the lanes run in parallel. Without SendMessage, the run moves in
 
 1. **Assign the lanes once**, after the plan is approved (a saved playbook: after
    `bind-playbook`) and before the first `playbook_next.py` call:
-   `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py assign <run_dir> <definition path>`.
+   `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py assign <run_dir> <definition path>`.
    It maps the approved plan's steps (only those, so a partial run's scope is what runs)
    onto at most three lanes and writes `<run_dir>/lanes.json`. Say nothing about it.
 2. **Run the loop as before**: `playbook_next.py`, then the lines it prints in order. On a
@@ -391,16 +399,16 @@ read and wrote; the lanes run in parallel. Without SendMessage, the run moves in
      (general-purpose where that type is not available), in the background, prompted
      exactly: `Read <brief> and do what it says. It is your entire instruction for this
      step.` Then record its agentId:
-     `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py holder <run_dir> --lane <L> --agent <agentId>`.
+     `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py holder <run_dir> --lane <L> --agent <agentId>`.
    - `holder=<agentId>`: SendMessage to that agentId, the message exactly: `Next step:
      read <brief> and do what it says. It is your entire instruction for this step.`
      If SendMessage refuses or fails, run
-     `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py fallback <run_dir> --lane <L>` and
+     `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py fallback <run_dir> --lane <L>` and
      execute the `LANE:` line it prints (a new holder for the same brief).
 3. **When a lane's agent reports back** — the Agent call's result, a task notification,
    or the SendMessage call's own result (where SendMessage waits for the worker, as in a
    cloud session, the reply is in the call's result) — run
-   `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py done <run_dir> --agent <its agentId>`.
+   `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py done <run_dir> --agent <its agentId>`.
    It closes that step alone (`run_state.py record --seqs`), so the steps still running in
    other lanes stay open; put its `OK:`, `BLOCKED:` and `FAILED:` lines to the user as
    § Classification and retries states, execute a `LANE:` line it prints (the failed
@@ -445,7 +453,7 @@ every finding in the review record by its `fix_kind`, without waiting for a ruli
 On a holder-lanes run (§ Holder lanes), every re-dispatch this section calls for — a fix
 of a review finding, a re-extract for a cache defect and the re-runs after it, a check
 re-dispatched with an answer — goes through
-`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py fix <run_dir> --checks <ids> --mode fix
+`uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py fix <run_dir> --checks <ids> --mode fix
 [--extra '<one-line JSON>']` instead of `run_state.py dispatch --checks`, with the same
 checks, mode and extra. It sends each re-run to the lane that ran its check, warm on
 that lane's holder, one at a time per lane. Execute its `LANE:` lines and each report
@@ -460,6 +468,34 @@ and the deliverable says so.
 Then `check-report` (`dispatch --step report`). Re-dispatch it whenever later checks or
 fixes land after a seal; the report step reassembles from all current records.
 
+The first time a report seals, review the deck, in at most two rounds:
+
+1. Dispatch `check-deck` (`dispatch --step deck`). It reads the sealed deck as its
+   reader, with the writing rules and nothing else, and records findings on its pages.
+   With none, the run is done.
+2. Re-dispatch `check-report` with every finding:
+   `dispatch --step report --args '{"mode": "fix", "fix_input": [<the findings>]}'`. It
+   fixes each finding with the report step's own means. A defect only a check can fix
+   ends it `blocked` naming the check, its other fixes kept in `out/.staging/` with
+   `fix-blocked.json` listing the findings and checks. Re-run each named check once with
+   `--mode fix` and the finding in `fix_input`. A check that reads a re-run one may now
+   hold its old words or figures: once the re-runs complete, run
+   `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/sql.py verify <run_dir>`,
+   and re-run each check it names with `--mode fix`, its `FAIL:` lines in `fix_input`.
+   Repeat until verify exits 0 or names only checks already re-run this way; the report
+   step's own verify then blocks on those. Then re-dispatch `check-report` in `mode: fix` with the same
+   findings: it picks up the re-run tabs and finishes from its staging.
+3. Once that seals, dispatch `check-deck` again to verify the fixes:
+   `--args '{"since": "out/history/<NNNN>-report.pptx", "verify": "steps/<MMMM>-deck.json"}'`,
+   `NNNN` the seq of the report the first round reviewed and `MMMM` the first round's
+   seq. It raises a finding the fix left unresolved, or a defect in words the fix wrote,
+   and nothing else.
+4. Its findings go to one `check-report` in `mode: fix` with `"rerun": false`: wording is
+   fixed, and a defect only a check can fix is carried to the open items instead of
+   blocking. No review follows.
+
+A later reseal is reviewed again only when the user directs it.
+
 The relay relays. It does not open client files, compute figures, or summarize a step's
 output. The preview puts the deliverables and the review's findings in front of the
 user.
@@ -469,8 +505,7 @@ user.
 `scripts/sync_run.py` moves the run directory whole, never a subset: the run's own code
 and scripts, `dispatch/`, `events.jsonl`, `steps/*.json`, `out/usage.json`, and a
 gathered `debug/`. Excluded: `__pycache__/`, `*.pyc`, `*.tmp`, `.DS_Store`, and the
-archive itself. The sync lands the run on the user's own machine and nowhere else; no run
-artifact goes to a server (`OBSERVABILITY.md` § 4).
+archive itself. The sync lands the run on the user's own machine and nowhere else.
 
 Every mode lands the run under one folder `<short_name>.<datetime>`. The short name
 defaults to the run directory's own `<skill>-<company>`; set `--name` to the user's own

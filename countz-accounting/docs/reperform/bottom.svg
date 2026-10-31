@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="420" viewBox="0 0 880 420" font-family="Arial, Helvetica, sans-serif">
+  <rect width="880" height="420" fill="#FFFFFF"/>
+  <text x="24" y="34" font-size="18" font-weight="bold" fill="#1F2933">The bottom of the chain</text>
+  <text x="24" y="56" font-size="13" fill="#52606D">A table read from a file lands on Evidence; a constant lands on its row under Constants on the Tables tab.</text>
+
+  <!-- evidence card -->
+  <g font-size="12">
+    <rect x="24" y="76" width="408" height="300" rx="6" fill="#F8FAFC" stroke="#CBD2D9"/>
+    <rect x="24" y="76" width="408" height="30" rx="6" fill="#0A5F6A"/>
+    <text x="36" y="96" fill="#FFFFFF" font-weight="bold">Evidence row</text>
+    <g fill="#52606D"><text x="36" y="132">id</text><text x="36" y="162">file</text><text x="36" y="206">header</text><text x="36" y="236">rows</text><text x="36" y="266">row count</text><text x="36" y="296">control total</text></g>
+    <g fill="#1F2933">
+      <text x="130" y="132" fill="#0A5F6A">E.m0.contract_register</text>
+      <text x="130" y="162">4 Contracts/</text>
+      <text x="130" y="178">Contract_register_2021-01_to_2026-03.csv</text>
+      <text x="130" y="206">A2</text>
+      <text x="130" y="236">3:1378</text>
+      <text x="130" y="266">1,376</text>
+      <text x="130" y="296">acv 46,172,900.00</text>
+    </g>
+    <rect x="36" y="318" width="384" height="44" rx="4" fill="#FFF7ED" stroke="#B54708"/>
+    <text x="48" y="336" fill="#7C2D12">Open the file, sum the acv column over rows 3 to</text>
+    <text x="48" y="352" fill="#7C2D12">1378, and compare with 46,172,900.00.</text>
+  </g>
+
+  <!-- constant card -->
+  <g font-size="12">
+    <rect x="448" y="76" width="408" height="300" rx="6" fill="#F8FAFC" stroke="#CBD2D9"/>
+    <rect x="448" y="76" width="408" height="30" rx="6" fill="#0A5F6A"/>
+    <text x="460" y="96" fill="#FFFFFF" font-weight="bold">Constants row (Constants tab)</text>
+    <g fill="#52606D"><text x="460" y="132">name</text><text x="460" y="162">value</text><text x="460" y="192">kind</text><text x="460" y="222">where</text><text x="460" y="266">quote</text></g>
+    <g fill="#1F2933">
+      <text x="540" y="132" fill="#0A5F6A">halcyon_filing_date</text>
+      <text x="540" y="162">2025-11-06</text>
+      <text x="540" y="192">stated in a document</text>
+      <text x="540" y="222">4 Contracts/Customer notices/Chapter 7</text>
+      <text x="540" y="238">trustee notice …, paragraph 1</text>
+      <text x="540" y="266">"In re Halcyon Freight Systems, Inc.,</text>
+      <text x="540" y="282">Chapter 7, filed November 6, 2025 (D. Del.)."</text>
+    </g>
+    <rect x="460" y="318" width="384" height="44" rx="4" fill="#FFF7ED" stroke="#B54708"/>
+    <text x="472" y="336" fill="#7C2D12">Open the document at the place named and read</text>
+    <text x="472" y="352" fill="#7C2D12">the sentence. The value must be the one it states.</text>
+  </g>
+</svg>

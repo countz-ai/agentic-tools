@@ -56,7 +56,11 @@ What gets wired, in this order:
      line (`= …`) becomes a formula over the rows above it when one plain reading of
      those rows adds to it exactly; a figure becomes a reference when its value, to the
      cent, sits in exactly one cell of an earlier check's tabs under a header naming the
-     same period. Anything less certain stays a value and is listed. Last, every
+     same period. Anything less certain stays a value and is listed. Every copy also
+     links to the cell it reads, and each figure's own cell to its Sources row — or, for a
+     figure written as a formula over a table on its tab, to that table's range. A linked
+     number is written as a formula of that number (`=225500`): Google Sheets imports a
+     linked plain number as text, and a formula reading it then skips it. Last, every
      formula's result is computed (scripts/formula.py) and cached, since a load and save
      by openpyxl stores none.
 
@@ -64,6 +68,17 @@ What gets wired, in this order:
      status's rows on its match schedule: the link selects the block, which the schedule
      holds together because it is sorted by status. A hyperlink cannot apply a filter; the
      selected block is the filter's rows, and check_workbook.py holds the line to them.
+
+  9. On Sources and Tables (scripts/ledger_tabs.py), a cell that is exactly the name of a
+     table or a constant links to its row on Tables or Constants, so each `reads` cell
+     opens the step below it.
+
+  10. A sentence written with its figures interpolated (figures.Cited, recorded as
+     `cites` in a cells map — a placed tab's, or the one the assembly saved beside the
+     workbook) links to the first figure it states that a tab places — its own cell on
+     the tab that computed it — or, where no tab places any, to the first one's Sources
+     row. The reader clicks from the
+     Exec Summary's sentence to the number it rests on. It takes the link color only.
 
 Every link carries the cell's own text as its `display` attribute, so a consumer that
 renders the anchor from link metadata instead of the cell shows the same readable text.
@@ -105,11 +120,14 @@ STEM_SEG = r"(?:[A-Za-z0-9_-]+|<[A-Za-z0-9_]+>)"
 STEM_CELL = re.compile(rf"(?:RI|[EFPTSXCDQ])\.{STEM_SEG}(?:\.{STEM_SEG})*")
 
 SOURCES = "Sources"
+TABLES = "Tables"
+CONSTANTS = "Constants"
 EVIDENCE = "Evidence"
 EXEC = "Exec Summary"
 # The workbook's run-level tabs (check-report SKILL § 1), on the fold. Every other tab
 # belongs to a check.
-RUN_TABS = {"exec_summary", "basis_of_preparation", "coverage", "open_items", "sources", "evidence"}
+RUN_TABS = {"exec_summary", "basis_of_preparation", "coverage", "open_items", "sources", "tables",
+            "constants", "evidence"}
 # Which ledger tab an id prefix resolves on. Every other prefix homes where it is stated.
 LEDGER = {"F": SOURCES, "P": SOURCES, "E": EVIDENCE}
 LINK_COLOR = "0A5F6A"   # WORKBOOK_STYLE.md § 1a `ACCENT`; the cell keeps its own font
@@ -224,8 +242,9 @@ def resolve(exact_cells, line_homes, tokens, sheets):
                 dead.append(i)
                 continue
             homes[i] = home
+            # every other cell that is the id, a figure another figure's Sources row reads among them
             for at in cells:
-                if at[0] != ledger:
+                if at != home:
                     targets[at] = home
             cited = [c for c in cells if c[0] != ledger]
             if cited:
@@ -660,12 +679,19 @@ def retrofit_copies(wb, value, rank: dict[str, int], results: dict, styles: Styl
     return done
 
 
-def load_maps(run_dir: pathlib.Path | None) -> dict[str, dict]:
-    """{sheet: {coord: entry}} from every placed tab's cells map."""
+def load_maps(run_dir: pathlib.Path | None, workbook: pathlib.Path | None = None) -> dict[str, dict]:
+    """{sheet: {coord: entry}} from every placed tab's cells map, and the map the
+    assembly saved beside `workbook` (its run-level tabs: the sentences of the Exec
+    Summary, what they cite)."""
     out: dict[str, dict] = {}
     if run_dir is None:
         return out
-    for f in sorted((run_dir / "out" / "tabs").glob("*.cells.json")):
+    files = sorted((run_dir / "out" / "tabs").glob("*.cells.json"))
+    if workbook is not None:
+        files.append(workbook.with_name(workbook.stem + ".cells.json"))
+    for f in files:
+        if not f.is_file():
+            continue
         try:
             for sheet, cells in (json.loads(f.read_text(encoding="utf-8")).get("sheets") or {}).items():
                 out.setdefault(sheet, {}).update(cells or {})
@@ -701,6 +727,15 @@ def main() -> int:
 
     wb = openpyxl.load_workbook(a.workbook)
     cached = openpyxl.load_workbook(a.workbook, data_only=True)   # a re-run reads its own formulas' results
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+    import formula as fx
+    # A linked number an earlier pass wrote as a formula (`=225500`, below) is a value again
+    # until this pass links it.
+    for ws in wb.worksheets:
+        for row in ws.iter_rows():
+            for cell in row:
+                if (n := fx.constant_of(cell.value)) is not None:
+                    cell.value = int(n) if n.is_integer() else n
     if SOURCES not in wb.sheetnames:
         print(f"{a.workbook.name}: no '{SOURCES}' tab — assemble the workbook first",
               file=sys.stderr)
@@ -750,6 +785,29 @@ def main() -> int:
                     targets[at] = (hits[0], TITLE_CELL)
                     nav += 1
 
+    # Tables: a cell on Sources or Tables that is exactly a table's or a constant's name
+    # links to that name's row on Tables or Constants (ledger_tabs.py), the reads a reader
+    # follows down.
+    tables_links = 0
+    if TABLES in wb.sheetnames or CONSTANTS in wb.sheetnames:
+        named: dict[str, tuple[str, str]] = {}
+        for tab in (TABLES, CONSTANTS):
+            if tab not in wb.sheetnames:
+                continue
+            for (cell,) in wb[tab].iter_rows(min_row=5, min_col=2, max_col=2):
+                if isinstance(cell.value, str) and cell.style not in ("cz_header", "cz_section"):
+                    named.setdefault(cell.value.strip(), (tab, cell.coordinate))
+        for sheet in (SOURCES, TABLES):
+            if sheet not in wb.sheetnames:
+                continue
+            for row in wb[sheet].iter_rows(min_row=5):
+                for cell in row:
+                    at = (sheet, cell.coordinate)
+                    home = named.get(cell.value.strip()) if isinstance(cell.value, str) else None
+                    if home and home != at and at not in targets:
+                        targets[at] = home
+                        tables_links += 1
+
     # The Exec Summary's copied tables: every amount back to the cell it was copied from.
     walk, missed = walk_targets(wb)
     targets.update(walk)
@@ -757,13 +815,14 @@ def main() -> int:
     matches = match_targets(wb)
     targets.update(matches)
 
+    copies: dict[tuple[str, str], tuple[str, str]] = {}
+    figure_cells: dict[tuple[str, str], tuple[str, str]] = {}
+    prose_cells: dict[tuple[str, str], tuple[str, str]] = {}
     live_rep = {"copies_wired": 0, "copy_problems": [], "totals_made_live": 0,
                 "totals_left_as_values": [], "copies_retrofitted": 0}
     if not a.dry_run:
         # § 8: the arithmetic made live, before the links (an Exec Summary amount reads a
         # cell that may itself have just become a reference).
-        sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-        import formula as fx
         known = fx.compute_results(wb, fallback=cached)   # the formulas the tabs arrived with
 
         def get(sh, co):
@@ -772,7 +831,7 @@ def main() -> int:
             c = wb[sh][co]
             return None if c.data_type == "f" else c.value
 
-        maps = load_maps(a.run_dir)
+        maps = load_maps(a.run_dir, a.workbook)
         run_tabs = {t for t in wb.sheetnames if normalize(t) in RUN_TABS}
         value = {"get": get, "set": lambda sh, co, v: known.setdefault(sh, {}).__setitem__(co, v),
                  "skip": run_tabs | set(maps), "skip_copies": run_tabs, "mapped": set(maps)}
@@ -786,6 +845,53 @@ def main() -> int:
         live_rep["copies_wired"], live_rep["copy_problems"] = wire_copies(wb, value, maps, known)
         live_rep["totals_made_live"], live_rep["totals_left_as_values"] = retrofit_totals(wb, value, known)
         live_rep["copies_retrofitted"] = retrofit_copies(wb, value, rank, known)
+        # Every copy (`='Tab'!G23`) also links to the cell it reads: Google Sheets does not
+        # follow a reference from the formula, and turns this link into a HYPERLINK() it
+        # can. Read from the formulas, so a re-run keeps the copies an earlier pass made.
+        for ws in wb.worksheets:
+            for row in ws.iter_rows():
+                for cell in row:
+                    t = fx.copy_of(cell.value)
+                    at = (ws.title, cell.coordinate)
+                    if t and t[0] != ws.title and t[0] in wb.sheetnames and at not in targets:
+                        copies[at] = t
+        targets.update(copies)
+        # A figure's own cell shows its number, not its id: it links to its Sources row,
+        # and that row's id links back to it when nothing else cites the id. A figure
+        # written as a formula over a table on its tab (render.py) links to that table
+        # instead: the reader follows it to the rows it comes from, and the Sources row
+        # still links back to it.
+        for sheet, cells in maps.items():
+            for coord, e in cells.items():
+                home, at = homes.get(e.get("fid") or ""), (sheet, coord)
+                if sheet not in wb.sheetnames or at in targets:
+                    continue
+                if e.get("over") and e.get("fid"):
+                    figure_cells[at] = (sheet, e["over"])
+                    if home:
+                        targets.setdefault(home, at)
+                elif home:
+                    figure_cells[at] = home
+                    targets.setdefault(home, at)
+        targets.update(figure_cells)
+        # A sentence links to the first figure it states that a tab places, on its own cell
+        # there; where no tab places any, to the first one's Sources row.
+        placed: dict[str, tuple[str, str]] = {}
+        for sheet in wb.sheetnames:
+            for coord, e in sorted((maps.get(sheet) or {}).items(),
+                                   key=lambda kv: fx.split(kv[0])[::-1]):
+                if e.get("fid"):
+                    placed.setdefault(e["fid"], (sheet, coord))
+        for sheet, cells in maps.items():
+            for coord, e in cells.items():
+                at = (sheet, coord)
+                if sheet not in wb.sheetnames or at in targets or not e.get("cites"):
+                    continue
+                to = next((placed[f] for f in e["cites"] if placed.get(f) not in (None, at)),
+                          next((homes[f] for f in e["cites"] if homes.get(f)), None))
+                if to:
+                    prose_cells[at] = to
+        targets.update(prose_cells)
 
         # Every link in this workbook is placed here, so a re-run owns them all: clear
         # first, or a link this pass no longer wants survives, pointing where it did.
@@ -815,15 +921,28 @@ def main() -> int:
             font.color = LINK_COLOR
             # A linked AMOUNT takes color only: under a figure, an underline is the
             # accounting rule that says "sum above", and a link must not draw one.
-            if (sheet, coord) not in walk and not isinstance(cell.value, (int, float)):
+            amount = isinstance(cell.value, (int, float)) or str(cell.value).startswith("=")
+            # A sentence takes color only: a whole sentence underlined reads as a heading.
+            if (sheet, coord) not in walk and not amount and (sheet, coord) not in prose_cells:
                 font.underline = "single"
             cell.font = font
+            # Google Sheets imports a linked number as HYPERLINK(url, "225500"), text that
+            # every formula reading it skips; a linked formula keeps its number.
+            if isinstance(cell.value, (int, float)) and not isinstance(cell.value, bool):
+                cell.value = fx.constant(cell.value)
         # Every table an Excel table of its own (wbkit.excel_tables): a tab copied cell by
         # cell arrives without its table objects, and names must be unique workbook-wide.
         sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
         from wbkit import excel_tables
+        from wbkit import freeze
         taken: set[str] = set()
         n_tables = sum(len(excel_tables(ws, taken)) for ws in wb.worksheets)
+        # A tab holding one table freezes its header with the band; the tables were just
+        # rebuilt, so the pane is set again from them (a tab copied cell by cell may
+        # arrive with either pane).
+        for ws in wb.worksheets:
+            if ws.freeze_panes in ("B4", "B5"):
+                freeze(ws)
         # openpyxl saves every formula with an empty result, and a workbook assembled by
         # copying tabs arrives with none: every formula's result is computed, the Exec
         # Summary's new references and § 8's included, and cached.
@@ -832,17 +951,22 @@ def main() -> int:
         wb.save(a.workbook)
         fx.cache_results(a.workbook, results)
 
-    ledgers = (SOURCES, EVIDENCE)
-    up = sum(1 for at, t in targets.items() if t[0] in ledgers and at[0] not in ledgers)
+    ledgers = (SOURCES, TABLES, CONSTANTS, EVIDENCE)
+    up = sum(1 for at, t in targets.items()
+             if t[0] in ledgers and at[0] not in ledgers and at not in figure_cells)
     back = sum(1 for at, t in targets.items() if at[0] in ledgers and t[0] not in ledgers)
     rep = {"workbook": str(a.workbook), "ids_seen": len(tokens),
            "links": len(targets), "to_ledgers": up, "back_from_ledgers": back,
            "family_links": fam, "navigation": nav, "walk_amounts": len(walk),
+           "table_links": tables_links,
            "unmatched_walk_amounts": [{"cell": c, "row": l, "column": h}
                                       for c, l, h in missed],
            "match_lines": len(matches),
            "tables": 0 if a.dry_run else n_tables,
-           "other": len(targets) - up - back - nav - len(walk) - len(matches),
+           "copy_links": len(copies), "figure_links": len(figure_cells),
+           "other": len(targets) - up - back - nav - len(walk) - len(matches) - len(copies)
+                    - tables_links
+                    - len(figure_cells),
            "dead_ends": sorted(dead), "internal_refs": sorted(internal),
            "dry_run": a.dry_run, **live_rep}
     if a.json:
@@ -852,7 +976,9 @@ def main() -> int:
     print(f"{a.workbook.name}: {verb} {len(targets)} links over {len(tokens)} ids — "
           f"{up} to {SOURCES}/{EVIDENCE}, {back} back out, {fam} family stems, "
           f"{rep['other'] - fam} to stated homes, {nav} check-tab navigation, "
-          f"{len(walk)} {EXEC} amounts, {len(matches)} match-summary lines.")
+          f"{len(walk)} {EXEC} amounts, {len(matches)} match-summary lines, "
+          f"{len(copies)} copies, {len(figure_cells)} figures to their {SOURCES} rows or supporting tables, "
+          f"{tables_links} reads to their {TABLES} or {CONSTANTS} rows.")
     if not a.dry_run:
         print(f"  live arithmetic: {live_rep['copies_wired']} copies wired by the cells maps, "
               f"{live_rep['copies_retrofitted']} copies retrofitted by value, "

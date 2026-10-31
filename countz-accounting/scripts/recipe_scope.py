@@ -2,7 +2,7 @@
 """The run's scope: which of a recipe's families it executes (PLAYBOOK_RECIPES.md § Ask
 what to run).
 
-    recipe_scope.py ask [<recipe.md>] [--suggest <picks>]   # no path: headers on stdin
+    recipe_scope.py ask [<recipe.md>] [--suggest <picks>] [--recipe <name>]   # no path: headers on stdin
     recipe_scope.py resolve <recipe.md> <picks>
 
 `ask` needs only the recipe's `### <F><n> — <title> (kind ..., ...)` header lines: the
@@ -10,8 +10,9 @@ relay pipes those from the body it was served, so nothing is written to disk bef
 user picks. It prints:
 
 - between `SHOW:` and `END`, the message the relay sends: the recipe's steps as an
-  overview, one numbered row per family with its title (`recipe_format.plain_title`),
-  then the prompt under the table. Without `--suggest` it asks what to run — *run 5,
+  overview, one numbered row per family with its title (`recipe_format.plain_title`)
+  and its estimated time and cost, the estimate for the plan, extraction and report
+  every run includes and for all steps together, then the prompt under the table. Without `--suggest` it asks what to run — *run 5,
   6* or *run all*. With `--suggest <picks>` (family ids or row numbers, as `resolve`
   reads them: the steps the user's request bears on) it proposes them by row number —
   *Based on your request, steps 5, 6 are relevant, shall we run them?*
@@ -20,17 +21,24 @@ user picks. It prints:
 
 No family id reaches the user.
 
+The estimates come from `spend_model.pick_estimates`: each family's median over the
+recipe's earlier runs, or the model where no earlier run covered it. `--recipe` names
+the recipe whose history applies; a recipe path supplies it from its frontmatter. Where
+the model file is missing or unreadable, the table carries no estimate columns.
+
 `resolve` reads `<picks>` — `all`, or row numbers and family ids, comma- or
 space-separated (`4,5`, `c4 c5`), a leading `run` ignored (`run 5, 6`) — and prints `SCOPE:\t<ids>`: the picked families and
 every family they read from, transitively (`recipe_format.scope_closure`), or `all` when
 that is every family. `SAY:` is the line the relay puts to the user, naming in plain
-words what runs and what was added because a picked step depends on it. `setup_run.py
+words what runs, what was added because a picked step depends on it, and the estimated
+cost and elapsed time of that scope. `setup_run.py
 --scope <picks>` records the same resolution in `run.json.inputs.scope`.
 
 Stdlib only. Exit 0; 2 on an unreadable recipe or a pick naming no row.
 """
 from __future__ import annotations
 
+import json
 import pathlib
 import re
 import sys
@@ -70,14 +78,47 @@ def resolve(fams: list[dict], picks: str) -> dict | None:
             "added": [i for i in families if i not in picked]}
 
 
-def say(fams: list[dict], scope: dict | None) -> str:
+def estimates(fams: list[dict], recipe: str | None) -> dict | None:
+    """Each family's estimated cost and minutes before the plan (`spend_model.py`); None
+    when the model cannot be read."""
+    try:
+        import spend_model
+        model = json.loads(spend_model.MODEL.read_text(encoding="utf-8"))
+        return spend_model.pick_estimates(recipe, fams, model)
+    except Exception:          # an estimate never blocks the question
+        return None
+
+
+def recipe_name(path: pathlib.Path) -> str | None:
+    try:
+        return recipe_format.frontmatter(path.read_text(encoding="utf-8")).get("name", "").strip("'\"") or None
+    except OSError:
+        return None
+
+
+def usd(x: float) -> str:
+    return f"${x:,.0f}" if x >= 1 else "under $1"     # DOCTRINE § Number conventions
+
+
+def hm(minutes: float) -> str:
+    m = max(1, round(minutes))
+    return f"{m // 60}h {m % 60:02d}m" if m >= 60 else f"{m}m"
+
+
+def say(fams: list[dict], scope: dict | None, est: dict | None = None) -> str:
     if scope is None:
-        return "This run covers every step of the recipe."
-    title = {f["id"]: recipe_format.plain_title(f["title"]) for f in fams}
-    line = "This run covers: " + "; ".join(title[i] for i in scope["picked"]) + "."
-    if scope["added"]:
-        line += (" Added because the steps you picked depend on them: "
-                 + "; ".join(title[i] for i in scope["added"]) + ".")
+        line = "This run covers every step of the recipe."
+    else:
+        title = {f["id"]: recipe_format.plain_title(f["title"]) for f in fams}
+        line = "This run covers: " + "; ".join(title[i] for i in scope["picked"]) + "."
+        if scope["added"]:
+            line += (" Added because the steps you picked depend on them: "
+                     + "; ".join(title[i] for i in scope["added"]) + ".")
+    if est:
+        import spend_model
+        tot = spend_model.scope_total(est, fams, scope["families"] if scope else None)
+        line += (f" Estimated cost {usd(tot['cost_usd'])}, about "
+                 f"{hm(tot['elapsed_minutes'])} from start to report.")
     return line
 
 
@@ -102,11 +143,30 @@ def suggestion(fams: list[dict], picks: str) -> str:
             f"shall we run them?")
 
 
-def table(fams: list[dict], suggest: str | None = None) -> list[str]:
-    rows = [HEAD, "", "| # | Step |", "|--:|---|"]
-    rows += [f"| {n} | {recipe_format.plain_title(f['title'])} |"
-             for n, f in enumerate(fams, 1)]
-    return rows + ["", suggestion(fams, suggest) if suggest else PROMPT]
+def table(fams: list[dict], suggest: str | None = None, est: dict | None = None) -> list[str]:
+    prompt = ["", suggestion(fams, suggest) if suggest else PROMPT]
+    if not est:
+        rows = [HEAD, "", "| # | Step |", "|--:|---|"]
+        rows += [f"| {n} | {recipe_format.plain_title(f['title'])} |"
+                 for n, f in enumerate(fams, 1)]
+        return rows + prompt
+    import spend_model
+    fe = est["families"]
+    rows = [HEAD, "", "| # | Step | Time | Cost |", "|--:|---|--:|--:|"]
+    rows += [f"| {n} | {recipe_format.plain_title(f['title'])} | {hm(fe[f['id']]['minutes'])} "
+             f"| {usd(fe[f['id']]['cost_usd'])} |" for n, f in enumerate(fams, 1)]
+    over, full = est["overhead"], spend_model.scope_total(est, fams, None)
+    basis = (f"from {est['runs']} earlier runs of this analysis" if est["runs"]
+             else "from earlier runs of other analyses")
+    if est["runs"] and any(v["source"] == "model" for v in fe.values()):
+        basis += "; a step none of them ran is priced from its kind"
+    notes = [f"Every run also includes the plan, the data extraction and the report: about "
+             f"{hm(over['minutes'])} and {usd(over['cost_usd'])}. All steps together: about "
+             f"{usd(full['cost_usd'])} and {hm(full['elapsed_minutes'])} from start to report. "
+             f"Steps run side by side, so a run takes less time than its steps' times added up.",
+             f"Estimates at list rates, {basis}. The plan gives a closer figure once it has read "
+             f"your data."]
+    return rows + [""] + notes + prompt
 
 
 def load(path: pathlib.Path | None) -> list[dict]:
@@ -125,17 +185,20 @@ def load(path: pathlib.Path | None) -> list[dict]:
 def main(argv: list[str]) -> int:
     try:
         if argv[:1] == ["ask"]:
-            rest, suggest = argv[1:], None
-            if "--suggest" in rest:
-                i = rest.index("--suggest")
-                if i + 1 >= len(rest):
-                    raise Refuse("--suggest needs the steps to propose")
-                suggest = rest[i + 1]
-                rest = rest[:i] + rest[i + 2:]
+            rest, opts = argv[1:], {}
+            for flag in ("--suggest", "--recipe"):
+                if flag in rest:
+                    i = rest.index(flag)
+                    if i + 1 >= len(rest):
+                        raise Refuse(f"{flag} needs a value")
+                    opts[flag] = rest[i + 1]
+                    rest = rest[:i] + rest[i + 2:]
             if len(rest) > 1:
                 raise Refuse("ask takes one recipe path at most")
-            fams = load(pathlib.Path(rest[0]) if rest else None)
-            shown = table(fams, suggest)
+            path = pathlib.Path(rest[0]) if rest else None
+            fams = load(path)
+            name = opts.get("--recipe") or (recipe_name(path) if path else None)
+            shown = table(fams, opts.get("--suggest"), estimates(fams, name))
             print("SHOW:")
             print("\n".join(shown))
             print("END")
@@ -143,10 +206,11 @@ def main(argv: list[str]) -> int:
                 print(f"KEY:\t{n}\t{f['id']}\t{recipe_format.plain_title(f['title'])}")
             return 0
         if len(argv) == 3 and argv[0] == "resolve":
-            fams = load(pathlib.Path(argv[1]))
+            path = pathlib.Path(argv[1])
+            fams = load(path)
             scope = resolve(fams, argv[2])
             print(f"SCOPE:\t{','.join(scope['families']) if scope else 'all'}")
-            print(f"SAY:\t{say(fams, scope)}")
+            print(f"SAY:\t{say(fams, scope, estimates(fams, recipe_name(path)))}")
             return 0
     except Refuse as exc:
         print(f"recipe_scope: {exc}", file=sys.stderr)

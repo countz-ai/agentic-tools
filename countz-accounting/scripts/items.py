@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
-"""A check's item table (EVIDENCE.md § 5) — `checks/<check>-<table>.csv` and the manifest
+"""A check's item table (EVIDENCE.md § 5) — `checks/<check>-<table>.parquet` and the manifest
 block that records what built it — as one importable module.
 
 Every step that writes item-level work imports this rather than hand-rolling a CSV writer
 and a manifest:
 
     import sys; sys.path.insert(0, "<${CLAUDE_PLUGIN_ROOT}>/scripts")   # the token expanded
-    from items import write_items, read_items, manifest_md
+    from items import write_items, manifest_md
 
-    m = write_items(RUN, "c4_lockbox", "matches", rows,
+    m = write_items(RUN, "c4_lockbox", "matches",
+                    about="One row per deposit or bank line, with how it matched.",
+                    sql='''SELECT deposit_id AS item_id, side, deposit_date AS period, amount,
+                                  'usd' AS unit, class, matched_to, match_pass, note
+                           FROM c4_lockbox.paired''',          # the rows, from SQL
                     extensions=["class", "matched_to", "match_pass", "note"],
                     classes=["deposit_in_transit", "outstanding_payment", "bank_only",
                              "book_only", "matched"],          # the recipe's vocabulary
@@ -16,7 +20,7 @@ and a manifest:
                     citations={"book": ["E.c4.gl_cash"], "bank": ["E.c4.bank_lines"]},
                     closes="F.c4.unreconciled.fy2025")
     record_md += manifest_md(m)                 # the hop from the table to the ledger
-    rows = read_items(RUN, "c4_lockbox", "matches")            # a downstream check reads it
+    # a downstream check reads it in SQL as c4_lockbox.matches
 
 **One core, the same in every check.** Every row carries `item_id` (unique in the
 table) and `side` (which record the item sits on). `period` (a period key, EVIDENCE.md
@@ -26,9 +30,12 @@ currencies states each row's) are always columns but may be empty where the item
 none (e.g. a roster member with no amount); `amount` and `unit` are filled together or
 not at all. Everything else is an **extension**, declared
 by name when the table is written; a column the call did not declare is refused, and a
-declared one missing from a row is written empty. Every cell is written as text (a float
-as its shortest round-trip form, numpy scalars included) and read back as text, except
-`amount`, read back as a float.
+declared one missing from a row is written empty. `write_items` writes
+`checks/<check>-<name>.parquet` with each column typed as the rows gave it (all ints an
+integer, all numbers a float, all dates a date, anything else text) and, in its metadata,
+the manifest and, for a table written from `sql=`, its statement; SQL reads it as
+`<check>.<name>` (`scripts/sql.py`). `read_items` returns every cell as text (a float as
+its shortest round-trip form), except `amount`, a float.
 
 **The path is unambiguous.** `check` is a check id (`check_playbook.CHECK_ID`:
 `[a-z0-9][a-z0-9_]*`, no `-`) and the table name a lower-case slug
@@ -56,15 +63,13 @@ FX-translated or allocated item keeps the figure it closes to) and each total is
 correctly rounded sum of those floats (`math.fsum`); only `manifest_md` rounds, for
 display.
 
-Stdlib and sibling modules only, except `read_items(..., frame=True)`,
-which returns a polars DataFrame.
+Stdlib, sibling modules and polars, which writes and reads the parquet;
+`read_items(..., frame=True)` returns a polars DataFrame.
 """
 from __future__ import annotations
 
-import csv
 import datetime
 import decimal
-import io
 import math
 import os
 import pathlib
@@ -93,7 +98,7 @@ class ItemsError(ValueError):
 
 
 def table_path(run_dir, check: str, name: str) -> pathlib.Path:
-    """`checks/<check>-<name>.csv` under the run directory. `check` must be a check id
+    """`checks/<check>-<name>.parquet` under the run directory. `check` must be a check id
     (`[a-z0-9][a-z0-9_]*`, no `-`) and `name` a lower-case slug (`[a-z0-9][a-z0-9_-]*`),
     each the whole string; anything else is refused."""
     if not isinstance(check, str) or not CHECK_ID.fullmatch(check):
@@ -102,7 +107,7 @@ def table_path(run_dir, check: str, name: str) -> pathlib.Path:
     if not isinstance(name, str) or not TABLE.fullmatch(name):
         raise ItemsError(f"table {name!r}: a lower-case slug, [a-z0-9][a-z0-9_-]* - no "
                          f"spaces, path separators or upper case")
-    return pathlib.Path(run_dir) / "checks" / f"{check}-{name}.csv"
+    return pathlib.Path(run_dir) / "checks" / f"{check}-{name}.parquet"
 
 
 def _rows(rows) -> list[dict]:
@@ -264,6 +269,48 @@ def _cell(v) -> str:
     return "" if v is None else repr(float(v)) if isinstance(v, float) else str(v)
 
 
+def _column_type(values: list):
+    """The polars dtype every value of one column fits, and the values as that type holds
+    them; text where they disagree."""
+    import polars as pl
+    vals = [None if v is None or v == "" else _scalar(v) for v in values]
+    got = [v for v in vals if v is not None]
+    if got and all(isinstance(v, bool) for v in got):
+        return pl.Boolean, vals
+    if got and all(isinstance(v, int) and not isinstance(v, bool) for v in got):
+        return pl.Int64, vals
+    if got and all(isinstance(v, (int, float, decimal.Decimal)) and not isinstance(v, bool)
+                   for v in got):
+        return pl.Float64, [None if v is None else float(v) for v in vals]
+    if got and all(isinstance(v, datetime.datetime) for v in got):
+        return pl.Datetime, vals
+    if got and all(isinstance(v, datetime.date) and not isinstance(v, datetime.datetime)
+                   for v in got):
+        return pl.Date, vals
+    return pl.String, [None if v is None else _cell(v) for v in vals]
+
+
+def _write_typed(path: pathlib.Path, columns: list[str], rows: list[dict], meta: dict) -> None:
+    """The item table as a typed parquet holding `meta`, which SQL reads."""
+    import json
+    import polars as pl
+    data, schema = {}, {}
+    for c in columns:
+        dtype, vals = _column_type([r.get(c) for r in rows])
+        if c == "amount":
+            dtype, vals = pl.Float64, [r.get(c) for r in rows]
+        data[c], schema[c] = vals, dtype
+    fd, tmpname = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    os.close(fd)
+    tmp = pathlib.Path(tmpname)
+    try:
+        pl.DataFrame(data, schema=schema).write_parquet(
+            tmp, metadata={"countz": json.dumps(meta, ensure_ascii=False, default=str)})
+        tmp.replace(path)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
 def _totals(rows: list[dict]) -> tuple[dict, dict]:
     """Rows per side and `{side: {unit: total}}`, each total the correctly rounded sum of
     the amounts' floats (`fsum`), never rounded further."""
@@ -279,13 +326,18 @@ def _totals(rows: list[dict]) -> tuple[dict, dict]:
     return counts, totals
 
 
-def write_items(run_dir, check: str, name: str, rows, *, extensions=(), classes=None,
+def write_items(run_dir, check: str, name: str, rows=None, *, about: str | None = None,
+                sql: str | None = None, extensions=(), classes=None,
                 class_column: str = "class", sides=None, keys=None, citations=None,
                 closes=None) -> dict:
-    """Write `checks/<check>-<name>.csv` atomically and return its manifest (EVIDENCE.md
+    """Write `checks/<check>-<name>.parquet` atomically and return its manifest (EVIDENCE.md
     § 5): `table`, `columns`, `row_count`, `sides` (rows per side), `control_total`
     (`{side: {unit: total}}`), and `keys`, `citations` (`{side: [E. ids]}`) and `closes`
-    (what the table closes to: a figure id or a sentence) as the call states them.
+    (what the table closes to: a figure id or a sentence) as the call states them. `about`
+    is one sentence on what a row of the table is, shown on the workbook's Tables tab. Give the
+    rows as `sql`, one SELECT over the run's tables (scripts/sql.py), and the statement is
+    recorded in the parquet and the manifest. `rows` (a list of dicts or a polars
+    DataFrame) writes the rows as given, and `sql.py verify` fails the table.
     Refuses, writing nothing, on a check id or table name outside their grammars
     (`table_path`), an undeclared column, an empty `item_id` or `side`, a repeated
     `item_id` (as written), an amount that is not a number a float holds as given, an
@@ -293,8 +345,16 @@ def write_items(run_dir, check: str, name: str, rows, *, extensions=(), classes=
     period that is neither a period key nor an ISO date, a vocabulary that is not a list
     of words, a side outside `sides`, a class outside `classes`, `keys` that are not a
     list of names, `citations` that are not `{side: [E. ids]}` (a side outside `sides`
-    included), or a `closes` that is not a non-empty string."""
+    included), a `closes` that is not a non-empty string, or no `about`."""
     path = table_path(run_dir, check, name)
+    if (rows is None) == (sql is None):
+        raise ItemsError("give exactly one of `sql` (the SELECT the rows come from) and `rows`")
+    reads = None
+    if sql is not None:
+        import sql as sqlmod                       # sibling: the run's tables in SQL
+        d = sqlmod.db(run_dir)
+        reads = d.lineage(sql, recorded=True)
+        rows = d.frame(sql)
     rows = _rows(rows)
     columns = _check(rows, extensions, classes, class_column, sides)
     if keys is not None:
@@ -325,30 +385,30 @@ def write_items(run_dir, check: str, name: str, rows, *, extensions=(), classes=
         if classes is not None and _empty(c.get(class_column)):
             c[class_column] = None                 # an empty class is written empty
         clean.append(c)
-    buf = io.StringIO()
-    w = csv.DictWriter(buf, fieldnames=columns, lineterminator="\n")
-    w.writeheader()
-    for c in clean:
-        w.writerow({k: _cell(v) for k, v in c.items()})
+    if not isinstance(about, str) or not about.strip():
+        raise ItemsError("give `about`: one sentence on what a row of the table is "
+                         "('One row per ...')")
     path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmpname = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
-    os.close(fd)
-    tmp = pathlib.Path(tmpname)
-    try:
-        tmp.write_text(buf.getvalue(), encoding="utf-8")
-        tmp.replace(path)
-    finally:
-        tmp.unlink(missing_ok=True)
     counts, totals = _totals(clean)
     rel = path.relative_to(pathlib.Path(run_dir)).as_posix()
-    return {"table": rel, "columns": columns, "row_count": len(clean), "sides": counts,
-            "control_total": totals, "keys": list(keys or []),
-            "citations": {s: list(ids) for s, ids in cites.items()}, "closes": closes}
+    manifest = {"table": rel, "columns": columns, "row_count": len(clean), "sides": counts,
+                "control_total": totals, "keys": list(keys or []),
+                "citations": {s: list(ids) for s, ids in cites.items()}, "closes": closes,
+                "sql": sql.strip() if sql else None}
+    # the manifest is kept in the parquet, where render.py's {manifests} reads it
+    meta = {"schema": "countz-accounting/table@1", "id": f"{check}.{name}", "check": check,
+            "name": name, "kind": "item", "description": about.strip(),
+            "sql": manifest["sql"], "reads": reads,
+            "row_count": len(clean), "manifest": manifest}
+    _write_typed(path, columns, clean, meta)
+    import sql as sqlmod
+    sqlmod.write_catalog(run_dir)
+    return manifest
 
 
 def read_items(run_dir, check: str, name: str, *, extensions=None, classes=None,
                class_column: str = "class", sides=None, frame: bool = False):
-    """The rows of `checks/<check>-<name>.csv`, validated as `write_items` writes them:
+    """The rows of `checks/<check>-<name>.parquet`, validated as `write_items` writes them:
     the core columns present once each, `item_id` and `side` filled, `item_id` unique,
     amounts numbers, periods period keys or ISO dates. `extensions`, when given, must be
     the table's other columns (in any order, each once); `classes` / `sides` re-check the
@@ -358,12 +418,9 @@ def read_items(run_dir, check: str, name: str, *, extensions=None, classes=None,
     path = table_path(run_dir, check, name)
     if not path.is_file():
         raise ItemsError(f"{path}: no such item table")
-    with path.open(encoding="utf-8", newline="") as fh:
-        rd = csv.DictReader(fh)
-        header = list(rd.fieldnames or [])
-        raw = list(rd)
-    if len(set(header)) != len(header):
-        raise ItemsError(f"{path.name}: the header repeats a column: {header}")
+    import polars as pl
+    table = pl.read_parquet(path)
+    header = table.columns
     missing = [c for c in CORE if c not in header]
     if missing:
         raise ItemsError(f"{path.name}: core column(s) {missing} missing - not an item table")
@@ -372,13 +429,13 @@ def read_items(run_dir, check: str, name: str, *, extensions=None, classes=None,
         want = list(extensions)
         if len(set(want)) != len(want) or set(want) != set(ext):
             raise ItemsError(f"{path.name}: extensions {ext} are not the declared {want}")
-    rows = [{k: (v if v != "" else None) for k, v in r.items()} for r in raw]
+    rows = [{k: v if v is None or k == "amount" else _cell(v) for k, v in r.items()}
+            for r in table.iter_rows(named=True)]
     _check(rows, ext, classes, class_column, sides)
     for i, r in enumerate(rows, 1):
         r["amount"] = _amount(r["amount"], r["unit"], f"{path.name} row {i}")
         r["unit"] = None if r["amount"] is None else r["unit"].lower()
     if frame:
-        import polars as pl
         return pl.DataFrame(rows, schema={c: pl.Float64 if c == "amount" else pl.String
                                           for c in header})
     return rows
@@ -400,4 +457,6 @@ def manifest_md(m: dict) -> str:
                      f"cites {cites}")
     if m.get("closes"):
         lines.append(f"- Closes to: {m['closes']}")
+    if m.get("sql"):
+        lines.append("- Statement:\n\n```sql\n" + m["sql"] + "\n```")
     return "\n".join(lines) + "\n"

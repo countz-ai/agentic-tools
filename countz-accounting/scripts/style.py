@@ -91,6 +91,9 @@ for _code in (
         "UZS VED VES VUV WST XAF XCD XCG XOF XPF YER ZMW ZWG").split():
     CURRENCIES.setdefault(_code.lower(), _c(_code, "", _ISO_MINOR.get(_code, 2)))
 
+# The units that are not a currency, for a figure (figures.py) and a cached column (cache.py).
+OTHER_UNITS = ("pct", "count", "ratio", "days", "rate", "fx_rate", "quantity")
+
 
 def is_money(unit: str | None) -> bool:
     return (unit or "").lower() in CURRENCIES
@@ -243,7 +246,9 @@ def span_label(first: tuple[int, int], last: tuple[int, int]) -> str:
 
 
 # --- reading back: the token grammar the gates use ------------------------------------
-NUM = r"\d[\d,]*(?:\.\d+)?"
+# A number ends in a digit: the comma after `C10007` or `2025` in `C10007, days` is the
+# sentence's, not a thousands separator.
+NUM = r"\d(?:[\d,]*\d)?(?:\.\d+)?"
 # Read, never written: another way a currency's symbol is spelled.
 _ALIASES = {"US$": "usd"}
 _SYMBOLS = sorted({c.symbol for c in CURRENCIES.values() if c.symbol} | set(_ALIASES),

@@ -6,13 +6,17 @@ issues and explain the outcome.
 
 ## Source election
 
-Pick the most trustworthy data source, in the following order:
-- audited
-- corroborated (by another source, e.g. tie-out with another source)
-- system_of_record
-- management_confirmed
+When two sources disagree, trust the one higher on this list and raise a question on the
+other:
+- `audited`: a figure an auditor opined on
+- `underlying_document`: what a counterparty, an institution or a signature produced (a
+  bank statement, a contract, an invoice)
+- `system_of_record`: what the accounting, billing or treasury system exported
+- `management_prepared`: a schedule, reconciliation or memo the company's people
+  assembled
 
-When 2 data sources don't agree, pick the most trustworthy one, and raise question on the other.
+A record tested against a higher class (re-performed, agreed, vouched) ranks with that
+class.
 
 ## Working with numbers
 

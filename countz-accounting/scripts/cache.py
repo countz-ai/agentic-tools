@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""The run's cache of parsed tables: `<run_dir>/cache/<id>.parquet` and the manifest that
-says where each came from. Bookkeeping only — this module parses no client file.
+"""The run's cache of parsed tables: `<run_dir>/cache/<id>.parquet`, each file holding its
+table's metadata - what one row is, where in which data-room file it was read, and each
+column's description, unit, location and parse. Bookkeeping only: this module parses no
+client file.
 
 The `extract` step (skills/check-extract/SKILL.md) samples each file with peek.py and
 writes its own script, `workpapers/extract-<check>.py`, that parses every table the
-downstream steps need out of it — stacked, side by side, several per sheet — once. The
-script hands each parsed table here with the coordinates it read it at:
+downstream steps need out of it, once. The script hands each parsed table here with the
+coordinates it read it at:
 
     import sys; sys.path.insert(0, "<${CLAUDE_PLUGIN_ROOT}>/scripts")   # the token expanded
     import cache
@@ -13,50 +15,49 @@ script hands each parsed table here with the coordinates it read it at:
     cache.write(RUN, "invoice_lines_fy2025", df,
                 file="3 Revenue/3.5 Invoices/Invoice Lines FY2025.csv", source="dataroom",
                 file_role="system_export", header_at="A5", rows="6:1204",
-                columns={"customer_id": {"at": "A", "parse": "as written, kept as text"},
-                         "invoice_amount": {"at": "D",
-                                            "parse": "decimal comma, thousands dot"}},
+                what="the FY2025 invoice lines", grain="one invoice line",
+                columns={"customer_id": {"at": "A", "parse": "as written, kept as text",
+                                         "description": "the billed customer"},
+                         "invoice_amount": {"at": "D", "parse": "decimal comma, thousands dot",
+                                            "description": "line amount before tax",
+                                            "unit": "usd"}},
                 control="invoice_amount",
                 stated={"value": 1234567.89, "where": "D1206 (Total)"},
-                script=RUN / "workpapers/extract-x0.py",
-                what="the invoice lines, header at row 5")     # the plan's words
+                script=RUN / "workpapers/extract-x0.py")
     cache.note(RUN, "3 Revenue/Summary.xlsx", source="dataroom",
                where="Summary!G24:K41", what="a KPI table no step reads")
 
-`write` refuses what it cannot record exactly, before it touches the parquet or the
-manifest: an id that is not a slug (`[a-z0-9][a-z0-9_-]*`, the whole
-string), a `columns` map that is not exactly the frame's columns each with `at` and
-`parse`, an Object-typed column (parquet holds typed columns only), a file that does not
+Every column has `at`, `parse` and `description`; a numeric column also its `unit` (a
+currency code, or one of OTHER_UNITS). A column in a currency is stored as
+DECIMAL(18, s), `s` the fewest decimals that hold every value exactly (the currency's
+minor units, 4 or 6); one that needs more is refused.
+
+`write` refuses what it cannot record exactly, before it touches the parquet: an id that
+is not a slug (`[a-z0-9][a-z0-9_-]*`, the whole string), a `columns` map that is not
+exactly the frame's columns each as above, an Object-typed column, a file that does not
 resolve (`resolve_file`), a file_role outside FILE_ROLES, a control column that
-`control_value` refuses, a `stated` or `what` of the wrong form. `header_at` (`"B4"`,
-`"line 5"`, `"p2:L3"`, `"none - columns by position"`) and `rows` (`"5:40,42:1203"`,
-`"p2:L7-15,p3:L4-12"`) are recorded as the caller states them; `sheet`, when given, is a
-non-empty string. A `stated` total the document prints is recorded beside the computed
-control total with `agrees` (the two differ by no more than its `tolerance`, 0.005 unless
-the call states one). A disagreement is recorded for the step to rule on. The source's
-sha256 and bytes are read when `write` is called: parse and write a table with the file
-unchanged in between.
+`control_value` refuses, a `stated`, `what` or `grain` of the wrong form. `header_at`
+(`"B4"`, `"line 5"`, `"p2:L3"`, `"none - columns by position"`) and `rows`
+(`"5:40,42:1203"`, `"p2:L7-15,p3:L4-12"`) are recorded as the caller states them; `sheet`,
+when given, is a non-empty string. A `stated` total the document prints is recorded
+beside the computed control total with `agrees` (the two differ by no more than its
+`tolerance`, 0.005 unless the call states one); a disagreement is recorded for the step
+to rule on. The source's sha256 and bytes are read when `write` is called: parse and write
+a table with the file unchanged in between. Each write replaces the parquet atomically and
+rewrites the run's `catalog.sql` (scripts/sql.py).
 
 **The control total** is exact or refused (`control_value`). A null, NaN or infinite cell
 in the control column is refused. A blank that means zero is filled by the script
 (`fill_null(0)`) and said in the column's `parse`.
 
-**Concurrent writers.** `write` and `note` hold an exclusive lock
-(`cache/.manifest.lock`, fcntl, POSIX) while they replace the parquet and rewrite the
-manifest, so concurrent extract scripts never lose an entry. Every read checks the
-manifest's `schema` and refuses another version's.
-
-Readers: `manifest`, `entry`, `read` (polars DataFrame), `scan` (LazyFrame),
-`control_value`. `verify` is the exact re-check: the source file still exists with the
-cached sha256 and byte count, the parquet still has the sha256 recorded when it was
-written, and it holds the recorded row count. A file or parquet that cannot be read is
-reported as a disagreement.
+Readers: `manifest` (every table's metadata), `entry`, `read` (polars DataFrame), `scan`
+(LazyFrame), `control_value`. `verify` is the exact re-check: the source file still has the
+recorded sha256 and byte count, and the parquet still holds the rows it was written with.
 
     cache.py <run_dir> --show              one line per id
     cache.py <run_dir> --verify [id]       exit 3 on a disagreement
 
-Stdlib, and polars (imported when a frame is read or
-written) — run as `uv run --project ${CLAUDE_PLUGIN_ROOT} python3`.
+Run as `uv run --project ${CLAUDE_PLUGIN_ROOT} python3`.
 """
 from __future__ import annotations
 
@@ -73,10 +74,14 @@ import re
 import sys
 import tempfile
 
-SCHEMA = "countz-accounting/cache@3"
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import style  # noqa: E402  sibling: currencies and units
+
+SCHEMA = "countz-accounting/cache@4"
 CACHE_DIR = "cache"
-MANIFEST = "manifest.json"
-LOCK = ".manifest.lock"
+META = "countz"                                    # the parquet's key-value metadata key
+NOTES = "not_extracted.json"                       # tables seen on a file and not parsed
+LOCK = ".notes.lock"
 SLUG = re.compile(r"[a-z0-9][a-z0-9_-]*")          # matched with fullmatch
 STATED_TOLERANCE = 0.005
 # EVIDENCE.md § 1: who produced a data-room file. evidence.py adds `run_artifact` for the
@@ -84,6 +89,7 @@ STATED_TOLERANCE = 0.005
 FILE_ROLES = frozenset({"system_export", "management_prepared", "bank_statement",
                         "policy_document", "correspondence", "unknown"})
 NO_ROWS = "none - no data rows"
+COLUMN_UNITS = tuple(style.CURRENCIES) + style.OTHER_UNITS
 
 
 def _pl():
@@ -105,7 +111,15 @@ def sha256(path: pathlib.Path) -> str:
 
 
 def _digest(path: pathlib.Path) -> tuple[str, int]:
-    """(sha256, bytes) of one read of the file."""
+    """(sha256, bytes) of one read of the file. For a folder: the sha256 of each file's
+    relative path and sha256, in path order, and the bytes of all its files."""
+    if path.is_dir():
+        h, n = hashlib.sha256(), 0
+        for f in sorted(x for x in path.rglob("*") if x.is_file()):
+            d, b = _digest(f)
+            h.update(f"{f.relative_to(path).as_posix()}\0{d}\n".encode())
+            n += b
+        return h.hexdigest(), n
     h, n = hashlib.sha256(), 0
     with open(path, "rb") as fh:
         for chunk in iter(lambda: fh.read(1 << 20), b""):
@@ -134,8 +148,7 @@ def _atomic(path: pathlib.Path, text: str) -> None:
 
 @contextlib.contextmanager
 def _locked(run_dir):
-    """Hold the cache's exclusive lock: one writer at a time reads, changes and saves the
-    manifest (and replaces a parquet with it)."""
+    """Hold the cache's exclusive lock while the not-extracted notes are read and rewritten."""
     import fcntl                                   # POSIX only: macOS and Linux
     p = pathlib.Path(run_dir) / CACHE_DIR / LOCK
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -174,7 +187,8 @@ def _under(p: pathlib.Path, root: pathlib.Path) -> tuple[str, int] | None:
     return None
 
 
-def resolve_file(run_dir, file, source: str | None = None) -> tuple[pathlib.Path, str | None, str]:
+def resolve_file(run_dir, file, source: str | None = None, *,
+                 folder: bool = False) -> tuple[pathlib.Path, str | None, str]:
     """(absolute path, source id, path relative to that source's registered path). `file`
     is relative to the source's registered path, or absolute. An absolute path under a
     registered source — through a symlinked directory or an alias such as `/tmp` for
@@ -184,7 +198,8 @@ def resolve_file(run_dir, file, source: str | None = None) -> tuple[pathlib.Path
     is its name. Refused: no `file`; a `source` not registered in run.json; a relative
     `file` with no `source`, or one that climbs out of its source (`..`); a `file` that
     is not under the `source` named; for a one-file source, a `file` naming another file;
-    a file that does not exist."""
+    a file that does not exist. With `folder`, `file` may be a folder under the source (a
+    table parsed from one row per file)."""
     if file is None or not isinstance(file, (str, os.PathLike)) or not str(file).strip():
         raise ValueError("no `file`")
     raw = pathlib.Path(str(file))
@@ -225,55 +240,55 @@ def resolve_file(run_dir, file, source: str | None = None) -> tuple[pathlib.Path
                 raise ValueError(f"file {str(raw)!r} climbs out of source {sid!r} "
                                  f"({root}); name it from inside the source")
             rel = hit[0]
-    if not p.is_file():
-        raise ValueError(f"file missing: {p}")
+    if not (p.is_file() or folder and p.is_dir()):
+        raise ValueError(f"file missing: {p}" + ("" if folder or not p.is_dir() else
+                         " - it is a folder; a table parsed from its files is cached with "
+                         "the folder as `file`"))
     if sid is not None and not rel:
         rel = p.name                              # the source is this one file
     return p, sid, rel
 
 
-# ---------------------------------------------------------------- the manifest
+# ---------------------------------------------------------------- the metadata
 
-def _manifest_path(run_dir) -> pathlib.Path:
-    return pathlib.Path(run_dir) / CACHE_DIR / MANIFEST
+def metadata(path) -> dict:
+    """The table metadata a cached parquet holds. Refused: a parquet with none, or one
+    written by another version of cache.py."""
+    p = pathlib.Path(path)
+    try:
+        raw = _pl().read_parquet_metadata(p).get(META)
+    except Exception as exc:
+        raise ValueError(f"{p}: not a readable parquet ({str(exc).splitlines()[0]})") from None
+    if raw is None:
+        raise ValueError(f"{p}: holds no table metadata - write it with cache.write")
+    e = json.loads(raw)
+    if e.get("schema") != SCHEMA:
+        raise ValueError(f"{p}: schema {e.get('schema')!r}, not {SCHEMA!r} - written by "
+                         f"another version of cache.py; delete {p.parent} and re-run the "
+                         f"extract step's script")
+    return e
+
+
+def _notes_path(run_dir) -> pathlib.Path:
+    return pathlib.Path(run_dir) / CACHE_DIR / NOTES
 
 
 def manifest(run_dir) -> dict:
-    """The manifest: `files` (one entry per cached id) and `not_extracted`. Refused: a
-    manifest that is not JSON, or whose `schema` is not SCHEMA."""
-    p = _manifest_path(run_dir)
-    if not p.is_file():
-        return {"schema": SCHEMA, "written_at": None, "files": [], "not_extracted": []}
-    try:
-        m = json.loads(p.read_text(encoding="utf-8"))
-    except ValueError as exc:
-        raise ValueError(f"{p}: not a cache manifest ({exc})") from None
-    got = m.get("schema") if isinstance(m, dict) else None
-    if got != SCHEMA:
-        raise ValueError(f"{p}: schema {got!r}, not {SCHEMA!r} - written by another "
-                         f"version of cache.py; delete {p.parent} and re-run the extract "
-                         f"step's script")
-    m.setdefault("files", [])
-    m.setdefault("not_extracted", [])
-    return m
-
-
-def _save(run_dir, man: dict) -> None:
-    man["schema"] = SCHEMA
-    man["written_at"] = _now()
-    man["files"] = sorted(man.get("files", []), key=lambda e: e["id"])
-    _atomic(_manifest_path(run_dir),
-            json.dumps(man, indent=1, ensure_ascii=False, default=str) + "\n")
+    """`files`: every cached table's metadata, by id; `not_extracted`: the notes."""
+    d = pathlib.Path(run_dir) / CACHE_DIR
+    files = [metadata(p) for p in sorted(d.glob("*.parquet"))] if d.is_dir() else []
+    n = _notes_path(run_dir)
+    notes = json.loads(n.read_text(encoding="utf-8")) if n.is_file() else []
+    return {"schema": SCHEMA, "files": files, "not_extracted": notes}
 
 
 def entry(run_dir, id: str) -> dict:
-    """One id's manifest entry; KeyError naming the ids the cache holds."""
-    files = manifest(run_dir).get("files", [])
-    for e in files:
-        if e["id"] == id:
-            return e
-    raise KeyError(f"{id!r} is not in {_manifest_path(run_dir)}; it holds "
-                   f"{[e['id'] for e in files] or 'nothing'}")
+    """One id's metadata; KeyError naming the ids the cache holds."""
+    p = pathlib.Path(run_dir) / CACHE_DIR / f"{id}.parquet"
+    if isinstance(id, str) and SLUG.fullmatch(id) and p.is_file():
+        return metadata(p)
+    held = sorted(x.stem for x in (pathlib.Path(run_dir) / CACHE_DIR).glob("*.parquet"))
+    raise KeyError(f"{id!r} is not in {p.parent}; it holds {held or 'nothing'}")
 
 
 def read(run_dir, id: str):
@@ -282,8 +297,13 @@ def read(run_dir, id: str):
 
 
 def scan(run_dir, id: str):
-    """The cached table as a polars LazyFrame — for a large table read in part."""
+    """The cached table as a polars LazyFrame - for a large table read in part."""
     return _pl().scan_parquet(pathlib.Path(run_dir) / entry(run_dir, id)["parquet"])
+
+
+def content_sha256(df) -> str:
+    """The sha256 of a frame's rows as CSV: what `verify` compares the parquet against."""
+    return hashlib.sha256(df.write_csv().encode("utf-8")).hexdigest()
 
 
 def control_value(df, col: str | None) -> float | int:
@@ -333,10 +353,14 @@ def control_value(df, col: str | None) -> float | int:
 
 # ---------------------------------------------------------------- writing
 
+COLUMN_FORM = ("{\"at\": <a letter, or chars 41-50>, \"parse\": <how its text was read>, "
+               "\"description\": <what it holds>, \"unit\": <a currency code or "
+               + ", ".join(style.OTHER_UNITS) + "; required on a numeric column>}")
+
+
 def _columns(df, columns) -> list[dict]:
     if not isinstance(columns, dict):
-        raise ValueError("`columns` maps each of the frame's columns to "
-                         "{\"at\": <letter or chars 41-50>, \"parse\": <how it was read>}")
+        raise ValueError(f"`columns` maps each of the frame's columns to {COLUMN_FORM}")
     missing = [c for c in df.columns if c not in columns]
     extra = [c for c in columns if c not in df.columns]
     if missing or extra:
@@ -345,16 +369,54 @@ def _columns(df, columns) -> list[dict]:
     out = []
     for c in df.columns:
         spec = columns[c]
-        bad = [k for k in ("at", "parse")
+        bad = [k for k in ("at", "parse", "description")
                if not isinstance(spec, dict) or not isinstance(spec.get(k), str)
                or not spec[k].strip()]
         if bad:
-            raise ValueError(f"column {c!r}: no {' / '.join(bad)} - `at` is where it sits "
-                             f"(a letter, or chars 41-50), `parse` how its text was read "
-                             f"('as written', 'decimal comma, thousands dot', ...)")
+            raise ValueError(f"column {c!r}: no {' / '.join(bad)}; a column is {COLUMN_FORM}")
+        extra_keys = sorted(set(spec) - {"at", "parse", "description", "unit"})
+        if extra_keys:
+            raise ValueError(f"column {c!r}: key(s) {extra_keys}; a column is {COLUMN_FORM}")
+        unit = spec.get("unit")
+        if unit is None and df.schema[c].is_numeric():
+            raise ValueError(f"column {c!r} is numeric and has no `unit`: a currency code or "
+                             f"one of {', '.join(style.OTHER_UNITS)}")
+        if unit is not None and unit not in COLUMN_UNITS:
+            raise ValueError(f"column {c!r}: unit {unit!r} - a currency code (scripts/style.py) "
+                             f"or one of {', '.join(style.OTHER_UNITS)}")
+        if unit is not None and not df.schema[c].is_numeric():
+            raise ValueError(f"column {c!r} is {df.schema[c]}, not numeric, so it takes no "
+                             f"`unit`; cast it to the number it holds")
         out.append({"name": c, "at": spec["at"].strip(), "dtype": str(df.schema[c]),
-                    "parse": spec["parse"].strip()})
+                    "parse": spec["parse"].strip(), "description": spec["description"].strip(),
+                    "unit": unit})
     return out
+
+
+def _money(df, cols: list[dict]):
+    """Each currency column as DECIMAL(18, s): `s` the fewest of the currency's minor units,
+    4 and 6 that hold every value exactly. Refused: a value that needs more decimals."""
+    pl = _pl()
+    for c in cols:
+        if not style.is_money(c["unit"]):
+            continue
+        name, s = c["name"], df[c["name"]]
+        if isinstance(s.dtype, pl.Decimal) and (s.dtype.scale or 0) <= 6 \
+                and (s.dtype.precision or 38) <= 18:
+            continue
+        vals = s.cast(pl.Float64)
+        for scale in sorted({style.minor_units(c["unit"]), 4, 6}):
+            if scale < style.minor_units(c["unit"]):
+                continue
+            off = (vals - vals.round(scale)).abs().max()
+            if off is None or off <= 1e-9:
+                break
+        else:
+            raise ValueError(f"column {name!r} ({c['unit']}) holds a value with more than 6 "
+                             f"decimals; round it in the parse and say so in `parse`")
+        df = df.with_columns(vals.round(scale).cast(pl.Decimal(18, scale)).alias(name))
+        c["dtype"] = str(df.schema[name])
+    return df
 
 
 STATED_FORM = ("`stated` is {\"value\": <the total the document states>, \"where\": "
@@ -402,18 +464,20 @@ def _stated(stated, computed) -> dict | None:
 
 
 def write(run_dir, id: str, frame, *, file, source: str | None, file_role: str,
-          header_at: str, rows: str, columns: dict, control: str | None,
-          sheet: str | None = None, stated: dict | None = None, script=None,
-          what: str | None = None) -> dict:
-    """Cache one parsed table as `cache/<id>.parquet` with its manifest entry; returns the
-    entry. An id written again is replaced. Everything is validated first, so a refused
-    call changes nothing; then, under the cache's lock, the parquet is replaced and the
-    manifest rewritten, each atomically. The entry records
-    the parquet's own sha256 (`parquet_sha256`) for `verify`."""
+          header_at: str, rows: str, columns: dict, control: str | None, what: str,
+          grain: str, sheet: str | None = None, stated: dict | None = None,
+          script=None) -> dict:
+    """Cache one parsed table as `cache/<id>.parquet` with its metadata; returns the
+    metadata. `what` describes the table, `grain` says what one row is. An id written
+    again is replaced. Everything is validated first, so a refused call changes nothing;
+    then the parquet is replaced atomically and the run's catalog rewritten."""
     pl = _pl()
     run_dir = pathlib.Path(run_dir).resolve()
     if not isinstance(id, str) or not SLUG.fullmatch(id):
         raise ValueError(f"id {id!r} is not a slug ([a-z0-9][a-z0-9_-]*)")
+    if id == "constants":
+        raise ValueError("id `constants` is room.constants, the run's constants; name the "
+                         "table another way")
     if file_role not in FILE_ROLES:
         raise ValueError(f"file_role {file_role!r}; one of {', '.join(sorted(FILE_ROLES))}")
     if hasattr(frame, "collect"):
@@ -426,8 +490,13 @@ def write(run_dir, id: str, frame, *, file, source: str | None, file_role: str,
     if objects:
         raise ValueError(f"{id}: column(s) {objects} are Object-typed; a parquet holds typed "
                          f"columns only - cast each to the type it holds")
-    path, sid, rel = resolve_file(run_dir, file, source)
+    for k, v in (("what", what), ("grain", grain)):
+        if not isinstance(v, str) or not v.strip():
+            raise ValueError(f"{id}: `{k}` is required - `what` describes the table, "
+                             f"`grain` says what one row is (\"one invoice line\")")
+    path, sid, rel = resolve_file(run_dir, file, source, folder=True)
     cols = _columns(frame, columns)
+    frame = _money(frame, cols)
     if not isinstance(header_at, str) or not header_at.strip():
         raise ValueError("`header_at` is where the header sits: a cell (\"B4\"), \"line 5\", "
                          "\"p2:L3\" or \"none - columns by position\"")
@@ -437,8 +506,6 @@ def write(run_dir, id: str, frame, *, file, source: str | None, file_role: str,
     if sheet is not None and (not isinstance(sheet, str) or not sheet.strip()):
         raise ValueError(f"{id}: `sheet` is the sheet's name as the workbook spells it, "
                          f"got {sheet!r}")
-    if what is not None and (not isinstance(what, str) or not what.strip()):
-        raise ValueError(f"{id}: `what` is the plan's words for the table, got {what!r}")
     if control is not None and control not in frame.columns:
         raise ValueError(f"control column {control!r} is not in the frame; it has "
                          f"{frame.columns}")
@@ -451,27 +518,25 @@ def write(run_dir, id: str, frame, *, file, source: str | None, file_role: str,
         except ValueError:
             script = str(sp)
     digest, size = _digest(path)
+    e = {"schema": SCHEMA, "id": id, "what": what.strip(), "grain": grain.strip(),
+         "file": rel, "source": sid, "file_role": file_role, "sha256": digest, "bytes": size,
+         "sheet": sheet, "header_at": header_at.strip(),
+         "rows": rows.strip() if isinstance(rows, str) and rows.strip() else NO_ROWS,
+         "columns": cols, "row_count": frame.height,
+         "control_total": {"column": control, "value": total}}
+    if st is not None:
+        e["stated"] = st
+    e.update({"parquet": f"{CACHE_DIR}/{id}.parquet", "content_sha256": content_sha256(frame),
+              "script": script, "written_at": _now()})
     out = run_dir / CACHE_DIR / f"{id}.parquet"
     tmp = _tmp_beside(out)
     try:
-        frame.write_parquet(tmp)
-        e = {"id": id, "what": what, "file": rel, "source": sid, "file_role": file_role,
-             "sha256": digest, "bytes": size, "sheet": sheet,
-             "header_at": header_at.strip(),
-             "rows": rows.strip() if isinstance(rows, str) and rows.strip() else NO_ROWS,
-             "columns": cols, "row_count": frame.height,
-             "control_total": {"column": control, "value": total}}
-        if st is not None:
-            e["stated"] = st
-        e.update({"parquet": f"{CACHE_DIR}/{id}.parquet", "parquet_sha256": sha256(tmp),
-                  "script": script, "written_at": _now()})
-        with _locked(run_dir):
-            man = manifest(run_dir)                # refuses a foreign manifest first
-            tmp.replace(out)
-            man["files"] = [x for x in man["files"] if x["id"] != id] + [e]
-            _save(run_dir, man)
+        frame.write_parquet(tmp, metadata={META: json.dumps(e, ensure_ascii=False, default=str)})
+        tmp.replace(out)
     finally:
         tmp.unlink(missing_ok=True)
+    import sql                                     # sibling; imports this module
+    sql.write_catalog(run_dir)
     return e
 
 
@@ -486,53 +551,55 @@ def note(run_dir, file, *, where: str, what: str, source: str | None = None) -> 
             raise ValueError(f"`{k}` is required")
     n = {"file": str(file), "source": source, "where": where.strip(), "what": what.strip()}
     with _locked(run_dir):
-        man = manifest(run_dir)
-        man["not_extracted"] = [x for x in man["not_extracted"]
-                                if (x.get("file"), x.get("source"), x.get("where"))
-                                != (n["file"], source, n["where"])] + [n]
-        _save(run_dir, man)
+        notes = manifest(run_dir)["not_extracted"]
+        notes = [x for x in notes if (x.get("file"), x.get("source"), x.get("where"))
+                 != (n["file"], source, n["where"])] + [n]
+        _atomic(_notes_path(run_dir), json.dumps(notes, indent=1, ensure_ascii=False) + "\n")
     return n
 
 
 # ---------------------------------------------------------------- the exact re-check
 
 def verify(run_dir, id: str | None = None) -> list[dict]:
-    """Per id, `{id, agrees, why}`: the source file exists with the cached sha256 and
-    bytes, the parquet has the sha256 recorded when it was written (so its content is the
-    frame the entry describes), and it holds the recorded row count. Nothing is
-    re-parsed. A source or parquet that cannot be found or read is a disagreement with its
-    reason. `why` is None when it agrees."""
+    """Per id, `{id, agrees, why}`: the source file exists with the recorded sha256 and
+    bytes, and the parquet holds the rows it was written with (their sha256 and count).
+    Nothing is re-parsed. A source or parquet that cannot be found or read is a
+    disagreement with its reason. `why` is None when it agrees."""
     pl = _pl()
     run_dir = pathlib.Path(run_dir).resolve()
-    ents = [entry(run_dir, id)] if id is not None else manifest(run_dir)["files"]
+    if id is not None:
+        paths = [run_dir / CACHE_DIR / f"{id}.parquet"]
+        if not paths[0].is_file():
+            entry(run_dir, id)                     # the KeyError naming what the cache holds
+    else:
+        paths = sorted((run_dir / CACHE_DIR).glob("*.parquet"))
     out = []
-    for e in ents:
+    for pq in paths:
+        try:
+            e = metadata(pq)
+        except ValueError as exc:
+            out.append({"id": pq.stem, "agrees": False, "why": str(exc)})
+            continue
         why = None
         try:
-            path, _, _ = resolve_file(run_dir, e["file"], e.get("source"))
+            path, _, _ = resolve_file(run_dir, e["file"], e.get("source"), folder=True)
             digest, size = _digest(path)
         except (ValueError, OSError) as exc:
             why = f"the source file: {exc}"
         else:
             if size != e.get("bytes"):
-                why = f"the source file changed: {size} bytes, cached {e.get('bytes')}"
+                why = f"the source file changed: {size} bytes, recorded {e.get('bytes')}"
             elif digest != e.get("sha256"):
-                why = "the source file changed: its sha256 differs from the cached one"
+                why = "the source file changed: its sha256 differs from the recorded one"
         if why is None:
-            pq = run_dir / e["parquet"]
-            if not pq.is_file():
-                why = f"parquet missing: {pq}"
-            else:
-                try:
-                    if sha256(pq) != e.get("parquet_sha256"):
-                        why = ("the parquet changed after it was written: its sha256 "
-                               "differs from the manifest's")
-                    else:
-                        n = pl.scan_parquet(pq).select(pl.len()).collect().item()
-                        if n != e["row_count"]:
-                            why = f"the parquet holds {n} rows, the manifest {e['row_count']}"
-                except (OSError, pl.exceptions.PolarsError) as exc:
-                    why = f"parquet unreadable: {str(exc).splitlines()[0] if str(exc) else exc!r}"
+            try:
+                df = pl.read_parquet(run_dir / e["parquet"])
+                if df.height != e["row_count"]:
+                    why = f"the parquet holds {df.height} rows, its metadata {e['row_count']}"
+                elif content_sha256(df) != e.get("content_sha256"):
+                    why = "the parquet's rows changed after it was written"
+            except (OSError, pl.exceptions.PolarsError) as exc:
+                why = f"parquet unreadable: {str(exc).splitlines()[0] if str(exc) else exc!r}"
         out.append({"id": e["id"], "agrees": why is None, "why": why})
     return out
 

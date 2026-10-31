@@ -40,10 +40,12 @@ def main() -> int:
         (rd / "run.json").write_text(json.dumps({"sources": [
             {"id": "dataroom", "name": "room", "path": str(room), "kind": "folder"}]}))
         df = pl.DataFrame({"period": ["2024-10", "2024-11"], "billings": [50.0, 60.0]})
-        cols = {"period": {"at": "A", "parse": "as written"},
-                "billings": {"at": "B", "parse": "as written"}}
+        cols = {"period": {"at": "A", "parse": "as written", "description": "the month"},
+                "billings": {"at": "B", "parse": "as written", "description": "billed",
+                             "unit": "usd"}}
         kw = dict(file="stacked.csv", source="dataroom", file_role="management_prepared",
-                  header_at="A2", rows="3:4", columns=cols, control="billings")
+                  header_at="A2", rows="3:4", columns=cols, control="billings",
+                  what="billings by month", grain="one month")
         e = write(rd, "roll", df, **kw, stated={"value": 110.0, "where": "B5 (Total)"},
                   script=rd / "workpapers" / "extract-x0.py")
         if e["control_total"] != {"column": "billings", "value": 110.0} or e["row_count"] != 2 \
@@ -71,7 +73,18 @@ def main() -> int:
         refused("extra column", lambda: write(rd, "r", df, **{**kw, "columns": {
             **cols, "memo": {"at": "C", "parse": "as written"}}}), "memo")
         refused("no parse", lambda: write(rd, "r", df, **{**kw, "columns": {
-            **cols, "billings": {"at": "B"}}}), "parse")
+            **cols, "billings": {"at": "B", "description": "x", "unit": "usd"}}}), "parse")
+        refused("no description", lambda: write(rd, "r", df, **{**kw, "columns": {
+            **cols, "billings": {"at": "B", "parse": "x", "unit": "usd"}}}), "description")
+        refused("a number with no unit", lambda: write(rd, "r", df, **{**kw, "columns": {
+            **cols, "billings": {"at": "B", "parse": "x", "description": "x"}}}), "unit")
+        refused("a unit on text", lambda: write(rd, "r", df, **{**kw, "columns": {
+            **cols, "period": {"at": "A", "parse": "x", "description": "x", "unit": "usd"}}}),
+            "not numeric")
+        refused("an unknown unit", lambda: write(rd, "r", df, **{**kw, "columns": {
+            **cols, "billings": {"at": "B", "parse": "x", "description": "x", "unit": "bucks"}}}),
+            "bucks")
+        refused("no grain", lambda: write(rd, "r", df, **{**kw, "grain": " "}), "grain")
         refused("file missing", lambda: write(rd, "r", df, **{**kw, "file": "nope.csv"}),
                 "file missing")
         refused("control absent", lambda: write(rd, "r", df, **{**kw, "control": "amount"}),
@@ -86,6 +99,19 @@ def main() -> int:
         refused("unknown id", lambda: entry(rd, "nope"), "roll")
         if (rd / "cache" / "r.parquet").exists():
             bad.append("a refused write left a parquet behind")
+        if (rd / "cache" / "manifest.json").exists():
+            bad.append("the metadata lives in the parquet; no manifest.json is written")
+        if read(rd, "roll").schema["billings"] != pl.Decimal(18, 2) \
+                or entry(rd, "roll")["columns"][1]["description"] != "billed":
+            bad.append(f"money as DECIMAL(18,2), the description kept: {entry(rd, 'roll')}")
+        if "room.roll" not in (rd / "catalog.sql").read_text():
+            bad.append("write did not rewrite catalog.sql")
+        frac = pl.DataFrame({"period": ["a", "b"], "billings": [1.2345, 2.0]})
+        e5 = write(rd, "frac", frac, **{**kw, "control": None})
+        if read(rd, "frac").schema["billings"] != pl.Decimal(18, 4):
+            bad.append(f"sub-cent money: {e5['columns']}")
+        refused("money beyond 6 decimals", lambda: write(rd, "r", pl.DataFrame(
+            {"period": ["a"], "billings": [1.23456789]}), **{**kw, "control": None}), "6")
         note(rd, "stacked.csv", source="dataroom", where="A7:B9", what="a KPI table")
         note(rd, "stacked.csv", source="dataroom", where="A7:B9", what="a KPI table, again")
         ne = manifest(rd)["not_extracted"]
@@ -137,9 +163,12 @@ def _room(td) -> tuple[pathlib.Path, pathlib.Path, pathlib.Path]:
 
 
 def _kw(df, **over) -> dict:
+    cols = {c: {"at": "A", "parse": "as written", "description": c} for c in df.columns}
+    for c in df.columns:
+        if df.schema[c].is_numeric():
+            cols[c]["unit"] = "usd" if c == "amt" else "count"
     kw = dict(file="a.csv", source="dataroom", file_role="system_export", header_at="A1",
-              rows="2:3", columns={c: {"at": "A", "parse": "as written"} for c in df.columns},
-              control="amt")
+              rows="2:3", columns=cols, control="amt", what="a table", grain="one row")
     kw.update(over)
     return kw
 
@@ -156,12 +185,12 @@ def _refusals_first(pl, bad, refused) -> None:
         for label, extra in (("malformed stated", {"stated": {"value": "30", "where": "B4"}}),
                              ("blank what", {"what": "   "}),
                              ("blank sheet", {"sheet": ""})):
-            refused(label, lambda: write(rd, "t", b, **_kw(b), **extra), "")
+            refused(label, lambda: write(rd, "t", b, **_kw(b, **extra)), "")
             if read(rd, "t")["amt"].sum() != 30.0 or entry(rd, "t")["control_total"]["value"] != 30.0:
                 bad.append(f"{label}: a refused write replaced the parquet or the entry")
         if not verify(rd, "t")[0]["agrees"]:
             bad.append(f"refused writes: the cache no longer verifies: {verify(rd, 't')}")
-        e = write(rd, "t", b, **_kw(b), what="the rewrite")      # the valid neighbour
+        e = write(rd, "t", b, **_kw(b, what="the rewrite"))      # the valid neighbour
         if read(rd, "t")["amt"].sum() != 1999.0 or e["control_total"]["value"] != 1999.0:
             bad.append(f"a valid rewrite of an id did not replace it: {e['control_total']}")
         refused("id with a trailing newline", lambda: write(rd, "t2\n", a, **_kw(a)), "slug")
@@ -243,9 +272,11 @@ def _stated_and_verify(pl, bad, refused) -> None:
             refused(label, lambda s=s: write(rd, "k2", one, **_kw(one, rows="2:2"), stated=s),
                     want)
         write(rd, "d", a, **_kw(a))
-        pl.DataFrame({"x": [7, 8], "amt": [1.0, 2.0]}).write_parquet(rd / "cache" / "d.parquet")
+        meta = pl.read_parquet_metadata(rd / "cache" / "d.parquet")
+        pl.DataFrame({"x": [7, 8], "amt": [1.0, 2.0]}).write_parquet(
+            rd / "cache" / "d.parquet", metadata={"countz": meta["countz"]})
         v = verify(rd, "d")[0]
-        if v["agrees"] or "parquet changed" not in (v["why"] or ""):
+        if v["agrees"] or "rows changed" not in (v["why"] or ""):
             bad.append(f"verify: a parquet rewritten with the same row count must disagree: {v}")
         (rd / "cache" / "d.parquet").write_bytes(b"garbage")
         v = verify(rd, "d")[0]
@@ -255,11 +286,16 @@ def _stated_and_verify(pl, bad, refused) -> None:
             bad.append("--verify on a corrupt parquet must exit 3")
         if not verify(rd, "s")[0]["agrees"]:
             bad.append(f"verify: an untouched id must still agree: {verify(rd, 's')}")
-        man = json.loads((rd / "cache" / "manifest.json").read_text())
-        man["schema"] = "countz-accounting/cache@1"
-        (rd / "cache" / "manifest.json").write_text(json.dumps(man))
-        refused("a foreign manifest schema", lambda: manifest(rd), "schema")
-        refused("a write over a foreign manifest", lambda: write(rd, "s", a, **_kw(a)), "schema")
+        (rd / "cache" / "d.parquet").unlink()
+        old = json.loads(pl.read_parquet_metadata(rd / "cache" / "s.parquet")["countz"])
+        old["schema"] = "countz-accounting/cache@3"
+        a.write_parquet(rd / "cache" / "f.parquet", metadata={"countz": json.dumps(old)})
+        refused("a foreign metadata schema", lambda: manifest(rd), "schema")
+        a.write_parquet(rd / "cache" / "g.parquet")
+        v = {r["id"]: r for r in verify(rd)}
+        if v["g"]["agrees"] or "no table metadata" not in (v["g"]["why"] or "") \
+                or not v["s"]["agrees"]:
+            bad.append(f"verify: a parquet with no metadata must disagree, alone: {v}")
 
 
 def _resolve(pl, bad, refused) -> None:
@@ -316,8 +352,7 @@ def _write_many(args) -> None:
 
 
 def _concurrent(pl, bad) -> None:
-    """Writers in separate processes never lose a manifest entry, and every parquet
-    matches its entry."""
+    """Writers in separate processes each land their table with its metadata."""
     import concurrent.futures
     import multiprocessing
     import tempfile

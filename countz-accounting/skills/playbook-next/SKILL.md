@@ -55,7 +55,7 @@ executes what you return.
    **On a holder-lanes run** (`<run_dir>/lanes.json` exists; RUN_CONTRACT.md § Holder
    lanes) a dispatch still running in a lane (outstanding, its seq in `lanes.json` `busy`)
    is running, not unrecorded: it is neither terminal nor ready. Write no briefs; run
-   `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py place <run_dir> <playbook> --steps
+   `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py place <run_dir> <playbook> --steps
    <the ready step ids>`, which writes the briefs of the steps that have a free lane, and
    return its `RECORD:`, `LANE:` and `AWAIT:` lines (or `WAIT:`). When nothing is ready
    and some step is running, return `WAIT:`.
@@ -71,11 +71,11 @@ The same imperatives the script prints:
 playbook <name>  wave=<n>  <k> dispatch(es)
 <the comparison that decided it, one sentence>
 SAY: Steps <a>–<b> of <m>: Wave <n> — running <k> checks in parallel: <what runs>.
-RECORD: python3 ${CLAUDE_PLUGIN_ROOT}/scripts/run_state.py dispatch <abs run_dir> --briefs <abs brief paths>
+RECORD: uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/run_state.py dispatch <abs run_dir> --briefs <abs brief paths>
 LAUNCH: <the LAUNCH constant in ${CLAUDE_PLUGIN_ROOT}/scripts/run_state.py, verbatim>
 NEXT: Skill check-tie run_dir=<abs> seq=<n> check=<step id> sources=<ids> goal=<...> mode=fresh brief=<abs brief path>
-THEN: python3 ${CLAUDE_PLUGIN_ROOT}/scripts/run_state.py record <abs run_dir>
-THEN: python3 ${CLAUDE_PLUGIN_ROOT}/scripts/playbook_next.py <abs run_dir> <abs definition path>
+THEN: uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/run_state.py record <abs run_dir>
+THEN: uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/playbook_next.py <abs run_dir> <abs definition path>
 ```
 
 The `SAY:` line is the relay's progress line to the user (`RUN_CONTRACT.md` § Every

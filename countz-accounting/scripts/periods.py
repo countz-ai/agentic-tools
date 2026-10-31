@@ -23,6 +23,8 @@ labels and fiscal-year rule:
         p.end_long                    # "September 30, 2025"
         rows.filter(p.mask(pl.col("invoice_date")))
         w = p.window(5, 5, "business", ["2025-10-13"], ["sat", "sun"])   # a cutoff window
+        t = p.trailing(3)             # the 3 calendar months ending with p's end month:
+                                      # t.start, t.end, t.months, t.days (calendar days)
     P["fy2025"], P.keys, P.labels("flow"), P.fy_of(pl.col("invoice_date"))   # local date
 
 The slug is the id segment (`F.a5.nrr.fy2025`); the label is display only and comes from
@@ -947,6 +949,23 @@ class Period:
         import polars as pl
         d = self.local_date(expr, timezone, source_timezone)
         return (d >= pl.lit(self.start)) & (d <= pl.lit(self.end))
+
+    @property
+    def days(self) -> int:
+        """The calendar days the period covers, both ends included."""
+        return (self.end - self.start).days + 1
+
+    def trailing(self, n: int) -> "Period":
+        """The `n` calendar months ending with the period's end month, as a `window`
+        period: the flow window beside a snapshot column (`2025-06`.trailing(3) runs April 1
+        to June 30, 2025). Bound a query with its `start` and `end`, never with date
+        arithmetic on the snapshot date: June 30 less three months is March 30, and a
+        bound there takes in March 31."""
+        if isinstance(n, bool) or not isinstance(n, int) or n < 1:
+            raise ValueError(f"trailing({n!r}): a whole number of months >= 1")
+        last = _ym(self.end)
+        s, e = dt.date(*_add(*last, -(n - 1)), 1), _last_day(*last)
+        return Period(f"w{s}_{e}", "window", s, e, timezone=self.timezone)
 
     def window(self, before: int, after: int, basis: str = "calendar",
                holidays=(), weekend=None) -> "Period":

@@ -17,6 +17,12 @@ writers produce, and nothing wider:
     =SUM(G5:G9)  =SUM(G5,G7:G8)      a sum of cells and ranges
     =G5+G6-G7                        a signed sum of references
     =SUMIFS(G10:G11,$N$10:$N$11,"supported")+SUMIFS(…)   a conditional sum over a column
+    =COUNTIFS($N$10:$N$11,"yes")     a count of the rows whose cells read so
+    =SUMIFS(…,$J$24:$J$47,$E67)      a criterion read from a cell
+    =(G5-G6)/G7*100                  products, quotients and parentheses
+
+A criterion is a string, a number or one cell, matched whole (case and surrounding
+spaces aside); an operator inside a criterion (`">0"`) is outside the grammar.
 
 `evaluate()` returns None for anything outside it; a caller never guesses.
 
@@ -27,16 +33,19 @@ saved file. Stdlib only, so the gates import it.
 from __future__ import annotations
 
 import html
+import numbers
 import pathlib
 import re
 import zipfile
 
 COORD = re.compile(r"^\$?([A-Z]{1,3})\$?(\d+)$")
+_COPY = re.compile(r"^='((?:[^']|'')+)'!(\$?[A-Z]{1,3}\$?\d+)$")
+_CONSTANT = re.compile(r"^=(-?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)$")
 _SHEET = r"(?:'((?:[^']|'')+)'|([A-Za-z_][A-Za-z0-9_.]*))!"
 _CELL = r"\$?[A-Z]{1,3}\$?\d+"
 TOKEN = re.compile(
-    rf"\s*(?:(?P<func>SUMIFS|SUM)\(|(?P<ref>(?:{_SHEET})?{_CELL}(?::{_CELL})?)"
-    rf"|(?P<num>\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)|(?P<str>\"(?:[^\"]|\"\")*\")|(?P<op>[-+,)]))")
+    rf"\s*(?:(?P<func>SUMIFS|COUNTIFS|SUM)\(|(?P<ref>(?:{_SHEET})?{_CELL}(?::{_CELL})?)"
+    rf"|(?P<num>\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)|(?P<str>\"(?:[^\"]|\"\")*\")|(?P<op>[-+*/,()]))")
 
 
 def col_num(letters: str) -> int:
@@ -69,6 +78,26 @@ def quote(sheet: str) -> str:
 
 def reference(sheet: str, coord: str) -> str:
     return f"={quote(sheet)}!{coord}"
+
+
+def constant(value: float) -> str:
+    """A number as a formula of that one number (`=225500`), as link_workbook.py writes a
+    linked value."""
+    return f"={int(value)}" if float(value).is_integer() else f"={float(value)!r}"
+
+
+def constant_of(value) -> float | None:
+    """The number of a formula that is one number, as `constant` writes it; None for
+    anything else."""
+    m = _CONSTANT.match(value) if isinstance(value, str) else None
+    return float(m.group(1)) if m else None
+
+
+def copy_of(value) -> tuple[str, str] | None:
+    """(sheet, coord) of a formula that is one reference to another tab's cell, as
+    `reference` writes it; None for anything else."""
+    m = _COPY.match(value) if isinstance(value, str) else None
+    return (m.group(1).replace("''", "'"), m.group(2).replace("$", "")) if m else None
 
 
 def sum_formula(col: str, rows: list[int]) -> str:
@@ -126,15 +155,27 @@ def _cells(ref: str, sheet: str) -> list[tuple[str, str]]:
             for c in range(min(c1, c2), max(c1, c2) + 1)]
 
 
+def is_number(v) -> bool:
+    """A number as a cell holds it — int, float or Decimal (a DECIMAL column) — never a bool."""
+    return isinstance(v, numbers.Number) and not isinstance(v, bool)
+
+
 def _num(v) -> float:
     """A cell as a sum reads it: a number counts, text and blanks are nothing."""
-    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else 0.0
+    return float(v) if is_number(v) else 0.0
+
+
+def _match(value, want) -> bool:
+    """A criterion as SUMIFS reads it: numbers by value, anything else as text, whole."""
+    if is_number(want):
+        return is_number(value) and float(value) == float(want)
+    return str(value if value is not None else "").strip().lower() == str(want).strip().lower()
 
 
 def evaluate(formula: str, sheet: str, get) -> float | None:
     """The value of `formula` on `sheet`, reading every cell it names through
     `get(sheet, coord)` (a number, a string or None); None for a formula outside the
-    grammar this module writes."""
+    grammar this module writes, or one that divides by zero."""
     text = formula.strip()
     if text.startswith("="):
         text = text[1:]
@@ -144,76 +185,123 @@ def evaluate(formula: str, sheet: str, get) -> float | None:
         return None
     i = 0
 
-    def args() -> list[list]:
-        nonlocal i
-        out, cur = [], []
-        while i < len(toks):
-            kind, v = toks[i]
-            i += 1
-            if kind == "op" and v == ")":
-                out.append(cur)
-                return out
-            if kind == "op" and v == ",":
-                out.append(cur)
-                cur = []
-                continue
-            cur.append((kind, v))
-        raise ValueError("unclosed call")
+    def peek(kind=None, value=None):
+        if i >= len(toks):
+            return False
+        k, v = toks[i]
+        return (kind is None or k == kind) and (value is None or v == value)
 
-    def term():
+    def take():
         nonlocal i
-        kind, v = toks[i]
+        if i >= len(toks):
+            raise ValueError("the formula ends early")
         i += 1
-        if kind == "num":
+        return toks[i - 1]
+
+    def argument():
+        """One argument: a range or a single token, or an expression when it is one."""
+        if peek("ref") or peek("str"):
+            k, v = take()
+            if peek("op", ",") or peek("op", ")"):
+                return (k, v)
+            raise ValueError("a range or a string inside an expression")
+        return ("num", expr())
+
+    def call(name: str) -> float:
+        parts = []
+        if not peek("op", ")"):
+            parts.append(argument())
+            while peek("op", ","):
+                take()
+                parts.append(argument())
+        if take() != ("op", ")"):
+            raise ValueError("unclosed call")
+        if name == "SUM":
+            total = 0.0
+            for k, v in parts:
+                if k == "num":
+                    total += v
+                elif k == "ref":
+                    total += sum(_num(get(*c)) for c in _cells(v, sheet))
+                else:
+                    raise ValueError("SUM of text")
+            return total
+        first = 1 if name == "SUMIFS" else 0
+        pairs = parts[first:]
+        if not pairs or len(pairs) % 2 or (first and parts[0][0] != "ref"):
+            raise ValueError(f"{name}(… criteria range, criterion, …)")
+        size = None
+        keep: list[bool] | None = None
+        for k in range(0, len(pairs), 2):
+            (rk, rv), (ck, cv) = pairs[k], pairs[k + 1]
+            if rk != "ref":
+                raise ValueError("a criteria range")
+            crit = _cells(rv, sheet)
+            if ck == "str" and cv[:1] in "<>=":
+                raise ValueError("an operator in a criterion")
+            if ck == "ref":
+                one = _cells(cv, sheet)
+                if len(one) != 1:
+                    raise ValueError("a criterion is one cell")
+                cv = get(*one[0])
+            if size is None:
+                size, keep = len(crit), [True] * len(crit)
+            elif len(crit) != size:
+                raise ValueError("criteria ranges of different sizes")
+            keep = [kp and _match(get(*c), cv) for kp, c in zip(keep, crit)]
+        if name == "COUNTIFS":
+            return float(sum(keep))
+        values = _cells(parts[0][1], sheet)
+        if len(values) != size:
+            raise ValueError("SUMIFS ranges of different sizes")
+        return sum(_num(get(*c)) for c, kp in zip(values, keep) if kp)
+
+    def factor() -> float:
+        k, v = take()
+        if k == "num":
             return v
-        if kind == "ref":
+        if k == "ref":
             cells = _cells(v, sheet)
             if len(cells) != 1:
-                raise ValueError("a range outside a sum")
+                raise ValueError("a range outside a function")
             return _num(get(*cells[0]))
-        if kind == "func":
-            parts = args()
-            if v == "SUM":
-                total = 0.0
-                for p in parts:
-                    if len(p) != 1:
-                        raise ValueError("SUM takes cells, ranges and numbers")
-                    pk, pv = p[0]
-                    if pk == "num":
-                        total += pv
-                    elif pk == "ref":
-                        total += sum(_num(get(*c)) for c in _cells(pv, sheet))
-                    else:
-                        raise ValueError("SUM of text")
-                return total
-            if len(parts) < 3 or len(parts) % 2 == 0 or any(len(p) != 1 for p in parts):
-                raise ValueError("SUMIFS(sum range, criteria range, criterion, …)")
-            values = _cells(parts[0][0][1], sheet)
-            keep = [True] * len(values)
-            for k in range(1, len(parts), 2):
-                crit = _cells(parts[k][0][1], sheet)
-                want = parts[k + 1][0][1]
-                if len(crit) != len(values):
-                    raise ValueError("SUMIFS ranges of different sizes")
-                keep = [kp and str(get(*c) if get(*c) is not None else "").strip().lower()
-                        == str(want).strip().lower() for kp, c in zip(keep, crit)]
-            return sum(_num(get(*c)) for c, kp in zip(values, keep) if kp)
-        if kind == "op" and v in "+-":
-            t = term()
-            return -t if v == "-" else t
+        if k == "func":
+            return call(v)
+        if k == "op" and v == "(":
+            got = expr()
+            if take() != ("op", ")"):
+                raise ValueError("unclosed parenthesis")
+            return got
+        if k == "op" and v in "+-":
+            got = factor()
+            return -got if v == "-" else got
         raise ValueError(f"unexpected {v!r}")
 
+    def term() -> float:
+        got = factor()
+        while peek("op", "*") or peek("op", "/"):
+            _, op = take()
+            rhs = factor()
+            if op == "/":
+                if rhs == 0:
+                    raise ZeroDivisionError
+                got = got / rhs
+            else:
+                got = got * rhs
+        return got
+
+    def expr() -> float:
+        got = term()
+        while peek("op", "+") or peek("op", "-"):
+            _, op = take()
+            rhs = term()
+            got = got + rhs if op == "+" else got - rhs
+        return got
+
     try:
-        total = term()
-        while i < len(toks):
-            kind, v = toks[i]
-            i += 1
-            if kind != "op" or v not in "+-":
-                return None
-            t = term()
-            total = total + t if v == "+" else total - t
-        return total
-    except (ValueError, IndexError):
+        total = expr()
+        return total if i == len(toks) else None
+    except (ValueError, IndexError, ZeroDivisionError):
         return None
 
 

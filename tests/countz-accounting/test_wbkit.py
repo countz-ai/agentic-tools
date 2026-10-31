@@ -188,6 +188,15 @@ def live() -> list[str]:
         rep = json.loads(subprocess.run(gate, capture_output=True, text=True).stdout)
         if not any("typed as a value" in f and "D8" in f for f in rep.get("formulas", [])):
             bad.append(f"a total typed as a value on a mapped sheet must be refused: {rep.get('formulas')}")
+        # and typed as a formula of one number, the form link_workbook.py gives a linked value
+        import formula as fx
+        typed = load_workbook(path)
+        typed["k3 Walk"]["D8"].value = "=110.15"
+        typed.save(path)
+        fx.cache_results(path, {"k3 Walk": {"D8": 110.15}})
+        rep = json.loads(subprocess.run(gate, capture_output=True, text=True).stdout)
+        if not any("typed as a value" in f and "D8" in f for f in rep.get("formulas", [])):
+            bad.append(f"a total typed as =110.15 on a mapped sheet must be refused: {rep.get('formulas')}")
         # a stale result: the formula computes one figure, the file stores another
         save(wb, path)
         import formula as fx

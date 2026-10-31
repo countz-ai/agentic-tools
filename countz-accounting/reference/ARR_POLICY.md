@@ -571,7 +571,8 @@ by A1; **churn**, a unit whose ARR falls to zero, dated per L2 and L3; **realloc
 per A4; **acquired** and **divested**, per A2; **fx**, the change in translated ARR at
 constant contracts, which V4 decides (under a rate held for the year it arises only at
 the year's turn); closing ARR. Every movement is classified from the two months'
-values, and one the values do not settle is an exception at its amount.
+values; a movement those values cannot classify is reported as an exception, at its full
+amount.
 
 **A1 · Mid-term modifications: bridge classes.** Whether expansion and contraction are
 split into fixed classes.

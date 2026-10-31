@@ -12,6 +12,8 @@ user-invocable: false
 
 # Perform one completeness check
 
+The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.
+
 Arguments: `run_dir`, `seq`, `check` (the check id), `sources` (comma-joined source ids —
 the first carries the subject roster, the rest the evidencing rosters), `goal` (the
 stated goal, or `(none)`), `params`, `mode` (`fresh` | `fix`), and on `fix`,
@@ -44,12 +46,12 @@ reported in `blockers`, not dropped.
 
 ## 3. Match members, in passes
 
-Match with polars joins, one per pass; check the assignment with
+Match with SQL joins, one per pass; check the assignment with
 `${CLAUDE_PLUGIN_ROOT}/scripts/matching.py`'s `check_assignment()` before writing it.
 
 By identifier first (account number or masked suffix), then by name or label, then by
 corroborating facts (a balance and period that agree), each pass recorded, a loose-key
-match stating its key. Write `checks/<check>-roster.csv` — member, presence per source,
+match stating its key. Write `checks/<check>-roster.parquet` — member, presence per source,
 match key, classification, exception id where one is minted — with its manifest block in
 `checks/<check>.md` per EVIDENCE.md § 5. The roster accounting must close in both
 directions: matched plus explained absences plus exceptions equals each roster's count.
@@ -66,7 +68,7 @@ differ.
 
 - `checks/<check>.md` — the definition, the rosters, the passes, the classifications and
   the exceptions.
-- `checks/<check>-roster.csv` — the roster table of § 3, with its manifest block.
+- `checks/<check>-roster.parquet` — the roster table of § 3, with its manifest block.
 - `out/tabs/<check>.xlsx` — your tab, blocks per `WORKBOOK.md` § 4, with the roster
   schedule as the primary table and the exceptions.
 
@@ -85,4 +87,4 @@ what you disagree with, rewrite only your own files — the roster table include
 
 Write `steps/<NNNN>-completeness.json` per `RUN_CONTRACT.md`: `check_id`, `produced`,
 `consumed` with mtimes, `blockers`. `conclusion` states the roster sizes and
-the exception count in two sentences. Return at most ten lines.
+the exception count in two sentences.

@@ -9,9 +9,11 @@ recipe**, which the `create-recipe` step writes on the user's machine for an ana
 the catalog does not cover. Either way a run reads its recipe from
 `<run_dir>/recipes/<name>.md`, the bytes it pinned (`RUN_CONTRACT.md`).
 
-A corpus recipe has exactly one shim skill (`context: inline`) that asks for it by its
-`name` and points at `PLAYBOOK_RECIPES.md`; `cash` is the exemplar. A new corpus recipe
-is the document, its `catalog.yaml` entry and its shim. A recipe composes check kinds
+`countz` matches the user's ask against `catalog.yaml`, fetches the matched recipe by its
+`name` and relays it under `PLAYBOOK_RECIPES.md`. A new corpus recipe is the document and its `catalog.yaml` entry,
+and it reaches every installed plugin with no release. The document carries everything
+the relay needs to run it. Examples: the records to ask for, how far the files must
+reach, the options to put to the user. A recipe composes check kinds
 from `KINDS` in `scripts/check_playbook.py` and adds no orchestration. One module,
 `scripts/recipe_format.py`, holds the shape rules below; `check-plugin.py` runs them over
 the corpus and `scripts/validate_recipe.py` runs them over a generated recipe.
@@ -83,9 +85,9 @@ The closed list the run's population is ruled from, drawn top-down from the obje
 the statement line, the trial-balance accounts that compose it, the general-ledger
 accounts behind each — never from which account names read as in scope. The section
 carries the definition the population family rules against and the accounts outside the
-line it reaches, each ruled in or out, and states how the run rules an item the records do
-not settle. Where the population family's ruling differs from the plan's, its record states
-the divergence, the relay tells the user in one line, and the later families run on the
+line it reaches, each ruled in or out. Where the population family's ruling differs from
+the plan's, its record states the divergence, the relay tells the user in one line, and
+the later families run on the
 population family's ruling (`RUN_CONTRACT.md` § Running to completion).
 
 #### `Source classes`
@@ -145,7 +147,7 @@ with no other key.
 
 `metrics` is one mapping, `{"title": ...}`: the headline of the key-metrics page, the
 second page of the deck, naming the measure the report exists to state (`Adjusted
-EBITDA`, `Cash as substantiated`). `check_report.py` refuses a deck whose second page is
+EBITDA`, `Substantiated cash`). `check_report.py` refuses a deck whose second page is
 headed otherwise.
 
 `narrative` is optional: the narrative's sections in reading order, each the kicker its

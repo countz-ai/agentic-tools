@@ -12,6 +12,8 @@ user-invocable: false
 
 # Perform one reconciliation
 
+The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.
+
 Arguments: `run_dir`, `seq`, `check` (the check id), `sources` (comma-joined source ids —
 the first is the subject side, the books; the second the counterparty side, the
 statement), `goal` (the user's stated goal, or `(none)`), `mode` (`fresh` | `fix`), and on
@@ -81,7 +83,7 @@ Call `resolve()` once, over the whole population: never filter a stream first or
 items out of it (undated items included); an item left out is a counterpart no rule
 could see.
 
-Elsewhere, match with polars joins, one per pass — by reference, then amount-and-date,
+Elsewhere, match with SQL joins, one per pass — by reference, then amount-and-date,
 then looser keys, each pass recorded — over streams mapped as above, and read the
 assignment back with `resolve.py`'s `from_assignment()`: each pass a `Pass`, its criteria
 in words and, where its groups' sides differ, the difference it tolerates, named; `transit=`
@@ -95,7 +97,7 @@ candidates a rule found. The exceptions are yours to clear with what the engine 
 read — names, memo text, the cash-application record, the cutoff statement — each one you
 clear recorded with its evidence. Report matched by rule, cleared by you, and still open
 as three separate counts.
-Write the match table `checks/<check>-matches.csv` (side, match key, date, amount,
+Write the match table `checks/<check>-matches.parquet` (side, match key, date, amount,
 matched-to, classification) with its manifest block in `checks/<check>.md` per
 EVIDENCE.md § 5: the citations behind each side, the keys used, `row_count` and a control
 total per side. The population accounting must close: matched plus unmatched per side
@@ -142,7 +144,7 @@ Files:
 
 - `checks/<check>.md` — the definition, the sides, the match summary by pass, the items
   with their evidence, the elections where any, and the statement.
-- `checks/<check>-matches.csv` — the match table of § 3, with its manifest block.
+- `checks/<check>-matches.parquet` — the match table of § 3, with its manifest block.
 - `out/tabs/<check>.xlsx` — your tabs. The file opens with the match tabs, one set per
   `res` of § 3, each set under its own token, written by
   `${CLAUDE_PLUGIN_ROOT}/scripts/match_tabs.py` from it and never by hand, whether it came
@@ -154,8 +156,8 @@ Files:
   schedule (one row per left item, the ones kept out of the streams included as `others`:
   an invoice with no cash, each with its reason), the reconciling items and the rules
   (`WORKBOOK.md` § 6). Then your check tab, blocks per `WORKBOOK.md` § 4, with the
-  reconciliation statement as the primary table and the item schedules, its totals and
-  derived lines written with `wbkit.total` and the file saved with `wbkit.save`
+  reconciliation statement as the primary table and the item schedules: pass the
+  workbook holding the match tabs to `render.render(run_dir, check, wb=wb)`
   (`WORKBOOK.md` § 7). Every
   reconciliation carries the match tabs, so the reader finds the schedule on each one;
   `check_workbook.py` GATE 7 refuses a file without them unless the check tab states
@@ -178,5 +180,4 @@ what you disagree with, rewrite only your own files — the match table included
 
 Write `steps/<NNNN>-recon.json` per `RUN_CONTRACT.md`: `check_id`, `produced`,
 `consumed` with mtimes, `blockers`. `conclusion` states the difference, how much is
-explained, and the unexplained residual in dollars, in two sentences. Return at most ten
-lines.
+explained, and the unexplained residual in dollars, in two sentences.

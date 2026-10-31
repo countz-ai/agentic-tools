@@ -2,23 +2,23 @@
 """A check's figures ledger (EVIDENCE.md § 3), its ties, and its prose numbers, as one
 importable module.
 
-Every step that mints a figure imports this rather than writing its own `fig()`:
+Every step that mints a figure imports this rather than writing its own `fig()`. Compute
+every figure in SQL (`scripts/sql.py`), one row per figure.
 
     import sys; sys.path.insert(0, "<${CLAUDE_PLUGIN_ROOT}>/scripts")   # the token expanded
-    from evidence import select
-    from figures import Ledger, figure, room, check_output, declared, fmt
+    from figures import Ledger
 
     L = Ledger(RUN, "a5_bridge_retention")      # resumes workpapers/figures-<check>.yaml
-    rows, e = select(RUN, "SELECT ... FROM ...", id="E.a5.cube", control="arr")
-    L.cite(e)                                   # -> workpapers/evidence-<check>.yaml
-    L.population("P.a5.cohort.fy2025", "Customers with ARR at 30 September 2024",
-                 total_n=812, included_n=812, citations=["E.a5.cube"])
-    L.fig("F.a5.cohort_arr.fy2025", "Cohort ARR at 30 September 2024", 81_234_567.12,
-          "usd", "sum(arr) over E.a5.cube where month = 2024-09", [room("cube", "E.a5.cube")],
-          population="P.a5.cohort.fy2025")
-    L.fig("F.a5.nrr.fy2025", "Net revenue retention FY2025", nrr, "pct",
-          "F.a5.nrr_num.fy2025 / F.a5.cohort_arr.fy2025",
-          [("numerator", "F.a5.nrr_num.fy2025"), ("denominator", "F.a5.cohort_arr.fy2025")])
+    L.populations('''SELECT 'P.a5.cohort.fy2025' AS id,
+                            'Customers with ARR at 30 September 2024' AS label,
+                            count(*) AS total_n, count(*) AS included_n
+                     FROM room.cube WHERE month = DATE '2024-09-30' AND arr > 0''')
+    L.figures('''SELECT 'F.a5.arr.' || strftime(month, '%Y-%m') AS id,
+                        'ARR, ' || strftime(month, '%B %Y') AS label, 'usd' AS unit,
+                        sum(arr) AS value
+                 FROM room.cube GROUP BY month''')
+    L.figures('''SELECT 'F.a5.nrr.fy2025' AS id, 'Net revenue retention FY2025' AS label,
+                        'pct' AS unit, fig('F.a5.nrr_num.fy2025') / fig('F.a5.arr.2024-09') AS value''')
     t = L.tie("T.a1.revenue.fy2025", "Income statement revenue to TB, FY2025",
               "F.a1.is.revenue.fy2025", "F.a1.tb.revenue.fy2025",
               tolerance=params.get("tolerance"), pct_tolerance=params.get("pct_tolerance"))
@@ -119,7 +119,7 @@ __all__ = ["Ledger", "FigureSet", "load", "fmt", "tie_table", "room", "check_out
 
 # A money unit is a currency code (scripts/style.py); the rest are what a figure measures.
 MONEY_UNITS = tuple(style.CURRENCIES)
-OTHER_UNITS = ("pct", "count", "ratio", "days", "rate", "fx_rate", "quantity")
+OTHER_UNITS = style.OTHER_UNITS
 UNITS = MONEY_UNITS + OTHER_UNITS
 DISPOSITIONS = ("measured", "inferred", "as_stated")
 ZERO_BASES = ("measured_zero", "not_measured", "not_applicable")
@@ -299,19 +299,35 @@ def md_table(headers, rows, units, style_: str = "prose") -> str:
     return "\n".join(out) + "\n"
 
 
+class Cited(str):
+    """A sentence with its figures interpolated, which remembers the ids it states (`ids`,
+    in order): the kit records them for the cell it writes the sentence to, and assembly
+    links the cell to the first one's cell (link_workbook.py). Any str operation returns a
+    plain str, which cites nothing."""
+    ids: tuple = ()
+
+    def __new__(cls, text: str, ids=()):
+        s = super().__new__(cls, text)
+        s.ids = tuple(dict.fromkeys(ids))
+        return s
+
+
 def _sub(template: str, lookup) -> str:
+    ids: list[str] = []
+
     def one(m):
         fid, style = m.group(1), m.group(2) or "prose"
         f = lookup(fid)
         if f is None:
             raise KeyError(f"{fid}: no figure with this id in the run's ledgers")
+        ids.append(fid)
         return fmt(f.get("value"), f.get("unit"), style)
     out = TEMPLATE.sub(one, template)
     left = TEMPLATE_ANY.search(out)
     if left:
         raise ValueError(f"{left.group(0)!r} is no figure reference this substitutes - "
                          f"`{{F.id}}` or `{{F.id:deck}}` (prose, deck or cell), no spaces")
-    return out
+    return Cited(out, ids)
 
 
 # --- the run's figures ---------------------------------------------------------------------
@@ -578,7 +594,7 @@ class Ledger:
         if not isinstance(expression, str) or not expression.strip():
             raise ValueError(f"{fid}: `expression` is required - the arithmetic, or "
                              f"`as stated at E.x (passthrough)`")
-        m = NOT_WHOLE.search(expression)
+        m = None if "sql" in extra else NOT_WHOLE.search(expression)   # SQL: its reads are the inputs
         if m:
             raise ValueError(f"{fid}: expression cites `{m.group(0)}...` - a range or "
                              f"wildcard is a dead end; cite each id whole, or the family "
@@ -639,6 +655,24 @@ class Ledger:
         else:
             self._pending.pop(fid, None)
         return fid
+
+    def figures(self, query: str, **kw) -> list[str]:
+        """One figure per row of one SELECT: `id, label, unit, value` (`scripts/sql.py`)."""
+        import sql
+        return sql.figures(self, query, **kw)
+
+    def populations(self, query: str) -> list[str]:
+        """One `P.` entry per row of one SELECT: `id, label, total_n, included_n`
+        (`scripts/sql.py`)."""
+        import sql
+        return sql.populations(self, query)
+
+    def constants(self, rows) -> list[str]:
+        """Write this check's constants: each a dict of `name`, `value`, `unit` and either
+        where a document states it (`file`, `source`, `file_role`, `locator`, `quote`) or
+        the `basis` for choosing it (`scripts/sql.py`)."""
+        import sql
+        return sql.constants(self, rows)
 
     def _input(self, fid: str, i) -> tuple[dict, bool]:
         """One input as its dict, and whether its kind waits for write() (an `E.` id given
@@ -856,7 +890,8 @@ class Ledger:
                         and not (p.get("included_n") or 0) > 0:
                     out.append(f"{eid}: `measured_zero` over {pop['ref']}, an empty "
                                f"population - not_measured")
-            expr = str(e.get("expression", ""))
+            # A SQL expression's reads are its inputs; its quoted strings are data.
+            expr = "" if isinstance(e.get("sql"), dict) else str(e.get("expression", ""))
             bad = NOT_WHOLE.search(expr)
             if bad:
                 out.append(f"{eid}.expression: `{bad.group(0)}...` is a range or wildcard - "
@@ -900,6 +935,8 @@ class Ledger:
         elif self.evidence_path.is_file():
             self.evidence_path.unlink()
         self._run = None
+        import sql                                 # sibling: the catalog lists the figures
+        sql.write_catalog(self.run_dir)
         return fp, ep
 
 

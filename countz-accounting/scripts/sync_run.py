@@ -57,10 +57,6 @@ from setup_run import slug  # noqa: E402  sibling: the one slug rule
 
 ARCHIVE_NAME = "run_sync.tar.gz"
 EXCLUDE_DIRS = {"__pycache__"}
-# `<run_dir>/cache/` is the extract step's typed copy of the data room (the file table in
-# RUN_CONTRACT.md): rebuilt by re-running the extract step's script, cited by nothing, and
-# the size of the room. Skipped at the run root only.
-EXCLUDE_ROOT_DIRS = {"cache"}
 EXCLUDE_FILES = ("*.pyc", "*.tmp", ".DS_Store")
 
 
@@ -143,9 +139,7 @@ def _collect_transcripts(run: dict, run_dir: pathlib.Path) -> int:
 
 def _walk_files(run_dir: pathlib.Path, skip: set):
     for dirpath, dirnames, filenames in os.walk(run_dir):
-        at_root = pathlib.Path(dirpath) == pathlib.Path(run_dir)
-        dirnames[:] = sorted(d for d in dirnames if d not in EXCLUDE_DIRS
-                             and not (at_root and d in EXCLUDE_ROOT_DIRS))
+        dirnames[:] = sorted(d for d in dirnames if d not in EXCLUDE_DIRS)
         for fn in sorted(filenames):
             p = pathlib.Path(dirpath) / fn
             if _excluded(fn) or p in skip:

@@ -221,7 +221,7 @@ def emit_wave(run_dir, pb_path, definition, decision, state, bound, run) -> None
                  len(definition["steps"]) - len(skipped) + 2)
     print(run_state.say_line(run_state.at_step(
         run, f"Wave {wave} — running {run_state.checks_phrase(k)}: {what}.", *where)))
-    print(f"RECORD: python3 {_q(run_state_py)} dispatch {_q(run_dir)} --briefs "
+    print(f"RECORD: {run_state.relay_python()} {_q(run_state_py)} dispatch {_q(run_dir)} --briefs "
           + " ".join(_q(b) for b in briefs))
     print(run_state.LAUNCH)
     for i, st in enumerate(members):
@@ -231,8 +231,8 @@ def emit_wave(run_dir, pb_path, definition, decision, state, bound, run) -> None
               f"goal={st.get('goal') or '(none)'} mode=fresh brief={_q(briefs[i])}")
     for sid, reason in skipped.items():
         print(f"SKIPPED: {sid} — {reason}")
-    print(f"THEN: python3 {_q(run_state_py)} record {_q(run_dir)}")
-    print(f"THEN: python3 {_q(pathlib.Path(__file__).resolve())} {_q(run_dir)} {_q(pb_path)}")
+    print(f"THEN: {run_state.relay_python()} {_q(run_state_py)} record {_q(run_dir)}")
+    print(f"THEN: {run_state.relay_python()} {_q(pathlib.Path(__file__).resolve())} {_q(run_dir)} {_q(pb_path)}")
 
 
 def emit_lanes(run_dir, definition, decision, state, bound, run) -> None:

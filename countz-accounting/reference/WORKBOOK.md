@@ -21,7 +21,7 @@ what goes where.
   run, or dropped by the plan — has no tab and is skipped
 - Basis of Preparation
 - every other check tab in roster order
-- Coverage, Open Items, Sources, Evidence
+- Coverage, Open Items, Sources, Tables, Constants (when the run states any), Evidence
 - Nothing hidden, nothing else.
 
 A reconciliation's match tabs (check-recon § 3) follow its check's own tab, wherever
@@ -51,10 +51,17 @@ reader.
 
 Every check tab puts the following in the frozen band: a title and a quick summary of what
 the tab is trying to accomplish. It orients a user on how to approach the data below. The
-band is frozen at `B4`. A table header is never frozen: the primary table's header on
-row 4 describes that table alone, not the tables below it.
+band is frozen at `B4`. On a tab holding one table, its header on row 4 is frozen with
+the band, at `B5`. On a tab of several, no table header is frozen: the primary table's
+header on row 4 describes that table alone, not the tables below it.
 
 - B1 the title, opening with the token (`q6 · Adjusted EBITDA reconciles to the ledger`).
+  On every tab, run-level and script-written tabs included, the title is what an
+  accountant writes at the head of a schedule: after the name, a short phrase or one
+  plain sentence saying what the tab holds or shows. It does not list the tab's columns
+  or explain how to read them; the headers and B3 do that. Example — not
+  `Tables · Every table the figures read: what one row is, how it was made, and what it
+  reads`, but `Tables · Tables behind the figures`.
 - B2 the subtitle: entity · period set · basis · unit · tolerance. The unit carries the
   primary table's currency and scale (`$ in thousands`); a column header never carries the
   scale. A tab covering several entities names the group and its count (`13 bank
@@ -105,7 +112,7 @@ its heading. The kit writes this: `section()` returns the header's row and
 
 **Every table is an Excel table.** A tab holding several tables cannot freeze one header
 for all of them, so the band is the only frozen row and each table carries its own header
-instead: `finish()` (and `link_workbook.py` again on the assembled workbook) makes every
+instead (a tab holding one table freezes its header with the band, § 2): `finish()` (and `link_workbook.py` again on the assembled workbook) makes every
 table block an Excel table — its own range, its own filter buttons, and its header shown in
 place of the column letters while the reader scrolls inside it. A block is a header row
 (bold on a fill, opening after a blank row or a Section heading) and the rows under it to
@@ -126,7 +133,9 @@ AutoFilter where a tab has a table.
    the reader must see. One per row: the id it qualifies in B, the sentence in C.
 6. **To reperform** — a `Section` heading, then a numbered list, one step per row in
    column B, `Body` style (a procedure is read, not glanced at): the read (file · sheet ·
-   range), the selection rule, the arithmetic. The last thing on the tab.
+   range), the selection rule, the arithmetic. A table the run made is read in SQL: the
+   step names `<check>.<table>` and the SELECT, never a file to open. The last thing on
+   the tab.
 
 **A schedule the recipe declares.** The recipe's `schedules` list names the tables the
 deck draws from a family's tab: `from` the family, `block` the `Section` heading the table
@@ -270,10 +279,11 @@ Tables, not paragraphs, in this order:
 5. **How to read this workbook** — the prefix table from `EVIDENCE.md` § 0, one row per
    prefix the workbook uses; then one line each for the dispositions (`measured` /
    `inferred` / `as_stated`), `passthrough`, `zero_basis`, populations (included of
-   total, exclusions named), the citation form (file · sheet · range), and the one-hop
-   rule: a figure id clicks to its Sources row, whose `To reperform` cell is the recipe
-   and whose `root source` clicks to the Evidence row that re-selects the data. The
-   reader never opens `EVIDENCE.md`; this block is their copy of it.
+   total, exclusions named), the citation form (file · sheet · range), and the path
+   down: a figure's cell clicks to its Sources row; each of its reads clicks to that
+   table's row on Tables, which shows the statement that made it and its own reads; a
+   table read from a file clicks to its Evidence row. The reader never opens
+   `EVIDENCE.md`; this block is their copy of it.
 
 **Coverage** — primary table `token · title | kind | step | status | what was
 examined | what was not examined, and why`, one row per rostered check, colored per `WORKBOOK_STYLE.md` § 5.
@@ -290,103 +300,103 @@ or `D.` id the check raises is stated on that check's own tab as well, so the ro
 resolves there and the reader lands on the schedule that raised it; a row whose only link
 is the check's name sends them to the top of a tab to search.
 
-**Sources** — the ledger every figure and population id resolves on, merged from every
-`workpapers/figures-*.yaml`; identical entries under one id collapse to one, and a
-disagreement is a blocker for the report step, never a repair. Band: title; subtitle
-naming the run and the row count; row 3 blank; header on row 4. Columns, every one
-named, no spacer, these labels exactly: `id | label | value | unit | disposition |
-expression | inputs | root source | To reperform | population | caveats and
-carry-forwards | from check`. `inputs` and `root source` hold one id per cell, spread
-across adjacent columns. `root source` is where the figure lands once every passthrough
-and figure-to-figure hop is collapsed: the `E.` id(s) of the reads against the data room
-(`resolve_roots.py` computes it). `To reperform` is the flattened recipe in one cell —
-file · sheet · rows · columns · filter · arithmetic · expected value with its control
-total; a figure that combines other figures states the combining arithmetic and points at
-its input rows. A `check_output` input is presented as derived from its producing check,
-never as a room read. `value` formatted by its `unit`; id column 44; `MIST` on even rows;
-gridlines on.
+**Sources, Tables, Constants, Evidence** — the ledger tabs, written by `scripts/ledger_tabs.py`
+from the run's records, never by hand. They are the trail a reader follows down from a
+number to the data room (`docs/REPERFORM.md`); the module's docstring states their
+columns.
 
-**Evidence** — one row per `E.` id, merged from every `workpapers/evidence-*.yaml`, the
-same ledger treatment. Columns: kind, file (room-relative path), source, role (a
-`run_artifact` row says "derived — from <check>"), sheet, anchor (`header_at` / cell /
-locator), rows, columns with their letters and `holds`, filter, row count, control
-total, value basis, read date, and the note, quote or `label_from`. Header on row 4; the
-source-id lines (one per source id, naming the path the run was given — text, not a
-link) go below the last ledger row under a `Source roots` line.
+- **Sources**: one row per figure and population: its value, the statement that
+  computed it, what that statement reads (each a link), where it lands in the data room
+  (`root source`, from `resolve_roots.py`) and `To reperform`.
+- **Tables**: one row per table: what one row of it is, the check that made it, its row
+  count, totals and result hash, the statement that made it or the read of its file, and
+  what it reads (each a link).
+- **Constants**: one row per constant the statements read, with the sentence or basis it
+  rests on; no tab when the run states none.
+- **Evidence**: one row per read of a file, with its rows and control total, then the
+  source roots.
+
+A disagreement between two ledgers on one id is a blocker for the report step, never a
+repair.
 
 ## 7. Writing it
 
-Every tab script imports one kit, `scripts/wbkit.py` — the style's § 9 constants and
-`styles()`, and the helpers that place the band and the blocks: `band`, `header`,
-`section`, `ident`, `text`, `amount`, `count`, `status`, `fit_rows`, `finish` (and
-`register_status` for a recipe's own status words). The script opens:
+A check writes no tab script. It writes one template, `workpapers/<check>.tpl.md`, and
+`scripts/render.py` renders it to the tab, `checks/<check>.md` and
+`checks/<check>-summary.md`. The template's syntax is the module's docstring: front matter
+for the band, `{F.id}` in prose, and an `sql` block per table, whose rows are the table's
+rows. The renderer writes through the kit, `scripts/wbkit.py` (the style's § 9 constants
+and `styles()`, and the helpers that place the band and the blocks), which a run-level
+tab's script imports too:
 
 ```python
 import sys; sys.path.insert(0, "<${CLAUDE_PLUGIN_ROOT}>/scripts")   # the token expanded
 from wbkit import *
 ```
 
-and never carries a copy of any of it: the module is the one place the kit is written,
-and `check_workbook.py` GATE 4 verifies the stored workbook against the same values. Each
-helper's contract is its docstring and signature in the module; the rules they implement
-are § 3 to § 5 above.
+No script carries a copy of the kit, and `check_workbook.py` GATE 4 verifies the stored
+workbook against the same values.
 
 **The arithmetic is live.** A reviewer foots a schedule by its formulas and traces a
 figure to where it came from by Excel's precedents, so:
 
 - A body figure is a value: it comes from the data room, which the workbook does not
-  hold, and its reperformance is its Sources row. Write it with `amount(cell, v,
-  fid="F.…")` (or `count(…, fid=…)`) naming the figure it holds.
-- A figure copied from ANOTHER check's tab is written with `src="F.…"`, naming the
-  figure it copies. At assembly `link_workbook.py --run-dir` replaces it with a reference
-  to the producing check's cell (`='r5 Position and DSO'!G23`), and reports a copy that
-  disagrees with its source — the copying check's to fix.
-- A subtotal, a total and a walk's derived line (`= …`) are `total(cell, value,
-  rows=[…])`: a formula over the rows it adds (`less=[…]` for `Less:` lines stored as
-  positive figures; `when=("N", "supported")` for a walk's conditional subtotal over its
-  verdict column). It refuses a formula that does not reach the figure the script
-  computed — the table is missing a row or carries a wrong one. A figure in such a row
-  that is not the sum of the rows above (a reconciliation's item count per bank) is
-  declared with `stated(cell)`.
-- Save with `save(wb, path)`, never `wb.save`: it caches every formula's result (a
-  viewer that does not recalculate shows nothing otherwise) and writes the cells map,
-  `<path stem>.cells.json`, that `step_record.place_tab` moves with the tab.
+  hold, and its reperformance is its Sources row. In a template it is `cell('F.…')`, and
+  the cell carries the figure's id.
+- A figure you built a table on the tab to support — the rows it counts, adds or filters
+  — is a formula over that table: `cell('F.…', formula := 'SUMIFS({Entries
+  selected.Gross}, {Entries selected.Counterparty}, {Who or what})')`. `{Heading.Header}`
+  is that column of the table under that heading; `{Header}` is this row's cell. The
+  formula shows which cells the figure reads and how; it may filter on any shown column
+  or on a cell of its own row. The renderer refuses one that does not reach the figure,
+  and the cell links to that table instead of its Sources row. A figure no table on the
+  tab supports stays a value.
+- A figure of ANOTHER check is written as a copy of it. At assembly `link_workbook.py
+  --run-dir` replaces it with a reference to the producing check's cell (`='r5 Position
+  and DSO'!G23`), and reports a copy that disagrees with its source — the copying check's
+  to fix.
+- A subtotal, a total and a walk's derived line (`= …`) are rows the query marks
+  (`_row`): each figure on one is a formula over the rows it adds, `Less:` lines deducted
+  and a conditional sum over the verdict column where the row names a word (`_when`). The
+  renderer refuses a formula that does not reach the figure, so a table missing a row or
+  carrying a wrong one does not render. A figure in such a row that is not the sum of the
+  rows above (a reconciliation's item count per bank) is declared stated (`_stated`).
+- A recon check writes its match tabs first and passes the workbook to
+  `render.render(run_dir, check, wb=wb)`.
 
 `check_workbook.py` GATE 8 recomputes every formula from the stored values and refuses a
 stale result, and on a mapped sheet refuses a subtotal, a total or a derived line typed
-as a value. A tab written before the maps existed is retrofitted at assembly as far as
-the evidence allows (`link_workbook.py` § 8).
-
-`finish(ws, table_last_row, ledger=False)` sets the per-sheet
-settings of the style's § 9 — the primary table's rules, row heights, the `B4` freeze, gridlines,
-tab color, an Excel table per table block (§ 4), print setup and the § 7 footer — after the
-last row is written.
+as a value.
 
 ## 8. Before the tab leaves staging
 
-Write the tab into `out/.staging/`, gate it there, and rename it into place as your last
-act:
+`render.py <run_dir> <check>` writes the tab into `out/.staging/`, gates it there, and
+renames it into place; run it as your last act. The gates it runs:
 
 ```
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/check_workbook.py <run_dir>/out/.staging/<tab>.xlsx --run-dir <run_dir>
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/check_prose.py <run_dir>/out/.staging/<tab>.xlsx --run-dir <run_dir>
+uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/sql.py verify <run_dir> --check <check>
 ```
 
-`scripts/step_record.py`'s `place_tab(run_dir, seq)` runs both and renames the tab into
-`out/tabs/` only when both exit 0; otherwise it raises `GateRefused` with their output
-and the tab stays staged. A non-zero exit from either is the author's to fix before the rename. `--run-dir` resolves
+`scripts/step_record.py`'s `place_tab(run_dir, seq)` runs all three and renames the tab into
+`out/tabs/` only when all three exit 0; otherwise it raises `GateRefused` with their output
+and the tab stays staged. A non-zero exit from any is the author's to fix before the
+rename. `--run-dir` resolves
 every `F.` / `P.` / `E.` id the tab cites against the run's own `workpapers/*.yaml`
 records, which gates the ids before any Sources or Evidence tab exists. An id cited but
 never recorded fails here, or it reaches the deliverable, where the report step may not
-repair a tab it copied. What `check_prose.py` holds the tab to is `VALIDATION.md`
-§ Prose checking.
+repair a tab it copied. With `--run-dir`, each tab's name must also pair with the check
+(§ 2). `sql.py verify --check` refuses an id the check's ledger rows cite (a table's
+statement, a figure's expression or caveats) that no tab states. What `check_prose.py`
+holds the tab to is `VALIDATION.md` § Prose checking.
 
 `check_workbook.py` holds the mechanical rules of this file and the style as its GATE 4
 and refuses a tab at the check's own gate and again at the seal. The author's pass
 covers what a parser cannot judge — the style's § 10 checklist, then:
 
 - B1 title, B2 subtitle, B3 the summary; on a check tab row 4 the one `BAND` header;
-  freeze at `B4` on every tab — the band alone, never a table header row; every table an
+  freeze at `B4` — the band alone — or at `B5` on a tab holding one table; every table an
   Excel table with distinct header labels;
 - the tab name is `<token> <Title>`, at most 31 characters; tab color per
   `WORKBOOK_STYLE.md` § 4;

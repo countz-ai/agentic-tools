@@ -18,7 +18,8 @@ what the user reads or takes away - the plan, each family's summary and its work
 the review findings, the sealed workbook and the report deck - and goes out as one card
 each, a family's workbook printed right after its summary. `working` is everything else -
 the engagement preview, the source inventory, the source profiles, the check records,
-the check schedules, the deck's source (report.yaml), the run summary - and goes out as
+the check schedules, the deck's source (report.yaml), the run summary, the cost report
+(out/cost.html, written by scripts/cost_report.py when the deck seals) - and goes out as
 ONE attach card per wave carrying every working file the wave
 produced, captioned by the BUNDLE line: a run of many checks then costs the conversation
 one card per wave, not one per file, and the files stay where they live in the run
@@ -69,6 +70,7 @@ WORKING_KINDS = {
     "report_plan": ("the deck's plan (report-plan.md)", None, "out/"),
     "report_source": ("the deck's source (report.yaml)", None, "out/"),
     "run_summary": ("the run summary", None, "out/"),
+    "cost": ("the cost report (cost.html)", None, "out/"),
 }
 
 
@@ -181,6 +183,11 @@ def render_findings(rec_path: pathlib.Path, out_path: pathlib.Path,
 
 # ---------------------------------------------------------------- the roster
 
+def _cost_report(run_dir: pathlib.Path) -> pathlib.Path:
+    import cost_report
+    return cost_report.write(run_dir)
+
+
 def _latest_record(run_dir: pathlib.Path, pattern: str) -> pathlib.Path | None:
     hits = [p for p in sorted((run_dir / "steps").glob("*.json"))
             if re.fullmatch(pattern, p.name)]
@@ -272,12 +279,18 @@ def collect(run_dir: pathlib.Path) -> list[tuple]:
                         "Run summary — statuses, open items, and what the run took",
                         WORKING))
 
+    deck = run_dir / "out" / "report.pptx"
+    if deck.is_file():
+        # written here, once per sealed deck: what the run cost, for the user to open
+        entries.append(("cost", _file_hash(deck), lambda: _cost_report(run_dir),
+                        "Cost report — what each step cost and took, against the plan's "
+                        "estimate", WORKING))
+
     wb = run_dir / "out" / "workbook.xlsx"
     if wb.is_file():
         entries.append(("workbook", _file_hash(wb), lambda: wb,
                         "The deliverable workbook, sealed", DELIVERABLE))
 
-    deck = run_dir / "out" / "report.pptx"
     if deck.is_file():
         entries.append(("report", _file_hash(deck), lambda: deck,
                         "The report deck — executive summary, a page per check, appendices",

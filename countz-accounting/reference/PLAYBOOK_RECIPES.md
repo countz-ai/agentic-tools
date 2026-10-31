@@ -53,9 +53,20 @@ never evidence that its own conclusion holds.
 `supported`: record evidence at the standing the ruling claims. A `supported` ruling
 whose evidence carries a lower standing is a `blocking` finding (VALIDATION.md § Severity).
 `candidate`: the evidence points one way and the data room lacks the document that
-settles it; carries the condition that would move it. `rejected`: examined and refused,
-with the test it failed. `modified`: a proposed figure and the run's, side by side. A
-recipe uses the subset it needs and says which.
+settles it; carries the condition that would move it. A document in the data room that
+settles the item rules it `supported` or `rejected`; a document that might exist and
+overturn it is not a condition. `rejected`: examined and refused, with the test it
+failed. `modified`: a proposed figure and the run's, side by side. A recipe uses the
+subset it needs and says which.
+
+### Hypotheses
+
+Fix each test and its threshold before reading its result. Record a pattern a check sees
+and does not test as a proposed hypothesis, with its size and the check best placed to
+test it; never hand it to another check in a sentence. Before the run seals, test every
+proposed hypothesis above the recipe's declared `performance_materiality` (its
+`materiality` where it declares none), and every one promoted under DOCTRINE.md
+§ Materiality. For one the data room cannot test, raise the `D.` that would.
 
 ### The subtraction runs before the verdict is chosen
 
@@ -96,9 +107,9 @@ classification, and what every wave owes the user.
 This is the run's first question, and it goes to the user before anything else is done:
 no file written, no folder made, no other question asked.
 
-1. Get the recipe your skill names. `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/bundled_recipe.py
-   <its name>` (your skill's first command runs it) prints `RECIPE:` and `VERSION:` when
-   the package carries a copy: that path is the recipe. On `NONE`, call
+1. Get the recipe of the catalog entry the ask matched (`skills/countz/SKILL.md`).
+   `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/bundled_recipe.py <its name>` prints `RECIPE:`
+   and `VERSION:` when the package carries a copy: that path is the recipe. On `NONE`, call
    `get_recipe_for_countz_analysis(recipe="<its name>")` on the `countz` server; the
    body is its `recipe_markdown`. Do not write the served body to a file: § 3 pins it after the
    user answers, from the saved result where the host saved one.
@@ -115,17 +126,19 @@ no file written, no folder made, no other question asked.
    request and without it on a broad one. For a bundled copy, pass its path:
    `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/recipe_scope.py ask <the RECIPE path>`. For a
    served body, pipe in only its family headers, the lines that open `### ` under
-   `## The families`, copied exactly:
+   `## The families`, copied exactly, and pass `--recipe <its name>` so the estimates
+   come from that recipe's earlier runs:
 
    ```
-   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/recipe_scope.py ask --suggest c4,c5 <<'EOF'
+   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/recipe_scope.py ask --recipe cash-substantiation --suggest c4,c5 <<'EOF'
    ### C0 — the population, drawn from the balance sheet (kind `analysis`, one check)
    ...
    EOF
    ```
 
 4. Send what the script prints between `SHOW:` and `END`, verbatim, as the whole
-   message: the recipe's steps as a numbered overview, and under it the prompt. On a
+   message: the recipe's steps as a numbered overview with each step's estimated time
+   and cost, the run's estimate, and under it the prompt. On a
    broad request the prompt asks what to run, *run 5, 6* or *run all*; on a specific
    one it proposes the steps the request bears on, *Based on your request, steps 5, 6
    are relevant, shall we run them?* Use no question tool: the user reads the whole
@@ -147,17 +160,22 @@ underscore or the code's own markup in front of the user.
 Once the user has picked what to run (§ 1), ask the rest in one message:
 
 - **The data sources**: a short id for each and what it is. Name the recipe's source
-  classes and the records each lists. Take what exists; the plan states what each
-  missing record costs. Do not press.
+  classes and the records each lists. Say how far the files must reach before and after
+  the period under review, as the recipe's `## The period set` states it (examples: one
+  full prior period of billing files, the twelve months before the period, the months
+  after the period end), so the user gathers them in one pass. Take what exists; the
+  plan states what each missing record costs. Do not press.
 - **The period end** covered, and **the period under review** in the user's words where
   they give one: a fiscal year, a quarter, the months of a close.
-- **Each option the recipe `declares`**: put its line to the user and record the choice.
+- **Each option the recipe `declares`**: put it to the user in plain words (what it
+  controls, its default, what changing it does) and record the choice.
   Where they do not choose, take the answer its line carries (`RUN_CONTRACT.md`
   § Parameters). `arr_policy` is the exception: it is a file, not a one-line choice. Ask
   whether the company has an approved ARR policy (`ARR_POLICY.md` § Where a policy
   lives). A policy in the library for this company (`arr_policy.py library`, its
   `MATCH:` line) is offered by name. The rest is
   settled after registration (§ 3).
+- **The accounting standard** (`accounting_standard`), if the user names one.
 - **The company** whose books the run is over, in the user's words. It names the run
   folder.
 - **Where the output goes**: a folder you may write into. Do not guess paths.
@@ -178,8 +196,8 @@ the user in one line, register with `--recipe <the RECIPE path> --recipe-version
 VERSION>`, and call no recipe tool. `NONE` means nothing is bundled: fetch.
 
 Call `get_recipe_for_countz_analysis(recipe="<your recipe's name>")` on the `countz`
-server — a named shim knows its name; `countz`, given an ask, matches the catalog first
-(its SKILL.md). The result carries `recipe_markdown`, `recipe_name` and `recipe_version`.
+server. The recipe's name is the `name` of the catalog entry the ask matched
+(`skills/countz/SKILL.md`). The result carries `recipe_markdown`, `recipe_name` and `recipe_version`.
 Pin it one of two ways; either way the script copies the bytes to
 `<run_dir>/recipes/<recipe_name>.md` and refuses bytes whose sha does not match the
 version, so the run pins the bytes the server served:
@@ -190,18 +208,19 @@ version, so the run pins the bytes the server served:
   copying the body out by hand takes minutes.
 - **Otherwise**, write `recipe_markdown` to a file, exactly as returned, and register with
   `--recipe` pointing at that file and `--recipe-version` the served version. If
-  `--recipe-result` refused the file, do the same. A named shim sends no
-`ask`. `match: not_found` for a named recipe means the server no longer carries it: put
-that to the user and stop.
+  `--recipe-result` refused the file, do the same. A recipe fetched by name sends no
+`ask`. `match: not_found` for a recipe fetched by name means the server no longer carries
+it: put that to the user and stop.
 
 The registration:
 
 ```
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/setup_run.py \
-    --output-root <abs> --skill <your shim's name> --company "<the user's words>" \
+    --output-root <abs> --company "<the user's words>" \
     --goal <the recipe's name> --session ${CLAUDE_SESSION_ID} \
     --sources '[{"id": "gl", "path": "<abs>", "name": "<the user's words>"}, ...]' \
     --params '{"period_end": "<as collected>", "period": "<as collected, where given>",
+               "accounting_standard": "<if the user named one>",
                "instructions": "<the ask, verbatim>", "<declared key>": "<the choice>", ...}' \
     --recipe-result <the saved result> \
     --scope <the picks: row numbers, or all>
@@ -210,23 +229,24 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/setup_run.py \
 Without a saved result, `--recipe <the file you wrote> --recipe-version <recipe_version>`
 stands in place of `--recipe-result`.
 
-The script mints `<output_root>/<skill>-<company slug>.<YYYYMMDD-HHMMSS>` and prints it
-as `RUN_DIR:`; that path is `<run_dir>` everywhere below. Never compose the name
+The script mints `<output_root>/<recipe name>-<company slug>.<YYYYMMDD-HHMMSS>`, where
+the recipe name is the pinned recipe's frontmatter `name`, and prints it as `RUN_DIR:`;
+that path is `<run_dir>` everywhere below. Never compose the name
 yourself. `--params` is everything § 2 collected, verbatim, as one JSON object — the
 ask included, so `run.json` records why the run was scoped as it was. The script reads
-no client file. A `countz` run on a catalog miss registers without `--recipe`
-and pins the generated recipe afterwards (its SKILL.md).
+no client file. A `countz` run on a catalog miss registers with `--skill countz` in
+place of `--recipe` and pins the generated recipe afterwards (its SKILL.md).
 
 **The scope.** `--scope` resolves the picks with every family they read from into
 `run.json.inputs.scope`, and prints `SCOPE:` and `SAY:`. Put the `SAY:` text to the user
-in one line, verbatim: it names what runs and what was added because a pick depends on
-it. `all` registers no scope, and the run executes every family. To change the scope
+in one line, verbatim: it names what runs, what was added because a pick depends on
+it, and the estimated cost and time of that scope. `all` registers no scope, and the run executes every family. To change the scope
 before the plan is approved, run `setup_run.py <run_dir> --session ${CLAUDE_SESSION_ID}
 --sources '[]' --scope <picks>`, then re-dispatch `check-plan` with `revise=` naming the
 change.
 
 Sources arriving after the plan is drafted: run the same script with `<run_dir>` in place
-of `--output-root`, `--skill` and `--company`, then re-dispatch `check-plan` with
+of `--output-root` and `--company`, then re-dispatch `check-plan` with
 `revise=` naming them.
 
 **The ARR policy.** Where the recipe declares `arr_policy`, pin an approved policy before
@@ -275,7 +295,7 @@ on to the deliverable without asking again, except about the data room
 ### 5. Execute
 
 The `playbook` skill's run loop. Run
-`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/playbook_next.py <run_dir> <definition path>` and
+`uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/playbook_next.py <run_dir> <definition path>` and
 execute the lines it prints in order: `RECORD:`, `LAUNCH:`, `NEXT:`, then the `THEN:`
 lines (`record`, any `RETRY:`, the script again). On `ESCALATE:` (exit code 3) or any
 other failure, invoke the `playbook-next` skill with the same arguments, execute its
@@ -296,7 +316,8 @@ user left out.
 
 The deliverables are `out/workbook.xlsx` and `out/report.pptx`; the report wave's preview
 put them on screen as rendered cards. `out/RUN_SUMMARY.md` is in that wave's working
-bundle. Point at all three. Hand
+bundle. Point at all three. The same bundle carries `out/cost.html`, what the run cost;
+leave it there, and open it or relay its figures only when the user asks. Hand
 over the run archive `out/run_sync.tar.gz` per `RUN_CONTRACT.md` § Bringing the run home;
 extracted under the user's result root it lands at `<short_name>.<datetime>` with
 `sync.json` carrying the run's session ids. Relay the exception schedule and the open

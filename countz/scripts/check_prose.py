@@ -1,0 +1,246 @@
+#!/usr/bin/env python3
+"""Refuse prose whose numbers the figure ledger does not carry.
+
+A metric number typed into a sentence is a second copy of a figure. A text cell has no
+formula, so the cell-resolution gate cannot see it, and when a fix re-run moves the
+ledger the sentence keeps the old value. Measured on the first critique loop: every
+prose-drift finding in rounds two through four was this class — a dollar amount or day
+count composed into a sentence instead of interpolated from the ledger.
+
+The rule this enforces (EVIDENCE.md § 4): the code that writes a tab loads the figure
+ledger and interpolates values into sentence templates. This gate reads the result. It
+extracts every dollar amount, day count, percentage and multiple (and with `--counts`
+every count: "372 lines", "86 new-logo orders") from text cells (or markdown lines) and
+requires each to agree with an admitted value within the rounding
+tolerance of the precision displayed (DOCTRINE.md § Number conventions: "$6.3M" tolerates 0.05M,
+"44.6 days" tolerates 0.05).
+
+Money is read with scripts/style.py's grammar, the one figures.fmt writes with: any
+currency in its table by symbol or ISO code (`$9.4M`, `€5,000,000`, `A$1.2B`, `CHF 1,204`,
+`5,000 EUR`), a scale suffix in any case or spelled (`$9.4m`, `$81K`, `$1.2 billion`).
+A number is backed by its magnitude: a written sign is not checked.
+
+Scanned: string cells of .xlsx targets; lines of any other (text) target. Digits only —
+a magnitude spelled out in words is the review's to catch by reading, not this gate's.
+Admitted: numbers on value-bearing keys (value, control_total, total_n, lo, hi, ...) in
+<run_dir>/workpapers/*.yaml, plus EVERY numeric literal in each --allow file — give the
+file carrying a declared tolerance a sentence legitimately states.
+Skipped: day-count ranges ("31-60 days", "90+ days") — bucket labels, not stated figures;
+a four-digit number written without a comma (a year, an account), a day of a date,
+and a number that names a thing ("rule 3", "row 12").
+
+Usage:
+    check_prose.py <tab.xlsx|file.md> [more targets...] [--run-dir DIR] [--allow FILE]...
+                   [--counts]
+--run-dir defaults to the nearest ancestor of the first target containing workpapers/.
+Exit 0 clean, 1 if any number is unbacked, 2 on a usage error.
+"""
+from __future__ import annotations
+
+import argparse
+import html
+import pathlib
+import re
+import sys
+import zipfile
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import style  # noqa: E402  sibling: the grammar figures.fmt writes with
+
+NUM = style.NUM
+ANY_NUM = re.compile(f"-?{NUM}")
+# One alternative per display convention, money first. Bare-number forms guard their left
+# edge so a token cannot start mid-number, and the days form also refuses a range/plus
+# prefix.
+TOKEN = re.compile(
+    rf"(?P<m>{style.MONEY_TOKEN})"
+    rf"|(?<![\d.,\-–+$])(?P<days>{NUM})[\s-]days?\b"
+    rf"|(?<![\d.,])(?P<pct>{NUM})\s?%"
+    rf"|(?<![\d.,])(?P<mult>{NUM})x\b")
+# A ledger line admits the first number after each of these keys; anything else on the
+# line (row anchors, dates, cell refs) stays out of the admitted set.
+VALUE_KEY = re.compile(
+    r"\b(?:value|control_total|total_n|included_n|row_count|lo|hi|low|high|min|max"
+    r"|amount|days|dollars|usd|pct|percent|target|floor|threshold|materiality"
+    r"|de_minimis|window_days|rate|n)\s*:")
+# A count: a whole number, up to three words, then the plural noun it counts.
+COUNT = re.compile(
+    r"(?<![\w.,\-\u2013+$/#\u00a7:])(?P<n>\d{1,3}(?:,\d{3})+|\d+)(?![.,]?\d)"
+    r"(?:\s+(?!(?:the|a|an|of|to|in|at|on|and|or|for|by|from|with|is|are|was|were|than)\b)"
+    r"[A-Za-z][\w-]*){0,3}?\s+(?P<noun>[a-z][a-z-]{2,}[a-z]s)\b")
+NOT_COUNTED = frozenset({"days", "months", "years", "weeks", "times", "points", "cents",
+                         "percent", "basis", "this", "thus", "does", "plus", "less", "minus",
+                         "versus", "across", "gross", "unless", "always", "perhaps"})
+NAMING = re.compile(r"(?:\b(?:rule|rules|step|steps|item|items|line|lines|row|rows|page|pages|"
+                    r"clause|clauses|section|note|notes|column|columns|tier|level|version|part|"
+                    r"phase|wave|lane|p|pp|no|fy|q|asc|asu|ias|ifrs|topic|form|exhibit|"
+                    r"schedule|appendix|chapter|article)\.?)\s*$", re.I)
+MONTH_WORD = re.compile(r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s*$",
+                        re.I)
+SHEET_EL = re.compile(r"<sheet\b[^>]*/?>")
+REL_EL = re.compile(r"<Relationship\b[^>]*/?>")
+ATTR = lambda name: re.compile(rf'\b{name}="([^"]*)"')
+
+
+def sheet_names(z: zipfile.ZipFile) -> dict[str, str]:
+    """worksheet part name -> display name, so a report names a real tab."""
+    try:
+        wb = z.read("xl/workbook.xml").decode()
+        rels = {}
+        for el in REL_EL.findall(z.read("xl/_rels/workbook.xml.rels").decode()):
+            rid, target = ATTR("Id").search(el), ATTR("Target").search(el)
+            if rid and target:
+                rels[rid.group(1)] = target.group(1)
+    except KeyError:
+        return {}
+    out = {}
+    for el in SHEET_EL.findall(wb):
+        name = ATTR("name").search(el)
+        rid = ATTR("r:id").search(el) or ATTR("id").search(el)
+        if name and rid:
+            target = rels.get(rid.group(1), "")
+            out["xl/" + target.lstrip("/").removeprefix("xl/")] = name.group(1)
+    return out
+
+
+def texts(target: pathlib.Path):
+    """Yield (location, text) for every prose surface in the target, as stored."""
+    if target.suffix.lower() != ".xlsx":
+        for i, line in enumerate(target.read_text(encoding="utf-8",
+                                                  errors="replace").splitlines(), 1):
+            yield f"{target.name}:{i}", line
+        return
+    with zipfile.ZipFile(target) as z:
+        shared: list[str] = []
+        if "xl/sharedStrings.xml" in z.namelist():
+            sst = z.read("xl/sharedStrings.xml").decode("utf-8", "replace")
+            for si in re.findall(r"<si>(.*?)</si>", sst, re.S):
+                shared.append(html.unescape("".join(re.findall(r"<t[^>]*>(.*?)</t>", si, re.S))))
+        names = sheet_names(z)
+        for part in sorted(n for n in z.namelist()
+                           if n.startswith("xl/worksheets/") and n.endswith(".xml")):
+            xml = z.read(part).decode("utf-8", "replace")
+            tab = names.get(part, part.rsplit("/", 1)[-1].removesuffix(".xml"))
+            # A styled empty cell is stored self-closing (`<c r="C1" s="1"/>` — openpyxl
+            # writes these); a pattern demanding `</c>` swallows the NEXT cell's text
+            # from inside one, and every cell after an empty styled cell escapes the scan.
+            for m in re.finditer(r"<c\b([^>]*?)(?:/>|>((?:(?!</c>).)*)</c>)", xml, re.S):
+                attrs, body = m.group(1), m.group(2) or ""
+                ref = ATTR("r").search(attrs)
+                loc = f"{tab}!{ref.group(1) if ref else '?'}"
+                t = ATTR("t").search(attrs)
+                kind = t.group(1) if t else ""
+                if kind == "s":
+                    v = re.search(r"<v[^>]*>(\d+)</v>", body)
+                    if v and int(v.group(1)) < len(shared):
+                        yield loc, shared[int(v.group(1))]
+                elif kind == "inlineStr":
+                    yield loc, html.unescape("".join(re.findall(r"<t[^>]*>(.*?)</t>", body, re.S)))
+                elif kind == "str":
+                    v = re.search(r"<v[^>]*>(.*?)</v>", body, re.S)
+                    if v:
+                        yield loc, html.unescape(v.group(1))
+
+
+def admitted_values(run_dir: pathlib.Path, allow: list[pathlib.Path]) -> list[tuple[float, str]]:
+    out: list[tuple[float, str]] = []
+    for y in sorted((run_dir / "workpapers").glob("*.yaml")):
+        for line in y.read_text(encoding="utf-8", errors="replace").splitlines():
+            for k in VALUE_KEY.finditer(line):
+                n = ANY_NUM.search(line[k.end():])
+                if n:
+                    out.append((float(n.group(0).replace(",", "")), y.name))
+    for f in allow:
+        for n in ANY_NUM.finditer(f.read_text(encoding="utf-8", errors="replace")):
+            out.append((float(n.group(0).replace(",", "")), f.name))
+    return out
+
+
+def tokenize(text: str, counts: bool = False):
+    """Yield (token_text, value, tolerance, variants) per metric number in the text, and
+    with `counts` per count; `value` is the magnitude."""
+    for m in TOKEN.finditer(text):
+        if m.group("m"):
+            raw = m.group("money") or m.group("money2")
+            scale = style.scale_of(m.group("suffix") or m.group("suffix2"))
+        else:
+            raw = m.group("days") or m.group("pct") or m.group("mult")
+            scale = 1.0
+        decimals = len(raw.split(".")[1]) if "." in raw else 0
+        value = float(raw.replace(",", "")) * scale
+        tol = 0.5 * scale * 10 ** -decimals
+        variants = (1.0, 100.0) if m.group("pct") else (1.0,)   # a ledger 0.174 backs "17.4%"
+        yield m.group(0).strip(), value, tol, variants
+    for m in COUNT.finditer(text) if counts else ():
+        n, before = m.group("n"), text[:m.start()]
+        if m.group("noun") in NOT_COUNTED or m.group("noun").endswith("ss") \
+                or (len(n) == 4 and "," not in n) or MONTH_WORD.search(before) \
+                or NAMING.search(before):
+            continue
+        yield m.group(0).strip(), float(n.replace(",", "")), 1e-9, (1.0,)
+
+
+def scan(targets, admitted, counts: bool = False):
+    """(metric numbers seen, unbacked) over every target's prose; counts too with
+    `counts`."""
+    total, unbacked = 0, []
+    for target in targets:
+        for loc, text in texts(target):
+            for token, value, tol, variants in tokenize(text, counts):
+                total += 1
+                if any(abs(abs(av) * f - value) <= tol for av, _ in admitted for f in variants):
+                    continue
+                gap, near, src = min((abs(abs(av) * f - value), av, s)
+                                     for av, s in admitted for f in variants)
+                unbacked.append({"target": target.name, "location": loc, "token": token,
+                                 "nearest": near, "nearest_in": src, "off_by": gap})
+    return total, unbacked
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("targets", nargs="+", type=pathlib.Path)
+    ap.add_argument("--run-dir", type=pathlib.Path)
+    ap.add_argument("--allow", action="append", type=pathlib.Path, default=[])
+    ap.add_argument("--json", action="store_true")
+    ap.add_argument("--counts", action="store_true", help="check counts too (a check's tab)")
+    a = ap.parse_args()
+    run_dir = a.run_dir
+    if run_dir is None:
+        run_dir = next((p for p in a.targets[0].resolve().parents
+                        if (p / "workpapers").is_dir()), None)
+    if run_dir is None or not (run_dir / "workpapers").is_dir():
+        print("no workpapers/ found above the target; use --run-dir", file=sys.stderr)
+        return 2
+    for f in [*a.targets, *a.allow]:
+        if not f.is_file():
+            print(f"{f}: not a file", file=sys.stderr)
+            return 2
+    admitted = admitted_values(run_dir, a.allow)
+    if not admitted:
+        print(f"{run_dir}/workpapers holds no admitted values - nothing to bind against",
+              file=sys.stderr)
+        return 2
+
+    total, unbacked = scan(a.targets, admitted, a.counts)
+    if a.json:
+        import json
+        print(json.dumps({"metric_numbers": total, "unbacked": unbacked}, indent=2))
+        return 1 if unbacked else 0
+    if not unbacked:
+        print(f"{', '.join(t.name for t in a.targets)}: {total} metric number(s) in prose, "
+              f"every one carried by the ledger.")
+        return 0
+    print(f"{len(unbacked)} of {total} prose numbers have NO admitted value behind them:\n")
+    for u in unbacked:
+        print(f"  {u['location']:<28} {u['token']:<16} nearest {u['nearest']:,} "
+              f"({u['nearest_in']}), off by {u['off_by']:,.2f}")
+    print("\n  A number in a sentence is interpolated from the figure ledger, never typed")
+    print("  (EVIDENCE.md § 4). Record the figure the sentence needs, or fix the sentence;")
+    print("  a threshold or tie delta a tab legitimately states is admitted with --allow.")
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

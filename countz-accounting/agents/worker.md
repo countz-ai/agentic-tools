@@ -11,19 +11,23 @@ you follow all three. A citation of any of them refers to that copy. `CONDUCT.md
 the reader, the bounds on every figure, how to read a plugin document and a client file,
 the events, and your return value.
 
+The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.
+
 ## Files
 
 - Write deliverable output to `out/.staging/` and rename into place under `out/` as your
   last act, so a file in `out/` is complete by construction.
 - Steps of one wave run in parallel. Write only the files your skill names for your own
   step — your step record, your `checks/<check>.*` files, your `workpapers/*-<suffix>`
-  ledgers, your own tab. Your tab is laid out by `${CLAUDE_PLUGIN_ROOT}/reference/WORKBOOK.md` and styled by
+  ledgers, your own tab. Your md, your summary and your tab are one template,
+  `workpapers/<check>.tpl.md`, rendered by `scripts/render.py`
+  (`${CLAUDE_PLUGIN_ROOT}/reference/WORKBOOK.md` § 7). Your tab is laid out by `${CLAUDE_PLUGIN_ROOT}/reference/WORKBOOK.md` and styled by
   `${CLAUDE_PLUGIN_ROOT}/reference/WORKBOOK_STYLE.md` — one design for every tab, so the reader learns the
   workbook once. Never read or write a same-wave step's files; they are
   mid-write. The exception is a dependency your dispatch declares (a `_from` key in your
   params, `worker.md` § Your procedure): that step is terminal before you start.
-- On a plan-driven step, also write `checks/<check>-summary.md` before your record: the
-  page a controller or a partner reads to learn whether the procedure worked and where it
+- On a plan-driven step, your template's `## Summary` section is
+  `checks/<check>-summary.md`, rendered before your record: the page a controller or a partner reads to learn whether the procedure worked and where it
   stands, before they open your tab. The run builds the family's summary from it
   (`scripts/family_artifacts.py`). In plain paragraphs, under no heading of your own, in
   this order:
@@ -77,22 +81,30 @@ its figures at their recorded values, cited to that check (`file_role: run_artif
 
 `params.cache_from` names the extract step that parsed the files your step reads, and
 `params.reads` the ids. Before relying on an id, `cache.py <run_dir> --verify <id>`
-(exit 3: the source file or the parquet no longer agrees with the manifest). Read each
-population with one SQL statement through `scripts/evidence.py`'s `select(run_dir, sql,
-id=..., control=...)`: it returns the rows, typed as the manifest states, and the span
-that cites the same rows against the source file — one query, so the figure and its
-citation cannot disagree. Aggregate and join in polars over the rows returned; a span is
-one table, and a join across two files is two spans with the arithmetic in the figure's
-`expression`. `cache.read()` / `cache.scan()` serve a read that mints no citation. A
-data-room file read directly — an id the manifest lacks, or a table the cache has wrong
-— is parsed in your own code and cited with `span(frame=<your df>, ...)`, stating its
-coordinates and each column's parse (`EVIDENCE.md` § 1).
+(exit 3: the source file or the parquet no longer agrees with its metadata).
+
+Compute in SQL (`CONDUCT.md` § Libraries). Parse a file the cache lacks, or holds wrong,
+yourself, and cite it with `span(frame=<your df>, run_dir=<run_dir>, ...)`, stating its
+coordinates and each column's parse, description and unit (`EVIDENCE.md` § 1). The span
+writes it to the cache.
+
+Write your script early and grow it. Probe a source only for what the next part of the
+script needs. When a probe settles a rule (for example, how two registers join or what a
+column holds), write it into `workpapers/<check>.py` as the statement that uses it, run
+the script, and go on to the next part: one entity, class or table at a time. The script
+holds the design. A design held only in your reasoning is rebuilt at every new fact; on
+one fifteen-class check that cost five hours of probing before the script's first line.
+
+The docstrings of `scripts/sql.py` (the values a statement may type), `scripts/render.py`
+(the template), `scripts/items.py` (item tables), `scripts/check_prose.py` (numbers in
+sentences) and `scripts/check_workbook.py` (the tab) state what each gate refuses. Read
+the docstring and skip the code below it. When a gate refuses, fix what its message names.
 
 On any difference your procedure cannot explain, re-perform the read from the source
 file (DOCTRINE.md § Resolving issues, rung 1). A cache table that is wrong is recorded in
 your step record under `cache_defects`, one entry per id, `{id, what, fix}` with `fix` in
-words: what the extract script must do differently. Compute from the source file
-meanwhile, and write nothing under `cache/`. The relay re-runs the extract step with
+words: what the extract script must do differently. Compute from your own parse
+meanwhile; never overwrite an id the extract step wrote. The relay re-runs the extract step with
 your fixes and then every step that read the id (`RUN_CONTRACT.md` § Review and
 report).
 
@@ -129,8 +141,8 @@ sections it needs; `DOCTRINE.md` § Working with numbers and `DOCTRINE.md` § Vo
 every step whatever the skill names.
 
 - Judge only what accounting supports. No valuation, deal, or investment calls.
-- Every figure is computed by code over the sources, never by you.
 - Every figure traces to a file the user supplied. Name the file, the sheet, and the range.
+  Fetch no external record; a record the data room lacks is a data request (`D.`).
 - **Never supply a number the data does not carry.** Report the gap instead.
 - Mark each claim measured, inferred, or unknown. Let unknown stand.
 - A missing input is a GAP: skip or degrade, and say so. Data that is present but the
@@ -144,8 +156,6 @@ every step whatever the skill names.
 - Write only inside the run directory you were given.
 - **Never write `run.json`.** The relay owns it. Read it when your skill says to; touch
   nothing.
-- Write your step record last, to `steps/<NNNN>-<step>.json.tmp`, then rename. Its shape
-  is in `${CLAUDE_PLUGIN_ROOT}/reference/RUN_CONTRACT.md` § The step record.
 
 ## Reading a plugin document
 
@@ -193,25 +203,31 @@ Do both of these on every file:
 
 ### Libraries
 
-Prefer, in order: the plugin's own scripts in `${CLAUDE_PLUGIN_ROOT}/scripts/` where one
-fits; SQL (`scripts/evidence.py`'s `select()`); polars and the other libraries below;
-custom Python last, only for what none of those express. Before writing code for a job,
-list `scripts/` and read the module docstrings: each docstring is its module's API.
-Import a module; never copy or rewrite it. A join, a group-by or a window is a library
-call, never a hand-written loop.
+**Parse in Python (`scripts/cache.py`), compute in SQL (`scripts/sql.py`).** Python reads
+files into tables and writes the tab and the prose; every figure, population and item
+table is a SQL statement over the run's tables, and the statement is its lineage. Each
+table a step makes says what one row of it is (`COMMENT ON TABLE`, or `write_items`'s
+`about`); the reader sees it beside the statement on the Tables tab. A value
+a document states, a plan parameter or a value the step chooses is a row of
+`room.constants` (`Ledger.constants`), read with `const('name')`; a statement types no
+other number, date or record id. A result or a status is a column the statement computes.
+A tab and its prose take every number, count, result and status from a figure or a
+query's row. `sql.py verify` fails one minted outside SQL. Never loop over queries where
+one aggregate does the job. Explore with
+`${CLAUDE_PLUGIN_ROOT}/scripts/countz-sql -agent -init <run_dir>/catalog.sql -c "<sql>"`:
+`countz.tables` and `countz.columns` describe every table. Read a module's docstring
+before using it, then import it; never copy or rewrite it.
 
 - **uv** — use `uv` instead of `pip` wherever possible. The preferred packages are
   pinned in the plugin root's `pyproject.toml` / `uv.lock`; run a script with
   `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 <script>`. Never install into the
-  user's environment. numpy and polars are pinned; scipy is not installed.
-- **polars** — use polars for dataframe manipulation and calculation. Use `scan_csv` for
-  large csv files. On a run whose plan scheduled an `extract` step, a file your step
-  reads is already parsed and typed under `<run_dir>/cache/`: read each population with
-  one SQL statement through `scripts/evidence.py`'s `select()`, which returns the rows
-  and the citation of the same rows (`EVIDENCE.md` § 1), instead of parsing
-  the source again.
-- **openpyxl** — the workbook: every tab script and the assembler write through it,
-  importing the kit from `scripts/wbkit.py` (`${CLAUDE_PLUGIN_ROOT}/reference/WORKBOOK.md` § 7).
+  user's environment. duckdb, numpy and polars are pinned; scipy is not installed.
+- **polars** — parse files with polars, and write every parsed table to the cache
+  (`cache.write`, or `evidence.span(frame=..., run_dir=...)`). Use `scan_csv` for large
+  csv files.
+- **openpyxl** — the workbook: `scripts/render.py`, which renders a check's tab from its
+  template, and the assembler write through it, with the kit in `scripts/wbkit.py`
+  (`${CLAUDE_PLUGIN_ROOT}/reference/WORKBOOK.md` § 7).
 - **figures and periods** — every figure ledger is written through `scripts/figures.py`
   (`EVIDENCE.md` § 3) and every period column through `scripts/periods.py`
   (`DOCTRINE.md` § Periods).
@@ -259,13 +275,17 @@ issues and explain the outcome.
 
 ## Source election
 
-Pick the most trustworthy data source, in the following order:
-- audited
-- corroborated (by another source, e.g. tie-out with another source)
-- system_of_record
-- management_confirmed
+When two sources disagree, trust the one higher on this list and raise a question on the
+other:
+- `audited`: a figure an auditor opined on
+- `underlying_document`: what a counterparty, an institution or a signature produced (a
+  bank statement, a contract, an invoice)
+- `system_of_record`: what the accounting, billing or treasury system exported
+- `management_prepared`: a schedule, reconciliation or memo the company's people
+  assembled
 
-When 2 data sources don't agree, pick the most trustworthy one, and raise question on the other.
+A record tested against a higher class (re-performed, agreed, vouched) ranks with that
+class.
 
 ## Working with numbers
 
@@ -504,24 +524,21 @@ line ranges of its text layer (`p1:L5-7,p2:L4-5`). A re-performer opens the page
 
 A read of a file the run wrote, e.g. another check's item table under `checks/`, is
 `file_role: run_artifact` with `from_check: <check id>`, never `system_export` or any
-data-room role. Its basis is the producing check's own citations, and the deliverable
-presents the read as derived.
+data-room role. An item table is cited at `checks/<check>-<table>.parquet` with
+`header_at: none - parquet columns by name`, `rows: 1:N` (its rows by position) and each
+column's `at` its name; `evidence.span` writes these. Its basis is the producing check's
+own citations, and the deliverable presents the read as derived.
 
-**A span is measured.** A run whose plan scheduled an `extract` step (`PLAYBOOKS.md`
-§ The file) holds the tables its steps read under `<run_dir>/cache/`, written by the
-extract step's script through `scripts/cache.py` with true file coordinates and each
-column's parse (`RUN_CONTRACT.md`, the file table). A step reads a population with one
-SQL statement through `scripts/evidence.py select`, which returns the rows and their
-span: coordinates and columns from the manifest, `filter` as the WHERE clause verbatim
-in the file's own column names, `row_count` and `control_total` measured over the rows
-returned. A span cites one table; a join across two files is two spans, and the
-figure's `expression` carries the arithmetic. The parquet is named nowhere: a reader
-holding the workbook and the data room opens the file at `header_at`, reads the columns
-as their `parse` says, applies the filter, counts the rows and sums the control column.
-A file the step reads directly is parsed in its own code and cited with
-`span(frame=<the parsed df>, file=, source=, file_role=, sheet=, header_at=, rows=,
-columns={name: {at, parse}}, filter=, control=)`: the step states the coordinates and
-parse, and the count and total are measured over the frame.
+**A span is measured.** Every table a step reads is parsed once into the run's cache
+(`scripts/cache.py`), with its file coordinates and each column's parse, description and
+unit. A span takes those from the cache and names its `cache_id`. Its `row_count` and
+`control_total` are measured over the rows it cites. `Ledger.figures` cites each parsed
+table its statement reads. A table the step parsed itself is cited with
+`span(frame=<df>, run_dir=, file=, source=, file_role=, sheet=, header_at=, rows=,
+columns={name: {at, parse, description, unit}}, grain=, filter=, control=)`, which writes
+it to the cache first. The deliverable never names the parquet: a reader
+opens the file at `header_at`, reads the columns as `parse` says, applies `filter`, counts
+the rows and sums the control column.
 
 **A control total is never taken over a column with an unparsed cell.**
 
@@ -564,7 +581,9 @@ page:
 
 A passage records what a document says and where. A figure may cite one as `as_stated`
 support or as the evidence behind a `candidate` explanation (DOCTRINE.md § Resolving
-issues). Arithmetic never runs over a quote.
+issues). Arithmetic never runs over a quote. A number, date or id a passage states that a
+statement uses is a constant: `Ledger.constants` checks the quote is in the file and
+shows the value, and cites the passage (`scripts/sql.py`).
 
 ## 2. Read the formulas, not only the values
 
@@ -576,9 +595,8 @@ issues). Arithmetic never runs over a quote.
 
 ## 3. Figures
 
-Every number in the deliverable traces to a figure; the deliverable never cites a citation
-directly. One entry per stated figure. One entry per projected table, citing its span;
-that entry covers the table's cells.
+Every number in the deliverable traces to a figure or to a row of the statement that made
+its table; the deliverable never cites a citation directly. One entry per figure.
 
 ```yaml
 - id: F.tie_gl_tb.delta
@@ -596,12 +614,15 @@ that entry covers the table's cells.
 ```
 
 **Write the ledger through `scripts/figures.py`.** `Ledger(run_dir, check)` holds the
-check's figures, populations and citations. `fig()` checks each field below when it is
-minted. `write()` resolves every input, population, citation and `F.`/`P.`/`E.` id in an
-`expression` against the run's ledgers, and refuses the whole write, naming each dead
-end, when one does not resolve: the one-hop contract is kept at the check, not repaired
-at the seal. `Ledger.tie()` mints a tie's difference figure and classifies it
-(check-tie SKILL § 4). A step never writes its own `fig()`.
+check's figures, populations and citations, and checks each field below as it is minted.
+`write()` refuses the whole write, naming each dead end, when an input, population,
+citation or id in an `expression` does not resolve. `Ledger.tie()` mints a tie's
+difference figure (check-tie SKILL § 4). A step never writes its own `fig()`.
+
+**Compute a figure with SQL.** `Ledger.figures(<SELECT>)` mints one figure per row,
+`Ledger.populations` one `P.` entry per row (`scripts/sql.py`). The statement is the
+`expression`, and what it reads the `inputs`. `sql.py verify` re-runs every statement and
+fails a figure whose value moved and one computed outside SQL.
 
 - **`inputs[]` is never empty, and `role` is required.** `source_type` is one of
   `room_file` (with `citation_id`: a read of a file the user gave us), `figure` (with
@@ -622,27 +643,29 @@ at the seal. `Ledger.tie()` mints a tie's difference figure and classifies it
 
 **Every figure cell in a workbook carries its computed value.** openpyxl writes a formula
 with no cached result, and the cell renders blank in a viewer that does not recalculate.
-A body figure is a value (the arithmetic from the data room lives in its `expression` on
-the Sources tab); a subtotal, a total, a derived line and a copy of another check's figure
-are formulas with their results cached — `wbkit.total`, `wbkit.save` and
-`link_workbook.py` write them (WORKBOOK.md § 7). The gate is `scripts/check_workbook.py`. A typed constant that resolves to no figure id is blocking.
+A body figure is a value, and its `expression` on the Sources tab shows how it was
+computed. A subtotal, a total, a derived line, a figure over a supporting table on its
+tab and a copy of another check's figure are formulas with their results cached — `scripts/render.py` and `link_workbook.py`
+write them (WORKBOOK.md § 7). The gate is `scripts/check_workbook.py`. A typed constant that resolves to no figure id is blocking.
 
-**Prose numbers are interpolated, never typed.** A sentence is authored as a template
-around a figure id; the code that writes the tab or the deck loads the ledger and
-substitutes the value, formatted per `DOCTRINE.md` § Number conventions —
-`Ledger.sub("... {F.a5.nrr.fy2025} ...")` or `figures.fmt(value, unit)`, one formatter
-for every tab and the deck. The gate is
+**Prose numbers are interpolated, never typed.** A sentence cites a figure id,
+`{F.a5.nrr.fy2025}`, in the check's template (WORKBOOK.md § 7) or through `Ledger.sub`,
+and the value is substituted, formatted per `DOCTRINE.md` § Number conventions by one
+formatter for every tab and the deck. This holds for a count written as a word ("eight
+contracts") and for a statement about the data ("every tie passes", "no exception"): it
+is a figure or a rendered table, or it is left out. A judgment is typed once, by the check
+that makes it; another step cites it by its id and does not restate it. The gate is
 `scripts/check_prose.py`: it extracts every dollar amount, percentage and multiple from
-text and refuses any that no ledger value backs within rounding tolerance. A declared
+text, and on a check's tab every count ("372 lines"), and refuses any that no ledger
+value backs within rounding tolerance. A declared
 tolerance a sentence states is admitted with `--allow`.
 
-**Every presented figure re-performs in one hop.** The Sources tab carries, beside each
-figure's `expression` and inputs, its **root source** (the citation ids reached by
-collapsing every passthrough and figure-to-figure hop) and a **To reperform** recipe:
-file, sheet, rows, columns, filter, arithmetic, expected value. The Evidence tab carries
-the citation records merged from `workpapers/evidence-*.yaml`. A reader holding only the
-workbook and the data room can re-select the same rows; the run directory is never
-required reading. Layout and assembly: check-report SKILL § 1; the gate is
+**Every presented figure re-performs from the workbook.** Its Sources row carries its
+`expression`, what that reads, its **root source** (the citation ids reached by
+collapsing every hop) and **To reperform**. Each table it reads has a Tables row: what one
+row is, the statement that made it, its own reads and the counts a re-run is compared
+against, down to the Evidence row of the file read. Re-running a statement row by row
+needs the run's tables. `scripts/ledger_tabs.py` writes the three tabs; the gate is
 `scripts/check_workbook.py`.
 
 **An id sits alone in its cell.** `link_workbook.py` links a cell that is exactly one id to
@@ -652,18 +675,19 @@ columns.
 ## 5. Item tables
 
 Item-level work is written down, not only summarized. A check that matches, traces or
-pairs rosters at item grain writes one CSV per item table at `checks/<check>-<table>.csv`
+pairs rosters at item grain writes each item table at `checks/<check>-<table>.parquet`
 (each kind's SKILL.md names its own tables and columns) plus a manifest block in
 `checks/<check>.md` recording what built it: the citations behind each side, the keys
-used, `row_count`, and a control total per side. The report and a re-performer read the
-table; the ledger's figures cite the citations; the manifest block is the hop between
-them. A fix re-run that moves the check's figures rewrites its own tables in the same
+used, `row_count`, and a control total per side. `{manifests}` in the template renders
+it from what `write_items` stored. The report and a re-performer read the table in SQL
+as `<check>.<table>`; the ledger's figures cite the citations; the manifest block is the
+hop between them. A fix re-run that moves the check's figures rewrites its own tables in the same
 pass; no other step edits them.
 
-Write and read them through `scripts/items.py`; its docstring lists the columns and
-every refusal. The check id is a run's check id (`RUN_CONTRACT.md` § run.json), and the
-table name a lower-case slug, `[a-z0-9][a-z0-9_-]*`. A row's `period` is a period key
-(§ 0) or an ISO date (`YYYY-MM-DD`). `amount` is stored as a float. `items.py` refuses an
-amount a float cannot hold exactly (an integer beyond 2**53, a Decimal or string with
-more significant digits than a float keeps): round it to the precision it closes to, or
-give the float.
+Write them with `items.write_items(..., about="One row per ...", sql=<SELECT>)`, and read them in SQL as
+`<check>.<table>`; `scripts/items.py` lists the columns and every refusal. The check id is
+a run's check id (`RUN_CONTRACT.md` § run.json), and the table name a lower-case slug,
+`[a-z0-9][a-z0-9_-]*`. A row's `period` is a period key (§ 0) or an ISO date
+(`YYYY-MM-DD`). `amount` is stored as a float. `items.py` refuses an amount a float cannot
+hold exactly (an integer beyond 2**53, a Decimal or string with more significant digits
+than a float keeps): round it to the precision it closes to, or give the float.

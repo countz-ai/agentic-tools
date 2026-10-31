@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# DuckDB's agent-mode CLI on the plugin's Python duckdb (sql_shell.py). Same options as
+# `duckdb -agent`, so a caller switches by changing the command name.
+plugin="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+exec uv run --quiet --project "$plugin" python3 "$plugin/scripts/sql_shell.py" "$@"

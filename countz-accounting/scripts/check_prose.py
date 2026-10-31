@@ -9,8 +9,9 @@ count composed into a sentence instead of interpolated from the ledger.
 
 The rule this enforces (EVIDENCE.md § 4): the code that writes a tab loads the figure
 ledger and interpolates values into sentence templates. This gate reads the result. It
-extracts every dollar amount, day count, percentage and multiple from text cells (or
-markdown lines) and requires each to agree with an admitted value within the rounding
+extracts every dollar amount, day count, percentage and multiple (and with `--counts`
+every count: "372 lines", "86 new-logo orders") from text cells (or markdown lines) and
+requires each to agree with an admitted value within the rounding
 tolerance of the precision displayed (DOCTRINE.md § Number conventions: "$6.3M" tolerates 0.05M,
 "44.6 days" tolerates 0.05).
 
@@ -24,10 +25,13 @@ a magnitude spelled out in words is the review's to catch by reading, not this g
 Admitted: numbers on value-bearing keys (value, control_total, total_n, lo, hi, ...) in
 <run_dir>/workpapers/*.yaml, plus EVERY numeric literal in each --allow file — give the
 file carrying a declared tolerance a sentence legitimately states.
-Skipped: day-count ranges ("31-60 days", "90+ days") — bucket labels, not stated figures.
+Skipped: day-count ranges ("31-60 days", "90+ days") — bucket labels, not stated figures;
+a four-digit number written without a comma (a year, an account), a day of a date,
+and a number that names a thing ("rule 3", "row 12").
 
 Usage:
     check_prose.py <tab.xlsx|file.md> [more targets...] [--run-dir DIR] [--allow FILE]...
+                   [--counts]
 --run-dir defaults to the nearest ancestor of the first target containing workpapers/.
 Exit 0 clean, 1 if any number is unbacked, 2 on a usage error.
 """
@@ -59,6 +63,20 @@ VALUE_KEY = re.compile(
     r"\b(?:value|control_total|total_n|included_n|row_count|lo|hi|low|high|min|max"
     r"|amount|days|dollars|usd|pct|percent|target|floor|threshold|materiality"
     r"|de_minimis|window_days|rate|n)\s*:")
+# A count: a whole number, up to three words, then the plural noun it counts.
+COUNT = re.compile(
+    r"(?<![\w.,\-\u2013+$/#\u00a7:])(?P<n>\d{1,3}(?:,\d{3})+|\d+)(?![.,]?\d)"
+    r"(?:\s+(?!(?:the|a|an|of|to|in|at|on|and|or|for|by|from|with|is|are|was|were|than)\b)"
+    r"[A-Za-z][\w-]*){0,3}?\s+(?P<noun>[a-z][a-z-]{2,}[a-z]s)\b")
+NOT_COUNTED = frozenset({"days", "months", "years", "weeks", "times", "points", "cents",
+                         "percent", "basis", "this", "thus", "does", "plus", "less", "minus",
+                         "versus", "across", "gross", "unless", "always", "perhaps"})
+NAMING = re.compile(r"(?:\b(?:rule|rules|step|steps|item|items|line|lines|row|rows|page|pages|"
+                    r"clause|clauses|section|note|notes|column|columns|tier|level|version|part|"
+                    r"phase|wave|lane|p|pp|no|fy|q|asc|asu|ias|ifrs|topic|form|exhibit|"
+                    r"schedule|appendix|chapter|article)\.?)\s*$", re.I)
+MONTH_WORD = re.compile(r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s*$",
+                        re.I)
 SHEET_EL = re.compile(r"<sheet\b[^>]*/?>")
 REL_EL = re.compile(r"<Relationship\b[^>]*/?>")
 ATTR = lambda name: re.compile(rf'\b{name}="([^"]*)"')
@@ -138,9 +156,9 @@ def admitted_values(run_dir: pathlib.Path, allow: list[pathlib.Path]) -> list[tu
     return out
 
 
-def tokenize(text: str):
-    """Yield (token_text, value, tolerance, variants) per metric number in the text;
-    `value` is the magnitude."""
+def tokenize(text: str, counts: bool = False):
+    """Yield (token_text, value, tolerance, variants) per metric number in the text, and
+    with `counts` per count; `value` is the magnitude."""
     for m in TOKEN.finditer(text):
         if m.group("m"):
             raw = m.group("money") or m.group("money2")
@@ -153,14 +171,22 @@ def tokenize(text: str):
         tol = 0.5 * scale * 10 ** -decimals
         variants = (1.0, 100.0) if m.group("pct") else (1.0,)   # a ledger 0.174 backs "17.4%"
         yield m.group(0).strip(), value, tol, variants
+    for m in COUNT.finditer(text) if counts else ():
+        n, before = m.group("n"), text[:m.start()]
+        if m.group("noun") in NOT_COUNTED or m.group("noun").endswith("ss") \
+                or (len(n) == 4 and "," not in n) or MONTH_WORD.search(before) \
+                or NAMING.search(before):
+            continue
+        yield m.group(0).strip(), float(n.replace(",", "")), 1e-9, (1.0,)
 
 
-def scan(targets, admitted):
-    """(metric numbers seen, unbacked) over every target's prose."""
+def scan(targets, admitted, counts: bool = False):
+    """(metric numbers seen, unbacked) over every target's prose; counts too with
+    `counts`."""
     total, unbacked = 0, []
     for target in targets:
         for loc, text in texts(target):
-            for token, value, tol, variants in tokenize(text):
+            for token, value, tol, variants in tokenize(text, counts):
                 total += 1
                 if any(abs(abs(av) * f - value) <= tol for av, _ in admitted for f in variants):
                     continue
@@ -178,6 +204,7 @@ def main() -> int:
     ap.add_argument("--run-dir", type=pathlib.Path)
     ap.add_argument("--allow", action="append", type=pathlib.Path, default=[])
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--counts", action="store_true", help="check counts too (a check's tab)")
     a = ap.parse_args()
     run_dir = a.run_dir
     if run_dir is None:
@@ -196,7 +223,7 @@ def main() -> int:
               file=sys.stderr)
         return 2
 
-    total, unbacked = scan(a.targets, admitted)
+    total, unbacked = scan(a.targets, admitted, a.counts)
     if a.json:
         import json
         print(json.dumps({"metric_numbers": total, "unbacked": unbacked}, indent=2))

@@ -145,7 +145,7 @@ its message says which steps the run left out. The deck never states a figure on
 left-out family establishes. A family the plan dropped as not runnable is treated the
 same way.
 
-Three rules:
+Four rules:
 
 1. **Use the real data from the workbook, and invent none.** Every figure on a slide is a
    reference to a workbook cell or a table copied from a tab (§ 2). The builder resolves

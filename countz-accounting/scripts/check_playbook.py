@@ -82,7 +82,7 @@ FAMILY_STEP_MAX = 4
 
 SCHEMA = "countz-accounting/playbook@1"
 SLUG = re.compile(r"[a-z0-9][a-z0-9_-]*")
-# A step id is the check id its files are named by (`checks/<check>-<table>.csv`,
+# A step id is the check id its files are named by (`checks/<check>-<table>.parquet`,
 # `workpapers/figures-<check>.yaml`). `-` separates check and table, so a check id takes
 # none (e.g. `a5` + `bridge-items` would read as `a5-bridge` + `items`). It is at most 31
 # characters: the check's tab opens with it, and Excel holds a tab name to 31, so a longer id
@@ -268,6 +268,10 @@ def check_files(kind: str, params: dict) -> list[str]:
         fid = f.get("id")
         if not isinstance(fid, str) or not SLUG.fullmatch(fid):
             bad.append(f"{at} has no valid `id` (a slug), got {fid!r}")
+        elif "-" in fid:
+            bad.append(f"{at}: id `{fid}` is written with `_`, not `-` "
+                       f"(`{fid.replace('-', '_')}`): the extract caches the table under it "
+                       f"and every reader names it `room.<id>` in SQL")
         elif fid in seen:
             bad.append(f"{at} repeats id `{fid}`")
         else:

@@ -50,7 +50,7 @@ directory):
 A path that does not exist refuses the record, naming where the path came from.
 
 **`produced`** is the check's own files (`own_files`: `checks/<check>.md`,
-`checks/<check>-*.csv`, `workpapers/figures-<check>.yaml`,
+`checks/<check>-*.parquet`, `tables/<check>/*.parquet`, `workpapers/figures-<check>.yaml`,
 `workpapers/evidence-<check>.yaml`, `out/tabs/<check>.xlsx`) that exist and changed since
 `step_start`, plus whatever the step passes (a plan, review or report step names its
 own), each of which must exist under the run directory. Changed means an mtime at or
@@ -72,9 +72,10 @@ the blocker's `what`. The record is UTF-8 JSON, written to `.tmp` then renamed; 
 character UTF-8 cannot carry (a lone surrogate from a file name that is not UTF-8) is
 written as its JSON escape, so it reads back as it was.
 
-**`place_tab`** runs `check_workbook.py` and `check_prose.py` on the staged tab with
-`--run-dir` (WORKBOOK.md § 8) and renames it into `out/tabs/` only when both exit 0;
-otherwise it raises GateRefused carrying their output, verbatim, and the tab stays
+**`place_tab`** runs `check_workbook.py` and `check_prose.py --counts` on the staged tab
+with `--run-dir`, and `sql.py verify --check` (WORKBOOK.md § 8). It renames the tab into
+`out/tabs/` only when all three exit 0; otherwise it raises GateRefused carrying their
+output, verbatim, and the tab stays
 staged for the author to fix. It takes the step's seq (an int) or its check id (a str);
 a seq whose brief names no check has no tab and is refused.
 
@@ -156,7 +157,7 @@ def _check_id(check) -> str:
     if not isinstance(check, str) or not check_playbook.CHECK_ID.fullmatch(check):
         raise ValueError(f"check id {check!r} is not a check id ([a-z0-9][a-z0-9_]*, at most "
                          f"{check_playbook.CHECK_ID_MAX} characters, no `-`: "
-                         f"a check id names its files, and `checks/<check>-<table>.csv` "
+                         f"a check id names its files, and `checks/<check>-<table>.parquet` "
                          f"would read a `-` in it as another check's table)")
     return check
 
@@ -287,11 +288,15 @@ def place_tab(run_dir, seq_or_check) -> pathlib.Path:
     if not staged.is_file():
         raise FileNotFoundError(f"{staged}: no staged tab")
     out = []
-    for gate in ("check_workbook.py", "check_prose.py"):
+    for gate, extra in (("check_workbook.py", []), ("check_prose.py", ["--counts"])):
         r = subprocess.run([sys.executable, str(SCRIPTS / gate), str(staged),
-                            "--run-dir", str(run_dir)], capture_output=True, text=True)
+                            "--run-dir", str(run_dir), *extra], capture_output=True, text=True)
         if r.returncode != 0:
             out.append(f"{gate} exit {r.returncode}:\n{(r.stdout + r.stderr).strip()}")
+    r = subprocess.run([sys.executable, str(SCRIPTS / "sql.py"), "verify", str(run_dir),
+                        "--check", check], capture_output=True, text=True)
+    if r.returncode != 0:
+        out.append(f"sql.py verify exit {r.returncode}:\n{(r.stdout + r.stderr).strip()}")
     if out:
         raise GateRefused("\n".join(out))
     dest = run_dir / "out" / "tabs" / staged.name
@@ -308,15 +313,16 @@ def place_tab(run_dir, seq_or_check) -> pathlib.Path:
 # --- consumed and produced ---------------------------------------------------------------
 def own_files(run_dir, check: str) -> list[pathlib.Path]:
     """The check's own files that exist, under `run_dir` as given, in this order:
-    `checks/<check>.md`, `checks/<check>-summary.md`, `checks/<check>-*.csv` (sorted),
-    `workpapers/figures-<check>.yaml`,
+    `checks/<check>.md`, `checks/<check>-summary.md`, `checks/<check>-*.parquet`
+    (sorted), `tables/<check>/*.parquet` (sorted), `workpapers/figures-<check>.yaml`,
     `workpapers/evidence-<check>.yaml`, `out/tabs/<check>.xlsx` and its cells map
     `out/tabs/<check>.cells.json`. Refuses a check id outside
     CHECK_ID."""
     rd = pathlib.Path(run_dir)
     check = _check_id(check)
     found = [rd / "checks" / f"{check}.md", rd / "checks" / f"{check}-summary.md"]
-    found += sorted((rd / "checks").glob(f"{check}-*.csv"))
+    found += sorted((rd / "checks").glob(f"{check}-*.parquet"))
+    found += sorted((rd / "tables" / check).glob("*.parquet"))
     found += [rd / "workpapers" / f"figures-{check}.yaml",
               rd / "workpapers" / f"evidence-{check}.yaml",
               rd / "out" / "tabs" / f"{check}.xlsx", rd / "out" / "tabs" / f"{check}.cells.json"]

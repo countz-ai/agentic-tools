@@ -32,9 +32,11 @@ shape; run `scripts/preview.py <run_dir>` and send what it prints per
 ## Interactive session
 
 1. Ask, in one message, for the data sources (short id each, and what each one is), the
-   company whose books they are, and an output folder. Register the workspace and the
+   company whose books they are, the accounting standard if the user names one, and an
+   output folder. Register the workspace and the
    sources with `scripts/setup_run.py` (`--skill playbook`, the company, `--goal checks`,
-   the sources as one-line JSON)
+   the sources as one-line JSON, `--params '{"accounting_standard": "<as named>"}'` if the
+   user named one)
    — mechanical, no dispatch, no client file read.
    More sources can join at any time: each batch is another run of the script.
 2. As the user asks for checks, register each with `scripts/run_state.py add-checks`,
@@ -51,7 +53,7 @@ shape; run `scripts/preview.py <run_dir>` and send what it prints per
 3. When the user is done checking — or asks for the deliverable — run the standard tail
    per `RUN_CONTRACT.md § Review and report`: `check-review` over the unreviewed checks,
    its findings acted on without a ruling, then
-   `check-report`. Point at `out/workbook.xlsx`, `out/report.pptx`, `out/RUN_SUMMARY.md` and
+   `check-report`, then `check-deck` and the one rewrite its findings buy. Point at `out/workbook.xlsx`, `out/report.pptx`, `out/RUN_SUMMARY.md` and
    relay the summary's open items.
 
 ## "Save this playbook"
@@ -88,7 +90,7 @@ listing and lookup.
    `scripts/run_state.py bind-playbook <run_dir> --path <definition> --bound
    '{"slot": "source_id", ...}'` (its `DROPPED:` lines are the unbound-fed steps). Then
    loop: run
-   `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/playbook_next.py <run_dir> <definition path>`
+   `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/playbook_next.py <run_dir> <definition path>`
    and execute the lines it prints in their order — `RECORD:`, `LAUNCH:`, `NEXT:`, then
    the `THEN:` lines (`record`, launch any `RETRY:`, the script again); with SendMessage
    available, assign holder lanes first and run the loop as `RUN_CONTRACT.md § Holder
