@@ -17,9 +17,9 @@ it (one count per `message.id`, `reference/rates.json`), and given to one step:
   go to the unbriefed step whose window overlaps the sub-agent's activity most.
 - The main session's responses are the relay's.
 
-A step's first dispatch for its check is its first pass; a later one is a re-run (a
+A step's first dispatch for its check is its first run; a later one is a re-run (a
 review fix, a report gate, a retry). The plan's estimate (`plan/spend-estimate.json`)
-prices each step's first pass, the report and the re-runs; it does not price the plan
+prices each step's first run, the report and the re-runs; it does not price the plan
 or the relay. Elapsed is from plan approval to the last step's end, the span the
 estimate covers. The page is self-contained: no script or style is fetched. Stdlib only.
 """
@@ -178,7 +178,7 @@ def collect(run_dir: pathlib.Path, rates: dict) -> dict:
     try:
         est = json.loads(ef.read_text(encoding="utf-8")) if ef.is_file() else {}
     except json.JSONDecodeError:
-        pass
+        est = {}
     est_step = {s["id"]: s for s in est.get("steps") or []}
 
     rows, seen = [], set()
@@ -197,7 +197,7 @@ def collect(run_dir: pathlib.Path, rates: dict) -> dict:
         rows.append({
             "seq": s["seq"], "step": s["step"], "check": s["check"],
             "name": s["check"] or s["step"], "lane": lane,
-            "pass": "First pass" if first else "Re-run",
+            "attempt": "First run" if first else "Re-run",
             "start": s["start"].isoformat() if s["start"] else None,
             "end": s["end"].isoformat() if s["end"] else None,
             "minutes": (s["end"] - s["start"]).total_seconds() / 60 if s["start"] and s["end"] else None,
@@ -217,13 +217,13 @@ def collect(run_dir: pathlib.Path, rates: dict) -> dict:
     est_elapsed = None
     if run_est.get("elapsed_minutes"):
         est_elapsed = run_est["elapsed_minutes"]["value"] + ((est.get("report") or {}).get("minutes") or {}).get("value", 0)
-    reruns = [r for r in rows if r["pass"] == "Re-run"]
+    reruns = [r for r in rows if r["attempt"] == "Re-run"]
     priced = [r for r in rows if r["step"] != "plan"]
     lanes: dict[str, dict] = {}
     for r in rows:
         ln = lanes.setdefault(r["lane"], {"lane": r["lane"], "steps": 0, "first": 0.0, "rerun": 0.0})
         ln["steps"] += 1
-        ln["first" if r["pass"] == "First pass" else "rerun"] += r["cost"]
+        ln["first" if r["attempt"] == "First run" else "rerun"] += r["cost"]
     lanes["Relay"] = {"lane": "Relay", "steps": 0, "first": relay["cost"], "rerun": 0.0}
     top = max(after or rows, key=lambda r: r["cost"], default=None)
     return {
@@ -379,8 +379,8 @@ def _timeline(rows: list[dict], tz) -> str:
                    f'text-anchor="end">{_e(ln)}</text>')
     for r, a, b in spans:
         y = 4 + lanes.index(r["lane"]) * row
-        colour = "--first" if r["pass"] == "First pass" else "--rerun"
-        tip = (f"#{r['seq']} {r['name']} ({r['lane']}, {r['pass'].lower()})\n"
+        colour = "--first" if r["attempt"] == "First run" else "--rerun"
+        tip = (f"#{r['seq']} {r['name']} ({r['lane']}, {r['attempt'].lower()})\n"
                f"{a.astimezone(tz):%H:%M} to {b.astimezone(tz):%H:%M}, {_dur(r['minutes'])}, {_usd(r['cost'])}")
         out.append(f'<g><title>{_e(tip)}</title><rect x="{x(a):.1f}" y="{y + 6}" '
                    f'width="{max(x(b) - x(a), 2):.1f}" height="{row - 12}" rx="2" fill="var({colour})" '
@@ -431,9 +431,9 @@ def render(rep: dict) -> str:
     lane_items = [(ln["lane"], [(ln["first"], "--first" if ln["lane"] != "Relay" else "--relay"),
                                 (ln["rerun"], "--rerun")],
                    _usd(ln["first"] + ln["rerun"]),
-                   f"{ln['lane']}: first pass {_usd(ln['first'])}, re-runs {_usd(ln['rerun'])}")
+                   f"{ln['lane']}: first runs {_usd(ln['first'])}, re-runs {_usd(ln['rerun'])}")
                   for ln in sorted(rep["lanes"], key=lambda l: -(l["first"] + l["rerun"]))]
-    firsts = [r for r in rows if r["pass"] == "First pass" and r["est_cost"]]
+    firsts = [r for r in rows if r["attempt"] == "First run" and r["est_cost"]]
     vs_items = [(f"#{r['seq']} {r['name']}",
                  [(r["cost"], "--bad" if r["cost"] > 2 * r["est_cost"] else "--first")],
                  _usd(r["cost"]),
@@ -445,7 +445,7 @@ def render(rep: dict) -> str:
 
     body = "".join(
         "<tr>" + cell(r["seq"], r["seq"], True) + cell(r["lane"], r["lane"]) + cell(r["name"], r["name"])
-        + cell(r["step"], r["step"]) + cell(r["pass"], r["pass"])
+        + cell(r["step"], r["step"]) + cell(r["attempt"], r["attempt"])
         + cell(r["minutes"] or 0, f"{r['minutes']:.1f}" if r["minutes"] is not None else "—", True)
         + cell(r["cost"], _usd(r["cost"]), True)
         + cell(r["est_cost"] if r["est_cost"] is not None else -1, _usd(r["est_cost"]) if r["est_cost"] else "", True)
@@ -479,20 +479,20 @@ def render(rep: dict) -> str:
 <section class="tiles">{tile_html}</section>
 <section class="card"><h2>When each lane was working</h2>
 <p class="note">Each bar is one step, from its start to its end, in {_e(tzname)}. A lane is one worker that keeps its context from step to step. The relay, the main session, runs throughout and is not drawn. Hover a bar for its time and cost.</p>
-<div class="legend">{sw('--first', 'First pass')}{sw('--rerun', 'Re-run')}</div>
+<div class="legend">{sw('--first', 'First run')}{sw('--rerun', 'Re-run')}</div>
 {_timeline(rows, tz)}</section>
 <section class="card"><h2>Spend by lane</h2>
 <p class="note">The relay is the main session that dispatched every step.</p>
-<div class="legend">{sw('--first', 'First pass')}{sw('--rerun', 'Re-runs')}{sw('--relay', 'Relay')}</div>
+<div class="legend">{sw('--first', 'First run')}{sw('--rerun', 'Re-runs')}{sw('--relay', 'Relay')}</div>
 {_bar_chart(lane_items)}</section>
-<section class="card"><h2>First pass against the plan's estimate</h2>
-<p class="note">Each bar is a step's first pass; the mark is the plan's estimate for it. A bar more than twice its estimate is red.</p>
+<section class="card"><h2>First runs against the plan's estimate</h2>
+<p class="note">Each bar is a step's first run; the mark is the plan's estimate for it. A bar more than twice its estimate is red.</p>
 <div class="legend">{sw('--first', 'Actual')}{sw('--bad', 'Over twice the estimate')}<span><i class="sw" style="background:var(--est);width:2px"></i>Estimate</span></div>
 {_bar_chart(vs_items, [r['est_cost'] for r in firsts])}</section>
 <section class="card"><h2>Every step</h2>
 <p class="note">Cost is each step's own model usage. Click a column to sort.</p>
 <div class="box"><table class="sortable"><thead><tr>
-<th class="num">#</th><th>Lane</th><th>Check</th><th>Step</th><th>Pass</th><th class="num">Minutes</th>
+<th class="num">#</th><th>Lane</th><th>Check</th><th>Step</th><th>Run</th><th class="num">Minutes</th>
 <th class="num">Cost</th><th class="num">Estimate</th><th class="num">Responses</th><th class="num">Output tokens</th>
 </tr></thead><tbody>{body}</tbody></table></div></section>
 <footer>Tokens are counted once per API response from the session transcripts. Dollars are computed at standard list rates captured {_e(rep['rates_captured_at'])}, so they do not reflect promotional pricing or contracted discounts and may differ from your bill; your provider's usage console is the authority.{_e(unpriced)} Generated {_e(rep['generated_at'])}.</footer>
