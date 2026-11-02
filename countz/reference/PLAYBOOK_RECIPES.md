@@ -63,7 +63,8 @@ subset it needs and says which.
 
 Fix each test and its threshold before reading its result. Record a pattern a check sees
 and does not test as a proposed hypothesis, with its size and the check best placed to
-test it; never hand it to another check in a sentence. Before the run seals, test every
+test it; never hand it to another check in a sentence. Its row carries the figure id of its
+size, so a check that rolls it up renders the amount. Before the run seals, test every
 proposed hypothesis above the recipe's declared `performance_materiality` (its
 `materiality` where it declares none), and every one promoted under DOCTRINE.md
 § Materiality. For one the data room cannot test, raise the `D.` that would.
@@ -83,7 +84,9 @@ One `X.` per exception, minted
 aggregated past counting: its schedule lists every one and states the count and gross
 amount for each group it presents. A family that rolls up other families' items mints
 nothing. It lists every item it rolls up, and each row carries the id and values of the
-check that produced the item.
+check that produced the item. A check that mints items writes each item's ruling, owner,
+the period it belongs to, reason and proposed entry to its persisted item table, not only
+to its tab, so the roll-up reads them there.
 
 ### Reperformance
 

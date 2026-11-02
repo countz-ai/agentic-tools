@@ -73,6 +73,9 @@ declared assertion, figures, citations, minted items and status, and no figure i
 across entities except as a stated total of the group. An entity whose records you could
 not reach is a blocker naming that entity, not a blocked step — the others still run.
 Your `conclusion` counts the entities covered and names each that did not come out clean.
+The plan writes `params.entities` before any check runs: where a `_from` input's roster
+holds an entity of your family's population that `params.entities` lacks, cover it too
+and name it in your `conclusion`.
 
 Any param ending `_from` names a check whose record, `checks/` files and ledgers are
 your inputs — one of your step's `after` dependencies, terminal before you started. Take
@@ -654,7 +657,8 @@ and the value is substituted, formatted per `DOCTRINE.md` § Number conventions 
 formatter for every tab and the deck. This holds for a count written as a word ("eight
 contracts") and for a statement about the data ("every tie passes", "no exception"): it
 is a figure or a rendered table, or it is left out. A judgment is typed once, by the check
-that makes it; another step cites it by its id and does not restate it. The gate is
+that makes it; another step cites it by its id and does not retype it. A figure cited by
+its id is still shown, rendered from the ledger. The gate is
 `scripts/check_prose.py`: it extracts every dollar amount, percentage and multiple from
 text, and on a check's tab every count ("372 lines"), and refuses any that no ledger
 value backs within rounding tolerance. A declared
