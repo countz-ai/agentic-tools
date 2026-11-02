@@ -42,7 +42,7 @@ path is `<run_dir>` everywhere below. Never compose the name yourself:
 ```
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/setup_run.py \
     --output-root <abs> --skill tieout --company "<the user's words>" \
-    --goal checks --session ${CLAUDE_SESSION_ID} \
+    --goal checks --session "$CLAUDE_CODE_SESSION_ID" \
     --sources '[{"id": "gl", "path": "<abs>", "name": "<the user's words>"}, ...]' \
     --params '{"accounting_standard": "<as collected>"}'
 ```

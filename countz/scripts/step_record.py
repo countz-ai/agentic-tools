@@ -263,7 +263,7 @@ def start(run_dir, seq: int, *, session_id: str | None = None) -> str:
         line["source"] = a["sources"]
     if a.get("mode"):
         line["mode"] = a["mode"]
-    sid = session_id or os.environ.get("CLAUDE_SESSION_ID")
+    sid = session_id or os.environ.get("CLAUDE_CODE_SESSION_ID") or os.environ.get("CLAUDE_SESSION_ID")
     if sid:
         line["session_id"] = sid
     _append(run_dir, line)

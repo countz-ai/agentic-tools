@@ -624,6 +624,8 @@ def main() -> int:
                     help="the families the run executes: `all`, or the row numbers and "
                          "family ids picked from recipe_scope.py ask")
     a = ap.parse_args()
+    # Claude Code names the transcript after CLAUDE_CODE_SESSION_ID; usage_report.py finds it by that.
+    a.session = a.session or os.environ.get("CLAUDE_CODE_SESSION_ID") or os.environ.get("CLAUDE_SESSION_ID")
     if a.recipe_result is not None:
         if a.recipe is not None:
             return fail("give --recipe or --recipe-result, not both")

@@ -357,7 +357,7 @@ def _timeline(rows: list[dict], tz) -> str:
     if not spans:
         return '<p class="note">The run recorded no step times.</p>'
     order = ["Plan"] + sorted({r["lane"] for r, _, _ in spans} - set(FORKED.values()) - {"Worker", "—"}) \
-        + ["Worker", "Review", "Report", "—"]
+        + ["Worker"] + [v for v in FORKED.values() if v != "Plan"] + ["—"]
     lanes = [ln for ln in order if any(r["lane"] == ln for r, _, _ in spans)]
     t0, t1 = min(a for _, a, _ in spans), max(b for _, _, b in spans)
     span = max((t1 - t0).total_seconds(), 1)

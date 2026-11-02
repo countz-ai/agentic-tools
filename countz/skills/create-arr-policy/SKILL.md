@@ -56,13 +56,13 @@ slug lowercase with hyphens. Look it up with `uv run --project ${CLAUDE_PLUGIN_R
   `<workspace>/arr_policy/pasted.md` with the Write tool, and register it with the
   documents.
   - The workspace is `run_dir` when you have one. New documents join it through
-    `setup_run.py <run_dir> --session ${CLAUDE_SESSION_ID} --sources '[...]'`.
+    `setup_run.py <run_dir> --session "$CLAUDE_CODE_SESSION_ID" --sources '[...]'`.
   - Without one, register a workspace:
 
     ```
     python3 ${CLAUDE_PLUGIN_ROOT}/scripts/setup_run.py \
         --output-root $HOME/.countz/arr-policies/work --skill create-arr-policy \
-        --company "<the user's words>" --goal arr-policy --session ${CLAUDE_SESSION_ID} \
+        --company "<the user's words>" --goal arr-policy --session "$CLAUDE_CODE_SESSION_ID" \
         --sources '[{"id": "...", "path": "<abs>", "name": "<the user's words>"}, ...]'
     ```
 
@@ -141,7 +141,7 @@ a draft that resolving again would change (one edited after `resolve`): resolve 
 again and show it again. With a `run_dir`, pin it into the run:
 
 ```
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/setup_run.py <run_dir> --session ${CLAUDE_SESSION_ID} \
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/setup_run.py <run_dir> --session "$CLAUDE_CODE_SESSION_ID" \
     --sources '[]' --arr-policy <path>
 ```
 

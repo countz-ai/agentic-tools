@@ -149,7 +149,7 @@ on `revise=`.
    `blocked` rather than hand the plan a malformed recipe. `record`, then pin the file:
 
    ```
-   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/setup_run.py <run_dir> --session ${CLAUDE_SESSION_ID} \
+   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/setup_run.py <run_dir> --session "$CLAUDE_CODE_SESSION_ID" \
        --sources '[]' --recipe <run_dir>/recipes/<name>.md
    ```
 
@@ -157,7 +157,7 @@ on `revise=`.
    recipe belongs to this run: a later run over the same analysis generates again.
 4. **What to run.** Put the generated recipe's steps to the user as
    `PLAYBOOK_RECIPES.md § Ask what to run` does, over the pinned file, and register the
-   picks with `setup_run.py <run_dir> --session ${CLAUDE_SESSION_ID} --sources '[]'
+   picks with `setup_run.py <run_dir> --session "$CLAUDE_CODE_SESSION_ID" --sources '[]'
    --scope <picks>` (`PLAYBOOK_RECIPES.md § Fetch the recipe and register`, *The
    scope*).
 

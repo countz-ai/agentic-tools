@@ -217,7 +217,7 @@ The registration:
 ```
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/setup_run.py \
     --output-root <abs> --company "<the user's words>" \
-    --goal <the recipe's name> --session ${CLAUDE_SESSION_ID} \
+    --goal <the recipe's name> --session "$CLAUDE_CODE_SESSION_ID" \
     --sources '[{"id": "gl", "path": "<abs>", "name": "<the user's words>"}, ...]' \
     --params '{"period_end": "<as collected>", "period": "<as collected, where given>",
                "accounting_standard": "<if the user named one>",
@@ -241,7 +241,7 @@ place of `--recipe` and pins the generated recipe afterwards (its SKILL.md).
 `run.json.inputs.scope`, and prints `SCOPE:` and `SAY:`. Put the `SAY:` text to the user
 in one line, verbatim: it names what runs, what was added because a pick depends on
 it, and the estimated cost and time of that scope. `all` registers no scope, and the run executes every family. To change the scope
-before the plan is approved, run `setup_run.py <run_dir> --session ${CLAUDE_SESSION_ID}
+before the plan is approved, run `setup_run.py <run_dir> --session "$CLAUDE_CODE_SESSION_ID"
 --sources '[]' --scope <picks>`, then re-dispatch `check-plan` with `revise=` naming the
 change.
 
@@ -251,7 +251,7 @@ of `--output-root` and `--company`, then re-dispatch `check-plan` with
 
 **The ARR policy.** Where the recipe declares `arr_policy`, pin an approved policy before
 the plan: the one the user named, or the library's for this company, with
-`setup_run.py <run_dir> --session ${CLAUDE_SESSION_ID} --sources '[]' --arr-policy
+`setup_run.py <run_dir> --session "$CLAUDE_CODE_SESSION_ID" --sources '[]' --arr-policy
 <path>`. Where there is none, or `--arr-policy` refuses the file, invoke the
 `create-arr-policy` skill with `run_dir` and `company`; it settles, saves and pins the
 policy.
