@@ -108,13 +108,13 @@ def main() -> int:
         check(by[2]["output_tokens"] == 30, "step 2 holds m3, after its brief")
         check(by[3]["output_tokens"] == 50 and by[3]["lane"] == "Review",
               "the forked review's responses land on the review step")
-        check(by[4]["output_tokens"] == 40 and by[4]["pass"] == "Re-run",
+        check(by[4]["output_tokens"] == 40 and by[4]["attempt"] == "Re-run",
               "the second dispatch of a1 is a re-run and holds m4")
-        check(by[1]["lane"] == "Lane 1" and by[1]["pass"] == "First pass", "a1's first pass runs in lane 1")
+        check(by[1]["lane"] == "Lane 1" and by[1]["attempt"] == "First run", "a1's first run is in lane 1")
         check(rep["relay"]["output_tokens"] == 100, "the main session is the relay's")
         check(rep["unattributed"]["responses"] == 0, "every response found a step")
         check(by[1]["est_cost"] == 0.01 and by[4]["est_cost"] is None,
-              "the first pass takes its estimate; a re-run takes none")
+              "the first run takes its estimate; a re-run takes none")
         check(rep["rerun_count"] == 1 and abs(rep["rerun_cost"] - by[4]["cost"]) < 1e-9, "re-runs summed")
 
         whole = usage_report.collect(run, rates)
