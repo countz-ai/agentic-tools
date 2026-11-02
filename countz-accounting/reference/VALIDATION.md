@@ -36,7 +36,9 @@ not run.
 2. **Re-perform the significant claims.** Each check's headline result, the largest
    differences and their sides, named exceptions, the largest reconciling items, and
    anything the reader would quote onward. Agree each to its cited source in the user's
-   own files, never to a derived table.
+   own files, never to a derived table. This includes every adjustment the deliverable
+   carries as supported: re-perform its amount and its sign from the evidence its reason
+   cites. Where that evidence shows the opposite sign, raise a `reperform` finding.
 3. **Sample 20 items from the rest.** Match rows, exception rows, traced items and prose
    claims the first two parts did not reach, drawn across the checks under review. Agree
    each to its cited source.

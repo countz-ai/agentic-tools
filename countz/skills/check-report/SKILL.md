@@ -23,7 +23,9 @@ a page, the words it quotes, the rule they break and the problem. You fix each o
 this file's own means, and leave the rest of the deliverable as it was sealed. Read
 § Voice (`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py DOCTRINE.md Voice`),
 `REPORT.md` § 2 and § 3, and the sealed `out/report.yaml`; read a tab where a finding
-needs it.
+needs it. When a finding says a claim goes further than the work, fix it by adding the
+evidence: name the test the check ran and the record it ran on, from the check's own
+record. Narrow the claim only when the check's record shows no such test.
 
 Where `out/.staging/fix-blocked.json` exists and lists the same finding ids as
 `fix_input`, an earlier `mode: fix` dispatch ended blocked and its `out/.staging/` is
