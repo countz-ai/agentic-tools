@@ -403,8 +403,9 @@ label or window typed per check drifts between tabs.
 - **Limitations stay prominent.** A data limitation that scopes a conclusion is stated in
   plain words where the conclusion is.
 - **The Supported vs Candidate split stays explicit.** Supported items make up the
-  headline figure. Candidate items await a document the data room lacks and sit beside the headline,
-  outside it. Say which is which every time a bridge or headline figure is cited.
+  headline figure. Candidate items sit beside the headline, outside it
+  (PLAYBOOK_RECIPES.md § The verdict ladder). Say which is which every time a bridge or
+  headline figure is cited.
 - **Evidence titles are neutral.** A theme or exhibit heading names the data it presents.
   Good: `Adjusted EBITDA Bridge`, `The Earnings Base`. Bad: `Growth Is Bought, Not Earned`.
 

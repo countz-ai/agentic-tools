@@ -52,10 +52,18 @@ never evidence that its own conclusion holds.
 
 `supported`: record evidence at the standing the ruling claims. A `supported` ruling
 whose evidence carries a lower standing is a `blocking` finding (VALIDATION.md § Severity).
-`candidate`: the evidence points one way and the data room lacks the document that
-settles it; carries the condition that would move it. A document in the data room that
-settles the item rules it `supported` or `rejected`; a document that might exist and
-overturn it is not a condition. `rejected`: examined and refused, with the test it
+`candidate`: the records do not establish what the item is, and the data room lacks the
+document that would; carries the condition that would move it. A document in the data
+room that settles the item rules it `supported` or `rejected`; a document that might exist
+and overturn it is not a condition. A ruling follows what the records establish: where the
+item's own records establish its nature and amount (its account, its posting legs, a
+schedule that agrees to them), rule it on them and raise a `D.` for the document that
+would corroborate it. A missing corroborating document is a data request and does not
+move the verdict. An amount that equals another figure does not establish nature.
+Example: stock-based compensation charged to its own account against paid-in capital,
+agreeing to the equity schedule, is `supported` with the award records requested; a
+monthly charge with no payee whose amount equals another account's is a `candidate`. 
+`rejected`: examined and refused, with the test it
 failed. `modified`: a proposed figure and the run's, side by side. A recipe uses the
 subset it needs and says which.
 
@@ -110,7 +118,7 @@ classification, and what every wave owes the user.
 This is the run's first question, and it goes to the user before anything else is done:
 no file written, no folder made, no other question asked.
 
-1. Get the recipe of the catalog entry the ask matched (`skills/countz/SKILL.md`).
+1. Get the recipe of the catalog entry the ask matched (`skills/analyze/SKILL.md`).
    `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/bundled_recipe.py <its name>` prints `RECIPE:`
    and `VERSION:` when the package carries a copy: that path is the recipe. On `NONE`, call
    `get_recipe_for_countz_analysis(recipe="<its name>")` on the `countz` server; the
@@ -200,7 +208,7 @@ VERSION>`, and call no recipe tool. `NONE` means nothing is bundled: fetch.
 
 Call `get_recipe_for_countz_analysis(recipe="<your recipe's name>")` on the `countz`
 server. The recipe's name is the `name` of the catalog entry the ask matched
-(`skills/countz/SKILL.md`). The result carries `recipe_markdown`, `recipe_name` and `recipe_version`.
+(`skills/analyze/SKILL.md`). The result carries `recipe_markdown`, `recipe_name` and `recipe_version`.
 Pin it one of two ways; either way the script copies the bytes to
 `<run_dir>/recipes/<recipe_name>.md` and refuses bytes whose sha does not match the
 version, so the run pins the bytes the server served:
@@ -237,7 +245,7 @@ the recipe name is the pinned recipe's frontmatter `name`, and prints it as `RUN
 that path is `<run_dir>` everywhere below. Never compose the name
 yourself. `--params` is everything § 2 collected, verbatim, as one JSON object — the
 ask included, so `run.json` records why the run was scoped as it was. The script reads
-no client file. A `countz` run on a catalog miss registers with `--skill countz` in
+no client file. An `analyze` run on a catalog miss registers with `--skill analyze` in
 place of `--recipe` and pins the generated recipe afterwards (its SKILL.md).
 
 **The scope.** `--scope` resolves the picks with every family they read from into

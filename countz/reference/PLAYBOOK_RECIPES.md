@@ -52,10 +52,18 @@ never evidence that its own conclusion holds.
 
 `supported`: record evidence at the standing the ruling claims. A `supported` ruling
 whose evidence carries a lower standing is a `blocking` finding (VALIDATION.md § Severity).
-`candidate`: the evidence points one way and the data room lacks the document that
-settles it; carries the condition that would move it. A document in the data room that
-settles the item rules it `supported` or `rejected`; a document that might exist and
-overturn it is not a condition. `rejected`: examined and refused, with the test it
+`candidate`: the records do not establish what the item is, and the data room lacks the
+document that would; carries the condition that would move it. A document in the data
+room that settles the item rules it `supported` or `rejected`; a document that might exist
+and overturn it is not a condition. A ruling follows what the records establish: where the
+item's own records establish its nature and amount (its account, its posting legs, a
+schedule that agrees to them), rule it on them and raise a `D.` for the document that
+would corroborate it. A missing corroborating document is a data request and does not
+move the verdict. An amount that equals another figure does not establish nature.
+Example: stock-based compensation charged to its own account against paid-in capital,
+agreeing to the equity schedule, is `supported` with the award records requested; a
+monthly charge with no payee whose amount equals another account's is a `candidate`. 
+`rejected`: examined and refused, with the test it
 failed. `modified`: a proposed figure and the run's, side by side. A recipe uses the
 subset it needs and says which.
 
