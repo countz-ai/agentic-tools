@@ -118,7 +118,7 @@ classification, and what every wave owes the user.
 This is the run's first question, and it goes to the user before anything else is done:
 no file written, no folder made, no other question asked.
 
-1. Get the recipe of the catalog entry the ask matched (`skills/analyze/SKILL.md`).
+1. Get the recipe of the catalog entry the ask matched (`skills/countz/SKILL.md`).
    `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/bundled_recipe.py <its name>` prints `RECIPE:`
    and `VERSION:` when the package carries a copy: that path is the recipe. On `NONE`, call
    `get_recipe_for_countz_analysis(recipe="<its name>")` on the `countz` server; the
@@ -208,7 +208,7 @@ VERSION>`, and call no recipe tool. `NONE` means nothing is bundled: fetch.
 
 Call `get_recipe_for_countz_analysis(recipe="<your recipe's name>")` on the `countz`
 server. The recipe's name is the `name` of the catalog entry the ask matched
-(`skills/analyze/SKILL.md`). The result carries `recipe_markdown`, `recipe_name` and `recipe_version`.
+(`skills/countz/SKILL.md`). The result carries `recipe_markdown`, `recipe_name` and `recipe_version`.
 Pin it one of two ways; either way the script copies the bytes to
 `<run_dir>/recipes/<recipe_name>.md` and refuses bytes whose sha does not match the
 version, so the run pins the bytes the server served:
