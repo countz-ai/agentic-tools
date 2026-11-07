@@ -5,7 +5,7 @@ Match with polars (or SQL) in your own step code — a join per pass, in the ord
 room calls for — then hand the assignment to `check_assignment()` before writing the
 match table. The module has no matching rule of its own; it checks the bookkeeping.
 
-    import sys; sys.path.insert(0, "<${CLAUDE_PLUGIN_ROOT}>/scripts")   # the token expanded
+    import sys; sys.path.insert(0, "<plugin_root>/scripts")   # the token expanded
     from matching import check_assignment
 
     # assignment: one row per item — side ("left"|"right"), id, status

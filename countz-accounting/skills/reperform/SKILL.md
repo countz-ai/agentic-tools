@@ -10,13 +10,13 @@ argument-hint: "[run directory] what to re-perform"
 context: inline
 ---
 
-```
-R=; for d in "${CLAUDE_PLUGIN_ROOT}" "${CLAUDE_SKILL_DIR}/../.." "$HOME"/.claude/plugins/synced/*/countz-accounting $(ls -td "$HOME"/.claude/plugins/cache/*/countz-accounting/*/ 2>/dev/null); do grep -qs '^def emptying' "$d/scripts/sql.py" && R=$(cd "$d" && pwd) && break; done; [ -n "$R" ] || { f=$(find "$HOME/.claude/plugins" -maxdepth 7 -path "*/countz-accounting/scripts/sql.py" -exec grep -l '^def emptying' {} + 2>/dev/null | head -1); [ -n "$f" ] && R=${f%/scripts/sql.py}; }; if [ -z "$R" ]; then echo "NOT INSTALLED: this plugin's files are not in the session. Tell the user so in one line, and stop."; else echo "CLAUDE_PLUGIN_ROOT=$R"; python3 "$R/scripts/section.py" DOCTRINE.md "Voice" "Number conventions" && python3 "$R/scripts/section.py" skills/drilldown/SKILL.md Inputs Querying "Find the result" "Re-perform it" "Fill the gaps"; fi
-```
+Set `<plugin_root>` to `<base path for this skill>/../..`.
 
-`$R` below is the `CLAUDE_PLUGIN_ROOT` the block printed. The block also printed the
-drilldown skill's Inputs, Querying and steps 1 to 3. You re-perform one result from the run's
-own tables, in this conversation.
+Run `python3 <plugin_root>/scripts/section.py DOCTRINE.md "Voice" "Number conventions"` and
+`python3 <plugin_root>/scripts/section.py skills/drilldown/SKILL.md Inputs Querying "Find the result" "Re-perform it" "Fill the gaps"`.
+
+That printed the drilldown skill's Inputs, Querying and steps 1 to 3. You re-perform one
+result from the run's own tables, in this conversation.
 
 ## 1. Research
 
@@ -72,7 +72,7 @@ holds the answer where the run names an owner. End with this line:
 
 > To run any of these queries, or a changed one, say: run query <sql>.
 
-Write the walkthrough per § Voice and § Number conventions, which the block printed.
+Write the walkthrough per § Voice and § Number conventions, which you printed at the start.
 
 ## 3. Run the user's queries
 

@@ -2,7 +2,7 @@
 """Print a built deck as its reader sees it: each slide's words and figures in reading
 order, for the deck review (skills/check-deck).
 
-    uv run --project ${CLAUDE_PLUGIN_ROOT} python3 scripts/deck_text.py <deck.pptx> [--since <old.pptx>]
+    uv run --project <plugin_root> python3 scripts/deck_text.py <deck.pptx> [--since <old.pptx>]
 
 One block per slide, `=== slide N`, then one line per text shape as `[shape] text`
 (build_report.py names the shapes: kicker, title, message, body-text, body-note, ...).

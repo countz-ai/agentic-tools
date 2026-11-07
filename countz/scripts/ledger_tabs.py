@@ -7,7 +7,7 @@ each table's Tables row shows what one row of it is, the statement that made it,
 reads and the counts a re-run is compared against, and each data-room table lands on its
 Evidence row.
 
-    import sys; sys.path.insert(0, "<${CLAUDE_PLUGIN_ROOT}>/scripts")   # the token expanded
+    import sys; sys.path.insert(0, "<plugin_root>/scripts")   # the token expanded
     from ledger_tabs import write
     write(wb, RUN, "Sablewood Analytics, Inc. · Contract costs, December 31, 2024 and 2025")
 
@@ -32,7 +32,7 @@ column and `evidence` names its Evidence row.
 
 Constants columns: name | value | unit | kind | where | quote or basis | evidence.
 
-Run with `uv run --project ${CLAUDE_PLUGIN_ROOT} python3`.
+Run with `uv run --project <plugin_root> python3`.
 """
 from __future__ import annotations
 

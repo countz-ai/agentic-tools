@@ -100,7 +100,7 @@ This file is your entire instruction.
 
 {standard}
 
-`${{CLAUDE_PLUGIN_ROOT}}` is `{plug}`. Every file you read below writes paths with that
+`<plugin_root>` is `{plug}`. Every file you read below writes paths with that
 token; expand it to that directory each time, including on a path you reach from inside
 another file.
 
@@ -474,7 +474,7 @@ def write_recipe_rules(run_dir: pathlib.Path, recipe: pathlib.Path, text: str) -
     head = text.split(f"\n## {FAMILIES}", 1)[0].rstrip()
     body = (f"# The rules every family of this run inherits\n\n"
             f"This file has two parts, copied when the step was dispatched: "
-            f"`${{CLAUDE_PLUGIN_ROOT}}/reference/PLAYBOOK_RECIPES.md` § {INHERITS}, then the "
+            f"`<plugin_root>/reference/PLAYBOOK_RECIPES.md` § {INHERITS}, then the "
             f"recipe at `{recipe}` from its start to `## {FAMILIES}`. Your family section is "
             f"in your brief.\n\n"
             f"{STANDARD_LINE.format(standard=accounting_standard(run_dir))}\n\n"
@@ -630,7 +630,7 @@ def _args_text(args: dict) -> str:
 def next_line(run_dir: pathlib.Path, row: dict, brief: pathlib.Path | None,
               label: str = "NEXT") -> str:
     # plugin_root: the plugin's folder, for a forked skill whose host left its
-    # `${CLAUDE_PLUGIN_ROOT}` paths unresolved
+    # `<plugin_root>` paths unresolved
     line = (f"{label}: Skill {row['skill']} run_dir={_q(run_dir)} seq={row['seq']}"
             + (f" check={row['check_id']}" if row.get("check_id") else "")
             + (f" {t}" if (t := _args_text(row.get("args") or {})) else "")

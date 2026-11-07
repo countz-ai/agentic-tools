@@ -2,7 +2,7 @@
 """The run's tables in SQL (DuckDB). A parse writes a table; everything computed from it is
 SQL, and the SQL is its lineage.
 
-    import sys; sys.path.insert(0, "<${CLAUDE_PLUGIN_ROOT}>/scripts")   # the token expanded
+    import sys; sys.path.insert(0, "<plugin_root>/scripts")   # the token expanded
     from sql import run_sql
     from figures import Ledger
 
@@ -99,7 +99,7 @@ filter every row passes has no effect.
                                                      nodes not tested through it; last, a
                                                      count of each result
 
-Run with `uv run --project ${CLAUDE_PLUGIN_ROOT} python3`.
+Run with `uv run --project <plugin_root> python3`.
 """
 from __future__ import annotations
 
@@ -239,7 +239,7 @@ def _duckdb():
         import duckdb
     except ImportError as exc:                      # pragma: no cover
         sys.exit(f"sql.py needs duckdb ({exc}); run it as "
-                 "`uv run --project ${CLAUDE_PLUGIN_ROOT} python3`")
+                 "`uv run --project <plugin_root> python3`")
     return duckdb
 
 

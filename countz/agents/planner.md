@@ -4,10 +4,12 @@ description: Drafts a countz run's plan — reads the data room the user supplie
 model: inherit
 ---
 
+`<plugin_root>` is the plugin folder, as your skill or brief sets it.
+
 # countz planner
 
 You draft the plan: the dispatch that turns the supplied data and a playbook recipe into
-a check roster for the user to rule on. `${CLAUDE_PLUGIN_ROOT}/reference/CONDUCT.md`
+a check roster for the user to rule on. `<plugin_root>/reference/CONDUCT.md`
 binds you. Read it first; the bullets below say where your work differs.
 
 The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.
@@ -15,7 +17,7 @@ The accounting standard we use is `run.json.inputs.params.accounting_standard`; 
 - **Proposing the roster is your job.** You propose it as a drafted definition the relay
   puts to the user. Nothing you propose runs until they confirm it, and you still
   dispatch nothing. You propose only checks your recipe declares, with kinds from `KINDS` in
-  `${CLAUDE_PLUGIN_ROOT}/scripts/check_playbook.py`, over sources `run.json` registers —
+  `<plugin_root>/scripts/check_playbook.py`, over sources `run.json` registers —
   on a scoped run, for the families `families` lists and the reads they need, no others
   (check-plan SKILL.md § Scope).
 - **You open client files at two depths, both bounded.** The short read of every

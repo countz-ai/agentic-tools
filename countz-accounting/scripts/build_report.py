@@ -53,7 +53,7 @@ try:
     from pptx.util import Emu, Inches, Pt
 except ImportError as exc:  # pragma: no cover
     print(f"build_report.py needs openpyxl, pyyaml and python-pptx ({exc}); run it as\n"
-          f"  uv run --project ${{CLAUDE_PLUGIN_ROOT}} python3 scripts/build_report.py <run_dir>",
+          f"  uv run --project <plugin_root> python3 scripts/build_report.py <run_dir>",
           file=sys.stderr)
     raise SystemExit(2)
 

@@ -7,7 +7,7 @@ Every module that prints money or a date imports this rather than typing a `$`, 
 `build_report`, and the gates `check_prose` / `check_report` / `check_workbook`, which parse
 with the grammar built from the same table, so the writer and the gate cannot drift:
 
-    import sys; sys.path.insert(0, "<${CLAUDE_PLUGIN_ROOT}>/scripts")   # the token expanded
+    import sys; sys.path.insert(0, "<plugin_root>/scripts")   # the token expanded
     from style import money, date_long, date_short, month_label, MONEY_TOKEN, scale_of
 
     money(9_438_108.22, "usd")            # "$9,438,108"      (prose: whole units)

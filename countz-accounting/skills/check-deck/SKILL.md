@@ -10,6 +10,8 @@ background: false
 user-invocable: false
 ---
 
+Set `<plugin_root>` to `<base path for this skill>/../..`.
+
 # Review the deck
 
 Arguments: `run_dir`, `seq`, and optionally `since` and `verify` for the second round:
@@ -24,22 +26,22 @@ only on words the fix wrote that break a rule or contradict another page. A defe
 words the fix did not touch is out of scope, even one the first round missed. A finding
 raised again keeps its first-round id; a new one continues the first round's numbering.
 
-Open the step: `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/step_record.py start <run_dir> <seq>`.
+Open the step: `python3 <plugin_root>/scripts/step_record.py start <run_dir> <seq>`.
 
 ## What to read
 
 1. The rules, by section:
 
    ```
-   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py DOCTRINE.md Voice "Number conventions"
-   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py REPORT.md Tone
-   sed -n '/^\*\*Headline and message\.\*\*/,/^\*\*Blocks\*\*/p' ${CLAUDE_PLUGIN_ROOT}/reference/REPORT.md
+   python3 <plugin_root>/scripts/section.py DOCTRINE.md Voice "Number conventions"
+   python3 <plugin_root>/scripts/section.py REPORT.md Tone
+   sed -n '/^\*\*Headline and message\.\*\*/,/^\*\*Blocks\*\*/p' <plugin_root>/reference/REPORT.md
    ```
 
 2. The deck, as its reader sees it:
 
    ```
-   uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/deck_text.py <run_dir>/out/report.pptx [--since <run_dir>/<since>]
+   uv run --project <plugin_root> python3 <plugin_root>/scripts/deck_text.py <run_dir>/out/report.pptx [--since <run_dir>/<since>]
    ```
 
 3. In the second round, the `verify` record's `findings`.
@@ -83,5 +85,5 @@ cannot follow, then a Voice or number-convention defect.
 
 Write the fields to `<run_dir>/out/.staging/deck-findings.json` as
 `{"conclusion": "...", "findings": [...]}` and close the step:
-`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/step_record.py finish <run_dir> <seq> --json <run_dir>/out/.staging/deck-findings.json`.
+`python3 <plugin_root>/scripts/step_record.py finish <run_dir> <seq> --json <run_dir>/out/.staging/deck-findings.json`.
 `conclusion` gives the count of findings and the worst in one clause.

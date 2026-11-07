@@ -2,7 +2,7 @@
 """A check's page, written once: `workpapers/<check>.tpl.md` rendered to `checks/<check>.md`,
 `checks/<check>-summary.md` and the staged tab `out/.staging/<check>.xlsx` (WORKBOOK.md § 7).
 
-    uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/render.py <run_dir> <check>
+    uv run --project <plugin_root> python3 <plugin_root>/scripts/render.py <run_dir> <check>
 
 renders the three files, then gates and places the tab (`step_record.place_tab`); exit 1
 names what a gate refused. `--no-place` stops after staging. A recon check writes its match

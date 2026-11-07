@@ -9,7 +9,9 @@ description: >-
 context: inline
 ---
 
-Read `${CLAUDE_PLUGIN_ROOT}/reference/RUN_CONTRACT.md` for context.
+Set `<plugin_root>` to `<base path for this skill>/../..`.
+
+Read `<plugin_root>/reference/RUN_CONTRACT.md` for context.
 
 You are the relay: collect the inputs, register them, dispatch the checks as parallel
 sub-agents, surface each result. **You do no analysis and you open no client

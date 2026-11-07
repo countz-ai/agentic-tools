@@ -19,7 +19,7 @@ exist.
 ## Reading this plugin's documents
 
 A citation that names a section — `RUN_CONTRACT.md § Every wave` — is read with
-`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py RUN_CONTRACT.md "Every wave"`, never by
+`python3 <plugin_root>/scripts/section.py RUN_CONTRACT.md "Every wave"`, never by
 opening the file. A multi-word heading is one quoted argument.
 The file is the name as the citation writes it; a path under the plugin root or an
 absolute path also works. Open a file whole only where the citation names no section.
@@ -351,11 +351,11 @@ through SendUserFile.
 
 After every wave, in this order:
 
-1. `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/family_artifacts.py <run_dir>`,
+1. `uv run --project <plugin_root> python3 <plugin_root>/scripts/family_artifacts.py <run_dir>`,
    silently: it writes each finished family's summary and workbook under
    `out/families/`, and leaves the rest as it was. If it fails, say so once and keep
    going.
-2. `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/preview.py <run_dir>`. Send what it prints and
+2. `python3 <plugin_root>/scripts/preview.py <run_dir>`. Send what it prints and
    only that. It prints nothing when nothing changed, and re-names a file whose content
    moved. It names every artifact as it lands. Each `SHOW:` line is `path`, `caption`,
    `tier`. The tier decides the send:
@@ -373,7 +373,7 @@ After every wave, in this order:
    each call waits for the one before it, never several in one turn. Where SendUserFile does
    not exist, one line per deliverable with its path and caption, and one line for the
    bundle listing its paths.
-3. `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/sync_run.py <run_dir>`, silently. Hand
+3. `python3 <plugin_root>/scripts/sync_run.py <run_dir>`, silently. Hand
    `out/run_sync.tar.gz` to the user after a report wave lands, and whenever they ask for
    the run (§ Bringing the run home). If the refresh fails, say so once and keep going.
 
@@ -387,7 +387,7 @@ read and wrote; the lanes run in parallel. Without SendMessage, the run moves in
 
 1. **Assign the lanes once**, after the plan is approved (a saved playbook: after
    `bind-playbook`) and before the first `playbook_next.py` call:
-   `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py assign <run_dir> <definition path>`.
+   `uv run --project <plugin_root> python3 <plugin_root>/scripts/lanes.py assign <run_dir> <definition path>`.
    It maps the approved plan's steps (only those, so a partial run's scope is what runs)
    onto at most three lanes and writes `<run_dir>/lanes.json`. Say nothing about it.
 2. **Run the loop as before**: `playbook_next.py`, then the lines it prints in order. On a
@@ -399,16 +399,16 @@ read and wrote; the lanes run in parallel. Without SendMessage, the run moves in
      (general-purpose where that type is not available), in the background, prompted
      exactly: `Read <brief> and do what it says. It is your entire instruction for this
      step.` Then record its agentId:
-     `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py holder <run_dir> --lane <L> --agent <agentId>`.
+     `uv run --project <plugin_root> python3 <plugin_root>/scripts/lanes.py holder <run_dir> --lane <L> --agent <agentId>`.
    - `holder=<agentId>`: SendMessage to that agentId, the message exactly: `Next step:
      read <brief> and do what it says. It is your entire instruction for this step.`
      If SendMessage refuses or fails, run
-     `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py fallback <run_dir> --lane <L>` and
+     `uv run --project <plugin_root> python3 <plugin_root>/scripts/lanes.py fallback <run_dir> --lane <L>` and
      execute the `LANE:` line it prints (a new holder for the same brief).
 3. **When a lane's agent reports back** — the Agent call's result, a task notification,
    or the SendMessage call's own result (where SendMessage waits for the worker, as in a
    cloud session, the reply is in the call's result) — run
-   `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py done <run_dir> --agent <its agentId>`.
+   `uv run --project <plugin_root> python3 <plugin_root>/scripts/lanes.py done <run_dir> --agent <its agentId>`.
    It closes that step alone (`run_state.py record --seqs`), so the steps still running in
    other lanes stay open; put its `OK:`, `BLOCKED:` and `FAILED:` lines to the user as
    § Classification and retries states, execute a `LANE:` line it prints (the failed
@@ -441,7 +441,7 @@ every finding in the review record by its `fix_kind`, without waiting for a ruli
 
 - **`rerun_check`**: re-dispatch the named checks with `--mode fix`. Each fix snapshots
   its check first and verifies its own change by diff
-  (`${CLAUDE_PLUGIN_ROOT}/scripts/rework.py`); that closes the finding and ends the
+  (`<plugin_root>/scripts/rework.py`); that closes the finding and ends the
   round. No re-review follows a fix.
 - **`withhold`**: the figure is withheld, and the deliverable says so.
 - **`review_call`**: carried into the deliverable as a stated limitation.
@@ -453,7 +453,7 @@ every finding in the review record by its `fix_kind`, without waiting for a ruli
 On a holder-lanes run (§ Holder lanes), every re-dispatch this section calls for — a fix
 of a review finding, a re-extract for a cache defect and the re-runs after it, a check
 re-dispatched with an answer — goes through
-`uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py fix <run_dir> --checks <ids> --mode fix
+`uv run --project <plugin_root> python3 <plugin_root>/scripts/lanes.py fix <run_dir> --checks <ids> --mode fix
 [--extra '<one-line JSON>']` instead of `run_state.py dispatch --checks`, with the same
 checks, mode and extra. It sends each re-run to the lane that ran its check, warm on
 that lane's holder, one at a time per lane. Execute its `LANE:` lines and each report
@@ -480,7 +480,7 @@ The first time a report seals, review the deck, in at most two rounds:
    `fix-blocked.json` listing the findings and checks. Re-run each named check once with
    `--mode fix` and the finding in `fix_input`. A check that reads a re-run one may now
    hold its old words or figures: once the re-runs complete, run
-   `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/sql.py verify <run_dir>`,
+   `uv run --project <plugin_root> python3 <plugin_root>/scripts/sql.py verify <run_dir>`,
    and re-run each check it names with `--mode fix`, its `FAIL:` lines in `fix_input`.
    Repeat until verify exits 0 or names only checks already re-run this way; the report
    step's own verify then blocks on those. Then re-dispatch `check-report` in `mode: fix` with the same
@@ -517,14 +517,14 @@ session ids; they also locate the session that produced the run.
 When the user asks to download or sync the run to a result directory:
 
 - **the path is writable from this machine**: `python3
-  ${CLAUDE_PLUGIN_ROOT}/scripts/sync_run.py <run_dir> --dest <result_root>` copies the
+  <plugin_root>/scripts/sync_run.py <run_dir> --dest <result_root>` copies the
   run to `<result_root>/<short_name>.<datetime>`.
 - **it is not** (the run is in a cloud container; the result root is on the user's
   machine): refresh the archive, send `out/run_sync.tar.gz` (`display: attach` where
   SendUserFile exists; the path otherwise), and relay the printed `EXTRACT:` line.
   Extraction lands the run at `<result_root>/<short_name>.<datetime>`.
 - **only the archive is at hand** (a pulled `run_sync.tar.gz`; the container that ran it
-  is gone): `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/sync_run.py <archive.tar.gz> --dest
+  is gone): `python3 <plugin_root>/scripts/sync_run.py <archive.tar.gz> --dest
   <result_root>` lands it whole at the same layout. `--name` is refused here, and so is a
   target that already exists.
 

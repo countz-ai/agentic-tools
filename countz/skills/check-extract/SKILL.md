@@ -11,6 +11,8 @@ background: false
 user-invocable: false
 ---
 
+Set `<plugin_root>` to `<base path for this skill>/../..`.
+
 # Perform one extraction
 
 Arguments: `run_dir`, `seq`, `check` (the step id), `sources` (comma-joined source ids —
@@ -25,13 +27,13 @@ column a check agrees a total to, or `"none"`. How each table is written — hea
 rows, types, dates, signs — is yours to find and state.
 
 This step computes no figure and writes no tab. Read
-`${CLAUDE_PLUGIN_ROOT}/reference/CONDUCT.md` (§ Files, § Events), the planner's profile
+`<plugin_root>/reference/CONDUCT.md` (§ Files, § Events), the planner's profile
 of each file (`sources/<source>.md`), and the docstring of
-`${CLAUDE_PLUGIN_ROOT}/scripts/cache.py`.
+`<plugin_root>/scripts/cache.py`.
 
 ## 1. Look
 
-`uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/peek.py <path>`
+`uv run --project <plugin_root> python3 <plugin_root>/scripts/peek.py <path>`
 on each file, then bounded reads in code of only what you need to write the parse: where
 each table's header and last row sit, what lies between and below, how amounts, dates
 and signs are written.
@@ -64,7 +66,7 @@ Cache each table under its entry's `id`, and type each column as what it holds.
 
 ## 3. Run and rule
 
-`uv run --project ${CLAUDE_PLUGIN_ROOT} python3 workpapers/extract-<check>.py`, then
+`uv run --project <plugin_root> python3 workpapers/extract-<check>.py`, then
 `cache.py <run_dir> --show`. Where it refuses a table another schema wrote, delete
 `cache/` and re-run the script. A `stated` total the rows do not agree to, or a row
 count or control total that disagrees with the profile's citation of the same table, is
@@ -77,7 +79,7 @@ naming its id; never drop an entry to make the step succeed.
 `checks/<check>.md` — one table, one row per id: file, rows, row count, control total,
 stated agreement. Then the `not_extracted` notes, then your rulings. No figures or
 evidence ledger: the cached tables are what consumers cite
-(`${CLAUDE_PLUGIN_ROOT}/reference/EVIDENCE.md` § 1).
+(`<plugin_root>/reference/EVIDENCE.md` § 1).
 
 ## `mode: fix`
 

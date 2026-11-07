@@ -10,6 +10,8 @@ background: false
 user-invocable: false
 ---
 
+Set `<plugin_root>` to `<base path for this skill>/../..`.
+
 # Perform one completeness check
 
 The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.
@@ -47,7 +49,7 @@ reported in `blockers`, not dropped.
 ## 3. Match members, in passes
 
 Match with SQL joins, one per pass; check the assignment with
-`${CLAUDE_PLUGIN_ROOT}/scripts/matching.py`'s `check_assignment()` before writing it.
+`<plugin_root>/scripts/matching.py`'s `check_assignment()` before writing it.
 
 By identifier first (account number or masked suffix), then by name or label, then by
 corroborating facts (a balance and period that agree), each pass recorded, a loose-key

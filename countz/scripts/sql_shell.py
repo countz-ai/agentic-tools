@@ -23,7 +23,7 @@ the run was moved: the shell replaces the old run directory with that directory 
 renames the file it read to `catalog.orig.sql` (an earlier one is kept) and writes the
 result as `catalog.sql`.
 
-Run with `uv run --project ${CLAUDE_PLUGIN_ROOT} python3`.
+Run with `uv run --project <plugin_root> python3`.
 """
 from __future__ import annotations
 

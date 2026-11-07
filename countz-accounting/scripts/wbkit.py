@@ -4,7 +4,7 @@
 
 Every tab script imports this module rather than carrying the code. A tab script opens:
 
-    import sys; sys.path.insert(0, "<${CLAUDE_PLUGIN_ROOT}>/scripts")   # the token expanded
+    import sys; sys.path.insert(0, "<plugin_root>/scripts")   # the token expanded
     from wbkit import *
 
 and writes its tab with `band`, `header`, `section`, `ident`, `text`, `amount`, `status`,

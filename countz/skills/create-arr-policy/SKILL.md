@@ -10,14 +10,16 @@ description: >-
 context: inline
 ---
 
+Set `<plugin_root>` to `<base path for this skill>/../..`.
+
 # Settle the ARR policy
 
-Read `${CLAUDE_PLUGIN_ROOT}/reference/ARR_POLICY.md` except § Computing ARR, which says how
+Read `<plugin_root>/reference/ARR_POLICY.md` except § Computing ARR, which says how
 figures are computed and settles nothing here:
-`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py reference/ARR_POLICY.md "The model" "The file" "Instructions" "Where a policy lives" "How a run carries it" "Applying the policy"`.
+`python3 <plugin_root>/scripts/section.py reference/ARR_POLICY.md "The model" "The file" "Instructions" "Where a policy lives" "How a run carries it" "Applying the policy"`.
 A § citation below is read
-with `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py <document> "<heading>"`. Every
-command below is `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/arr_policy.py`
+with `python3 <plugin_root>/scripts/section.py <document> "<heading>"`. Every
+command below is `uv run --project <plugin_root> python3 <plugin_root>/scripts/arr_policy.py`
 (it needs the plugin's pinned libraries), called `arr_policy.py` here.
 
 **Aim for the fewest questions.** One purpose settles four positions, and the positions
@@ -32,7 +34,7 @@ data room), `company`. Invoked by the user, you have neither.
 ## 1. What the company already has
 
 The library path is `$HOME/.countz/arr-policies/<company-slug>.yaml`, the
-slug lowercase with hyphens. Look it up with `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/arr_policy.py library --company "<the company>"`, never by listing the folder: its
+slug lowercase with hyphens. Look it up with `uv run --project <plugin_root> python3 <plugin_root>/scripts/arr_policy.py library --company "<the company>"`, never by listing the folder: its
 `MATCH:` line is the company's policy, and `NONE` means the library holds nothing.
 
 1. **An approved policy in the library.** If it prints `MATCH:` and `arr_policy.py check`
@@ -60,14 +62,14 @@ slug lowercase with hyphens. Look it up with `uv run --project ${CLAUDE_PLUGIN_R
   - Without one, register a workspace:
 
     ```
-    python3 ${CLAUDE_PLUGIN_ROOT}/scripts/setup_run.py \
+    python3 <plugin_root>/scripts/setup_run.py \
         --output-root $HOME/.countz/arr-policies/work --skill create-arr-policy \
         --company "<the user's words>" --goal arr-policy --session "$CLAUDE_CODE_SESSION_ID" \
         --sources '[{"id": "...", "path": "<abs>", "name": "<the user's words>"}, ...]'
     ```
 
   Then dispatch the fork as a wave of one:
-  `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/run_state.py dispatch <workspace> --step arr_policy --args '{"out": "<workspace>/arr_policy/stated.yaml", "company": "<company>"}'`,
+  `uv run --project <plugin_root> python3 <plugin_root>/scripts/run_state.py dispatch <workspace> --step arr_policy --args '{"out": "<workspace>/arr_policy/stated.yaml", "company": "<company>"}'`,
   execute the `NEXT:` line it prints, then `run_state.py record <workspace>`. Its return
   names the documents that state rules and how many decisions they settle. Say that to
   the user in one line.
@@ -141,7 +143,7 @@ a draft that resolving again would change (one edited after `resolve`): resolve 
 again and show it again. With a `run_dir`, pin it into the run:
 
 ```
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/setup_run.py <run_dir> --session "$CLAUDE_CODE_SESSION_ID" \
+python3 <plugin_root>/scripts/setup_run.py <run_dir> --session "$CLAUDE_CODE_SESSION_ID" \
     --sources '[]' --arr-policy <path>
 ```
 

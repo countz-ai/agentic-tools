@@ -16,7 +16,27 @@ contract cost assets at December 31, 2025, **1,221,656.67**.
 
 ## The path down
 
-![The path from a number down to the data room](reperform/path.svg)
+```
+Exec Summary                 the number as the reader sees it
+  │ click the number
+  ▼
+Check tab that uses it       a copy: the formula names the cell it reads
+  │ click the number
+  ▼
+Check tab that computes it   the number in its schedule
+  │ click the number
+  ▼
+Sources                      the figure: its SQL and what it reads
+  │ click a reads cell
+  ▼
+Tables                       a table: what a row is, its SQL, what it reads
+  │ click a reads cell       (repeat while a table reads another table)
+  ▼
+Evidence or Constants        the read of a file, or a value a document states
+  │ open the file named
+  ▼
+The file in your data room
+```
 
 A linked cell shows its text in teal. Clicking it takes you one step down. Four kinds of
 tab carry the trail:
@@ -64,7 +84,18 @@ D39 is the figure M5 computed. Click it to see how.
 
 ### 4. Sources: the figure
 
-![One row of the Sources tab](reperform/sources-row.svg)
+Every number with an id has one row on the Sources tab. The row for 1,221,656.67, one
+column per line:
+
+| Column | In the example |
+|---|---|
+| id | `F.m5.presentation.noncurrent.2025-12` |
+| label | AJ.presentation.noncurrent: supported asset beyond the next twelve months, 2025-12 |
+| value | 1,221,656.67 |
+| expression | `SELECT … UNION ALL SELECT … round(sum(noncurrent), 2) FROM m5_amortization.by_portfolio WHERE period IN ('2024-12', '2025-12') GROUP BY period` |
+| reads | `m5_amortization.writeoffs`, `m5_amortization.by_portfolio`, each a link |
+| root source | `E.m5_amortization.contract_register` and 6 more |
+| To reperform | Run the expression over the tables in reads (Tables tab); the row where id = `F.m5.presentation.noncurrent.2025-12` gives 1,221,656.67. |
 
 The **expression** is the whole logic of this step: add the `noncurrent` column of the
 table `m5_amortization.by_portfolio` for each date. **reads** lists what the expression
@@ -79,7 +110,21 @@ Click `m5_amortization.by_portfolio`.
 
 ### 5. Tables: one step down
 
-![One row of the Tables tab](reperform/tables-row.svg)
+Every table a step made or read has one row on the Tables tab. The row for
+`m5_amortization.by_portfolio`, one column per line:
+
+| Column | In the example |
+|---|---|
+| table | `m5_amortization.by_portfolio` |
+| what one row is | One row per portfolio and date: recorded, recomputed, write-offs, closing, current and noncurrent balance. |
+| made by | m5 Amortization recalculation |
+| rows | 12 |
+| totals | recorded 1,848,931.14 · recomputed_term 990,420.23 · … closing 3,059,693.65 · difference 1,210,762.51 · current_part 934,168.78 · noncurrent 2,125,524.87 |
+| result hash | `66d1b3b1e531c280` |
+| SQL | `WITH … b AS (SELECT period, portfolio, sum(supported) … FROM m5_amortization.balances GROUP BY ALL) SELECT … supported − written_off − current_part AS noncurrent …` |
+| reads | `m5_amortization.balances`, `m5_amortization.schedule_lines`, `room.dic_schedule_2024`, `room.dic_schedule_2025`, each a link |
+
+Rows, totals and result hash are what you compare a re-run against.
 
 Read **what one row is** first, then the **SQL**. For `by_portfolio`, each portfolio's
 noncurrent amount is the supported balance, less what was written off, less what
@@ -88,9 +133,21 @@ amortizes in the next twelve months. Those three amounts come from
 
 ### 6. Keep going
 
-Each Tables row works the same way. The branches below `by_portfolio`:
+Each Tables row works the same way. Where 1,221,656.67 comes from, one step per line; each
+indent is a link in a reads cell:
 
-![Where 1,221,656.67 comes from](reperform/branches.svg)
+```
+noncurrent, 2025-12                  the figure (Sources)
+├─ by_portfolio                      per portfolio and date
+│  ├─ balances                       per cost item and date
+│  │  ├─ costs                       → M2 cost items, M3 periods
+│  │  └─ customers                   → contract register, 2 constants
+│  ├─ schedule_lines                 the company's schedule
+│  │                                 → room.dc_schedule_*, M3 periods
+│  └─ room.dic_schedule_*            a data-room file (Tables, then Evidence)
+└─ writeoffs                         read by the same statement for other figures;
+                                     not needed for this number
+```
 
 - **balances**: one row per cost item and date. Its SQL holds the amortization formula:
   amount × (supported period − months elapsed) ÷ supported period. A cost for a customer
@@ -107,11 +164,34 @@ Follow the branch that matters to your question. To question a write-off, follow
 
 ### 7. The bottom
 
-![The bottom of the chain](reperform/bottom.svg)
-
 A table read from a file shows the file, the rows read and a control total on its
-Evidence row. Open the file and check the total. A constant shows the sentence it was
-taken from; open the document and read it.
+Evidence row. Open the file and check the total. In the example, the contract register's
+Evidence row:
+
+| Column | In the example |
+|---|---|
+| id | `E.m0.contract_register` |
+| file | `4 Contracts/Contract_register_2021-01_to_2026-03.csv` |
+| header | A2 |
+| rows | 3:1378 |
+| row count | 1,376 |
+| control total | acv 46,172,900.00 |
+
+Open the file, sum the `acv` column over rows 3 to 1378, and compare with 46,172,900.00.
+
+A constant shows the sentence it was taken from; open the document and read it. In the
+example, a row on the Constants tab:
+
+| Column | In the example |
+|---|---|
+| name | `halcyon_filing_date` |
+| value | 2025-11-06 |
+| kind | stated in a document |
+| where | `4 Contracts/Customer notices/Chapter 7 trustee notice …`, paragraph 1 |
+| quote | "In re Halcyon Freight Systems, Inc., Chapter 7, filed November 6, 2025 (D. Del.)." |
+
+Open the document at the place named and read the sentence. The value must be the one it
+states.
 
 ## Reading a step
 

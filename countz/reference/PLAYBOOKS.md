@@ -102,7 +102,7 @@ at least one slot.
 Listing and lookup come from one implementation:
 
 ```
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/check_playbook.py --list \
+python3 <plugin_root>/scripts/check_playbook.py --list \
     $HOME/.countz/playbooks
 ```
 

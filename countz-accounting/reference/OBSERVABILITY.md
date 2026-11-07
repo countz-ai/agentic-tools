@@ -54,7 +54,7 @@ compute it from them. Where file order and `ts` disagree, file order governs.
 ## 2. Duration and cost — `scripts/usage_report.py`
 
 ```
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/usage_report.py <run_dir> [--json]
+python3 <plugin_root>/scripts/usage_report.py <run_dir> [--json]
 ```
 
 Reads the session ids from `run.json`, then the transcripts under `~/.claude/projects/`,
@@ -78,7 +78,7 @@ this report.
 ### The cost report — `out/cost.html`
 
 ```
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/cost_report.py <run_dir> [--json]
+python3 <plugin_root>/scripts/cost_report.py <run_dir> [--json]
 ```
 
 `scripts/preview.py` writes it once per sealed deck and puts it in the working bundle, so
@@ -99,7 +99,7 @@ nothing.
 No mode turns it on and no wave runs it: run it by hand, on a run you are diagnosing.
 
 ```
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gather_debug.py <run_dir> [--cli-debug-log <path>]
+python3 <plugin_root>/scripts/gather_debug.py <run_dir> [--cli-debug-log <path>]
 ```
 
 Run it before `sync_run.py`, so the archive carries the trace, and while the session's

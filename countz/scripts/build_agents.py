@@ -36,7 +36,7 @@ def render(name: str, root: pathlib.Path = PLUGIN_ROOT) -> tuple[pathlib.Path, s
     for rel in INCLUDES[name]:
         doc = (root / rel).read_text(encoding="utf-8").strip()
         parts.append(f"\n---\n\nThe text from here to the next horizontal rule is "
-                     f"`${{CLAUDE_PLUGIN_ROOT}}/{rel}`, in full.\n\n{doc}\n")
+                     f"`<plugin_root>/{rel}`, in full.\n\n{doc}\n")
     return path, "".join(parts)
 
 

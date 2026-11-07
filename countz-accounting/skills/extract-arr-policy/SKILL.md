@@ -11,6 +11,8 @@ background: false
 user-invocable: false
 ---
 
+Set `<plugin_root>` to `<base path for this skill>/../..`.
+
 # Read the company's ARR rules
 
 Arguments: `run_dir`, `seq`, `out` (the stated-rules file to write, under
@@ -19,12 +21,12 @@ read; absent, every registered source). You read client files and you decide not
 you record what the documents state, in the policy's vocabulary, and `create-arr-policy`
 settles the rest with the user.
 
-Start with `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/step_record.py start <run_dir> <seq>`.
-Read `${CLAUDE_PLUGIN_ROOT}/reference/CONDUCT.md` § Reading client files and
-`${CLAUDE_PLUGIN_ROOT}/reference/ARR_POLICY.md` except § Computing ARR
-(`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py reference/ARR_POLICY.md "The model" "The file" "Instructions" "Where a policy lives" "How a run carries it" "Applying the policy"`),
+Start with `python3 <plugin_root>/scripts/step_record.py start <run_dir> <seq>`.
+Read `<plugin_root>/reference/CONDUCT.md` § Reading client files and
+`<plugin_root>/reference/ARR_POLICY.md` except § Computing ARR
+(`python3 <plugin_root>/scripts/section.py reference/ARR_POLICY.md "The model" "The file" "Instructions" "Where a policy lives" "How a run carries it" "Applying the policy"`),
 then print the catalog:
-`uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/arr_policy.py catalog`. Every value you write is
+`uv run --project <plugin_root> python3 <plugin_root>/scripts/arr_policy.py catalog`. Every value you write is
 an option id the catalog prints.
 
 ## 1. Find the documents that state ARR rules
@@ -70,7 +72,7 @@ with their citations, and the decision is left out. A conflict is the user's to 
 Write `out` as the stated input `ARR_POLICY.md` § The file describes: `company`,
 `documents` (each document read, `{path, title}`), `policies`, `conventions`,
 `decisions`, `instructions`, `notes`. Then run
-`uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/arr_policy.py resolve <out>`. An `ERROR` line is
+`uv run --project <plugin_root> python3 <plugin_root>/scripts/arr_policy.py resolve <out>`. An `ERROR` line is
 yours to fix in the file before you finish: a value that is not an option id, or a
 decision id that does not exist. An `ERROR` naming statements that contradict each other
 or the policy (a convention stated twice differently, a measurement window no stated rule
@@ -89,7 +91,7 @@ states a rule, the outcome is still `complete`: say so in `conclusion`, and writ
 with `company`, `documents: []` and no decisions. Then:
 
 ```
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/step_record.py finish <run_dir> <seq> --json <run_dir>/arr_policy/finish.json
+python3 <plugin_root>/scripts/step_record.py finish <run_dir> <seq> --json <run_dir>/arr_policy/finish.json
 ```
 
 ## Return

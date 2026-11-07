@@ -9,11 +9,13 @@ background: false
 user-invocable: false
 ---
 
+Set `<plugin_root>` to `<base path for this skill>/../..`.
+
 # Decide the next wave
 
 Arguments: `run_dir`, `playbook` (absolute path to the definition).
 
-`${CLAUDE_PLUGIN_ROOT}/scripts/playbook_next.py` makes this decision whenever it is a
+`<plugin_root>/scripts/playbook_next.py` makes this decision whenever it is a
 pure function of disk — the relay runs it first, always. You are invoked when it printed
 `ESCALATE: <reason>` — read that reason before anything else. It wrote nothing when it
 escalated, so the decision is entirely yours: redo it whole, from disk, by the procedure
@@ -26,7 +28,7 @@ executes what you return.
 ## Procedure
 
 1. Validate the definition:
-   `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/check_playbook.py <playbook>`. On a non-zero
+   `python3 <plugin_root>/scripts/check_playbook.py <playbook>`. On a non-zero
    exit, return the error instead of a decision — a broken definition is reported, not
    worked around.
 2. Read `run.json` — the binding (`playbook.bound`), the sources, `next_seq`, and the
@@ -35,7 +37,7 @@ executes what you return.
    a non-empty `blockers`, which is blocked whatever `error` carries (RUN_CONTRACT.md
    § Classification and retries); a record that is absent or unparseable takes the row's terminal
    `state`.
-3. Decide per `${CLAUDE_PLUGIN_ROOT}/reference/PLAYBOOKS.md`:
+3. Decide per `<plugin_root>/reference/PLAYBOOKS.md`:
    - a step whose `after` dependencies are all terminal ok-or-blocked, whose sources are
      all bound, and which has no terminal dispatch — goes in this wave. All such steps
      go in this one decision.
@@ -43,10 +45,10 @@ executes what you return.
      the reason; the run continues degraded.
    - every step terminal or skipped — DONE.
 4. For a wave: resolve each step's kind to its skill through `KINDS` in
-   `${CLAUDE_PLUGIN_ROOT}/scripts/check_playbook.py`, map its slots to the bound source
+   `<plugin_root>/scripts/check_playbook.py`, map its slots to the bound source
    ids, take seqs from `next_seq` upward, and write one brief per step at
    `dispatch/<NNNN>-<step>.md`, rendering the `BRIEF` template in
-   `${CLAUDE_PLUGIN_ROOT}/scripts/run_state.py` verbatim — absolute paths, complete
+   `<plugin_root>/scripts/run_state.py` verbatim — absolute paths, complete
    arguments, the step's `goal` and `params` carried verbatim. Write the argument block
    per `RUN_CONTRACT.md` § The relay's pen, each value as `_arg` writes it; `dispatch
    --briefs` refuses a brief whose argument block does not read back. It then re-renders
@@ -55,7 +57,7 @@ executes what you return.
    **On a holder-lanes run** (`<run_dir>/lanes.json` exists; RUN_CONTRACT.md § Holder
    lanes) a dispatch still running in a lane (outstanding, its seq in `lanes.json` `busy`)
    is running, not unrecorded: it is neither terminal nor ready. Write no briefs; run
-   `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lanes.py place <run_dir> <playbook> --steps
+   `uv run --project <plugin_root> python3 <plugin_root>/scripts/lanes.py place <run_dir> <playbook> --steps
    <the ready step ids>`, which writes the briefs of the steps that have a free lane, and
    return its `RECORD:`, `LANE:` and `AWAIT:` lines (or `WAIT:`). When nothing is ready
    and some step is running, return `WAIT:`.
@@ -71,16 +73,16 @@ The same imperatives the script prints:
 playbook <name>  wave=<n>  <k> dispatch(es)
 <the comparison that decided it, one sentence>
 SAY: Steps <a>–<b> of <m>: Wave <n> — running <k> checks in parallel: <what runs>.
-RECORD: uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/run_state.py dispatch <abs run_dir> --briefs <abs brief paths>
-LAUNCH: <the LAUNCH constant in ${CLAUDE_PLUGIN_ROOT}/scripts/run_state.py, verbatim>
+RECORD: uv run --project <plugin_root> python3 <plugin_root>/scripts/run_state.py dispatch <abs run_dir> --briefs <abs brief paths>
+LAUNCH: <the LAUNCH constant in <plugin_root>/scripts/run_state.py, verbatim>
 NEXT: Skill check-tie run_dir=<abs> seq=<n> check=<step id> sources=<ids> goal=<...> mode=fresh brief=<abs brief path>
-THEN: uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/run_state.py record <abs run_dir>
-THEN: uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/playbook_next.py <abs run_dir> <abs definition path>
+THEN: uv run --project <plugin_root> python3 <plugin_root>/scripts/run_state.py record <abs run_dir>
+THEN: uv run --project <plugin_root> python3 <plugin_root>/scripts/playbook_next.py <abs run_dir> <abs definition path>
 ```
 
 The `SAY:` line is the relay's progress line to the user (`RUN_CONTRACT.md` § Every
 wave); a wave of one reads `running 1 check:`. `<what runs>` is
-`describe_members` in `${CLAUDE_PLUGIN_ROOT}/scripts/run_state.py`, rendered the same:
+`describe_members` in `<plugin_root>/scripts/run_state.py`, rendered the same:
 each recipe family the members cover by its title from its `###` header
 (`run.json.plan.recipe`), with no family code, counted `<n> × ` where more than one; a
 member with no recipe family as `<id> (<kind word>)` from `KIND_WORDS`, and an extract

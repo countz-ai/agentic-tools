@@ -3,7 +3,7 @@
 
 In a step's code:
 
-    import sys; sys.path.insert(0, "<${CLAUDE_PLUGIN_ROOT}>/scripts")   # the token expanded
+    import sys; sys.path.insert(0, "<plugin_root>/scripts")   # the token expanded
     from evidence import select, span, write_ledger
 
     rows, e = select(RUN, "SELECT customer_id, invoice_amount FROM invoice_lines_fy2025 "
@@ -53,7 +53,7 @@ Command line, printing the entry as YAML:
         [--columns a,b] [--control amount] [--filter "<sql where>"] [--from-check c1]
         [--note "..."] [--reperform]
 
-Requires polars and pyyaml — run as `uv run --project ${CLAUDE_PLUGIN_ROOT} python3`.
+Requires polars and pyyaml — run as `uv run --project <plugin_root> python3`.
 """
 from __future__ import annotations
 

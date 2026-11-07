@@ -11,6 +11,8 @@ background: false
 user-invocable: false
 ---
 
+Set `<plugin_root>` to `<base path for this skill>/../..`.
+
 # Draft the plan
 
 The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.
@@ -54,7 +56,7 @@ accepts a step outside the list only when a step in it reads that step. Without
 
 ## Read first
 
-Read `${CLAUDE_PLUGIN_ROOT}/reference/EVIDENCE.md` § 1 and § 2, then the recipe, then
+Read `<plugin_root>/reference/EVIDENCE.md` § 1 and § 2, then the recipe, then
 `run.json` — its registered sources are the data room, and you read them directly, under
 `agents/planner.md`'s rules. Every check inherits what you record here, and a read-trap
 you miss is a misread every one of them inherits. Append `step_start` before reading and
@@ -66,7 +68,7 @@ For each source's file — or every file under its folder — record path, name,
 size and modification time; for a spreadsheet, its sheet names. A file that cannot be
 read is recorded with `"unreadable": "<reason>"` and listed in `blockers`.
 
-Take the short look with `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/peek.py <source path>`
+Take the short look with `python3 <plugin_root>/scripts/peek.py <source path>`
 — a folder in one call, or the files named; `--json` prints the index fields above per
 file, so take them from it rather than from a read of your own. Read what it prints:
 sheet names, each sheet's extent, the header and a few data rows, a text file's first
@@ -78,7 +80,7 @@ The walk never reads past the peek: a file whose peek does not settle its verdic
 a second bounded look — `--rows` up to the tool's ceiling, a page-ranged read of a PDF,
 a `head` of a text file — and a file that still does not settle is `"context"` with the
 open question in `why`, never a whole read. Every client-file read in this step is
-bounded per `${CLAUDE_PLUGIN_ROOT}/reference/CONDUCT.md § Reading client files`; a Read with no `limit` or
+bounded per `<plugin_root>/reference/CONDUCT.md § Reading client files`; a Read with no `limit` or
 `pages`, a `cat`, and a printed DataFrame are outside it, whatever the file's size.
 Relevance is judged per family, against each
 family's own question, never
@@ -236,7 +238,7 @@ Steps carry: an id slugged per the recipe, naming what the step covers rather th
 `c2_accounts` where the family is one step, `c4_concentration` and `c4_remaining_accounts`
 where it is two, at most 31 characters (the check's tab opens with it, and a tab name holds
 31: `a7_writeoff_authority`, not `a7_credit_and_writeoff_authority`) — the family's kind (from `KINDS` in
-`${CLAUDE_PLUGIN_ROOT}/scripts/check_playbook.py` — a kind the map lacks is reported,
+`<plugin_root>/scripts/check_playbook.py` — a kind the map lacks is reported,
 not invented), the source ids, a one-sentence `goal` naming the entities it covers, the
 grain and the as-of date, `params` for anything the checks must agree on (`family` — the recipe
 family's slug (`q2`), on every step, so the worker reads its family section of the
@@ -252,7 +254,7 @@ EVIDENCE.md § 0; also `fy2025h1`, `fy2025p03`, `ytd_2025-12` (a `"MM-DD"` year 
 `w2025-08-16_2025-09-30` for a period no calendar names, such as a deal's stub) on every
 step that reports by period, and `fiscal_year_end` wherever a column is a fiscal year,
 half, period or quarter, the same calendar on every step, in a form
-`${CLAUDE_PLUGIN_ROOT}/scripts/periods.py` reads (its docstring). `timezone` (an IANA
+`<plugin_root>/scripts/periods.py` reads (its docstring). `timezone` (an IANA
 zone name, e.g. `America/New_York`; the validation refuses any other) wherever a source
 carries timestamps. Where the steps name more than one entity, set it on every step that
 reads timestamps: a step whose entities no zone-declaring step covers fails mid-run on a
@@ -315,7 +317,7 @@ outside `after`, and a `reads` id the extract step does not parse.
   report's cover prints them beside the title (`REPORT.md` § 2). Then validate:
 
   ```
-  python3 ${CLAUDE_PLUGIN_ROOT}/scripts/check_playbook.py <run_dir>/plan/<name>.json
+  python3 <plugin_root>/scripts/check_playbook.py <run_dir>/plan/<name>.json
   ```
 
   A non-zero exit is yours to fix before you write your record; if you cannot, return
@@ -323,7 +325,7 @@ outside `after`, and a `reads` id the extract step does not parse.
 - The spend estimate, once the definition validates:
 
   ```
-  python3 ${CLAUDE_PLUGIN_ROOT}/scripts/spend_model.py estimate <run_dir> <run_dir>/plan/<name>.json
+  python3 <plugin_root>/scripts/spend_model.py estimate <run_dir> <run_dir>/plan/<name>.json
   ```
 
   It writes `plan/spend-estimate.json` and prints a table per family with the report,
@@ -336,7 +338,7 @@ outside `after`, and a `reads` id the extract step does not parse.
   them:
 
   ```
-  python3 ${CLAUDE_PLUGIN_ROOT}/scripts/check_workbook.py --run-dir <run_dir>
+  python3 <plugin_root>/scripts/check_workbook.py --run-dir <run_dir>
   ```
 
   It refuses a ledger whose top level is not a list and an id outside the grammar

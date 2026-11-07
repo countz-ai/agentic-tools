@@ -10,6 +10,8 @@ background: false
 user-invocable: false
 ---
 
+Set `<plugin_root>` to `<base path for this skill>/../..`.
+
 # Perform one reconciliation
 
 The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.
@@ -43,7 +45,7 @@ Take the difference before explaining anything.
 
 Where both sides are records of the same money — the book's deposits and the statement's
 credits, its payments and the statement's debits, invoices and a cash-application file —
-match with `${CLAUDE_PLUGIN_ROOT}/scripts/resolve.py` (its docstring is the method and the
+match with `<plugin_root>/scripts/resolve.py` (its docstring is the method and the
 contract). It matches by ordered rules, as reconciliation software does, and every match
 names its rule.
 
@@ -88,7 +90,7 @@ then looser keys, each pass recorded — over streams mapped as above, and read 
 assignment back with `resolve.py`'s `from_assignment()`: each pass a `Pass`, its criteria
 in words and, where its groups' sides differ, the difference it tolerates, named; `transit=`
 measured as above. It checks the assignment with
-`${CLAUDE_PLUGIN_ROOT}/scripts/matching.py`'s `check_assignment()` and returns the same
+`<plugin_root>/scripts/matching.py`'s `check_assignment()` and returns the same
 Resolution `resolve()` does, so everything below reads one `res` whichever way you matched.
 
 Read the result the way a preparer reads auto-match output. Each match names its rule
@@ -147,7 +149,7 @@ Files:
 - `checks/<check>-matches.parquet` — the match table of § 3, with its manifest block.
 - `out/tabs/<check>.xlsx` — your tabs. The file opens with the match tabs, one set per
   `res` of § 3, each set under its own token, written by
-  `${CLAUDE_PLUGIN_ROOT}/scripts/match_tabs.py` from it and never by hand, whether it came
+  `<plugin_root>/scripts/match_tabs.py` from it and never by hand, whether it came
   from `resolve()` or `from_assignment()`. Pass `right_population` (the bank side's
   population), and `currency` where the amounts are money: its minor units are the
   `decimals` the streams were matched at, which the call reads from `res`. Figure ids are

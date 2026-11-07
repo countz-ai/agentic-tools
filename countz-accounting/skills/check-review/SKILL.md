@@ -11,6 +11,8 @@ background: false
 user-invocable: false
 ---
 
+Set `<plugin_root>` to `<base path for this skill>/../..`.
+
 # Review the checks
 
 The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.
@@ -22,9 +24,9 @@ check gets the full scope.
 
 ## What to read
 
-1. `${CLAUDE_PLUGIN_ROOT}/reference/VALIDATION.md` — the scope you run and the finding
+1. `<plugin_root>/reference/VALIDATION.md` — the scope you run and the finding
    you write. Read it whole; it is the only file that states the scope.
-2. `${CLAUDE_PLUGIN_ROOT}/reference/DOCTRINE.md` — the standard behind every `judgment`
+2. `<plugin_root>/reference/DOCTRINE.md` — the standard behind every `judgment`
    finding
 3. on a plan-driven run, the recipe at `run.json.plan.recipe` — its population rule is
    what the boundary test reads — and `PLAYBOOK_RECIPES.md` § What every recipe inherits;

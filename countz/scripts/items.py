@@ -5,7 +5,7 @@ block that records what built it — as one importable module.
 Every step that writes item-level work imports this rather than hand-rolling a CSV writer
 and a manifest:
 
-    import sys; sys.path.insert(0, "<${CLAUDE_PLUGIN_ROOT}>/scripts")   # the token expanded
+    import sys; sys.path.insert(0, "<plugin_root>/scripts")   # the token expanded
     from items import write_items, manifest_md
 
     m = write_items(RUN, "c4_lockbox", "matches",

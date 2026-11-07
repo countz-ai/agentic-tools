@@ -9,9 +9,9 @@ Every metric number in reader-facing text is checked by script, never by reading
 both gates over everything that has landed:
 
 ```
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/check_prose.py <tab-or-workbook> --run-dir <run_dir> \
+python3 <plugin_root>/scripts/check_prose.py <tab-or-workbook> --run-dir <run_dir> \
     [--allow <file carrying declared tolerances>]
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/check_report.py <deck>   # once a report has landed
+python3 <plugin_root>/scripts/check_report.py <deck>   # once a report has landed
 ```
 
 `check_prose.py` takes the tabs and the workbook; `check_report.py` takes the deck
@@ -63,7 +63,7 @@ not run.
    does not, or that states a figure only a left-out family establishes, is a blocking
    finding.
 8. **Hold each check to its own procedure.** Resolve the check's kind to its worker skill
-   through `KINDS` in `${CLAUDE_PLUGIN_ROOT}/scripts/check_playbook.py`, and read that
+   through `KINDS` in `<plugin_root>/scripts/check_playbook.py`, and read that
    skill's numbered sections — its procedure — with `section.py`. Stop there: `mode: fix`
    and `Record` are the worker's, not yours. A step the procedure requires and the record
    does not show is a `judgment` finding.
@@ -76,7 +76,7 @@ not run.
    `fix_input` stating the test to run.
 
 Where a deliverable has landed, its layout and its cells are held to
-`${CLAUDE_PLUGIN_ROOT}/reference/WORKBOOK.md` and `WORKBOOK_STYLE.md`, and the deck to
+`<plugin_root>/reference/WORKBOOK.md` and `WORKBOOK_STYLE.md`, and the deck to
 `REPORT.md` § 3 and `REPORT.md` § 4. Read the section that governs the surface you are
 judging.
 

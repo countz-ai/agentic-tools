@@ -318,7 +318,7 @@ def check(root: pathlib.Path) -> list[str]:
 
     # 5f. A dispatched instruction file (an agent charter, a skill) is read by a worker whose
     #     working directory is the RUN, not the plugin. So every reference file it names as a
-    #     read target carries ${CLAUDE_PLUGIN_ROOT}; a bare `reference/X.md` resolves to
+    #     read target carries <plugin_root>; a bare `reference/X.md` resolves to
     #     nothing there. Measured 2026-09-22: check-report/SKILL.md named REPORT.md and
     #     WORKBOOK_STYLE.md bare in the one sentence listing what the report worker must
     #     read, while naming DOCTRINE.md and WORKBOOK.md with the prefix in the same
@@ -329,7 +329,7 @@ def check(root: pathlib.Path) -> list[str]:
         if not f.is_file():
             continue
         for m in BARE_REF.finditer(f.read_text()):
-            bad.append(f"{rel(f)}: names `{m.group(0)[1:]}` with no ${{CLAUDE_PLUGIN_ROOT}} "
+            bad.append(f"{rel(f)}: names `{m.group(0)[1:]}` with no <plugin_root> "
                        f"prefix - a dispatched worker runs in the run directory, where that "
                        f"path resolves to nothing")
 
@@ -795,7 +795,7 @@ def check(root: pathlib.Path) -> list[str]:
     #     wave-1 tasks the coordinator must print the WAVE marker and one NEXT line per
     #     task, each carrying brief=, and write each brief as a self-contained instruction
     #     file - agent file, skill file, plugin root and the dispatch args, all absolute,
-    #     because a sub-agent prompt gets no ${CLAUDE_PLUGIN_ROOT} substitution and no
+    #     because a sub-agent prompt gets no base path for a skill and no
     #     conversation. The single dispatch that follows the wave must carry none of that:
     #     a single runs as its skill's fork.
     if co.is_file() and goals:
@@ -1642,7 +1642,7 @@ def check(root: pathlib.Path) -> list[str]:
                            f"reader finds recipes by listing the directory")
         for f in sorted(root.glob("skills/*/SKILL.md")) + sorted(root.glob("agents/*.md")) \
                 + sorted(root.glob("reference/*.md")):
-            if "${CLAUDE_PLUGIN_ROOT}/playbook-recipes" in f.read_text():
+            if "<plugin_root>/playbook-recipes" in f.read_text():
                 bad.append(f"{rel(f)}: reads a recipe from the plugin tree - recipes are "
                            f"served by the connector and pinned under <run_dir>/recipes/")
 
@@ -2605,15 +2605,35 @@ def check(root: pathlib.Path) -> list[str]:
         except Exception as exc:
             bad.append(f"{rel(hj)}: not valid JSON ({exc})")
 
-    # 8. A relay skill finds the plugin's folder with one command before it reads any
-    #     plugin file: a host may leave `${CLAUDE_PLUGIN_ROOT}` unresolved or point it at
-    #     a copy of the skill folder alone, and a model left to find the folder searches
-    #     the whole filesystem (minutes before the user's first question).
-    for sk in sorted(root.glob("skills/*/SKILL.md")):
-        text = sk.read_text(encoding="utf-8")
-        if '"Running a recipe"' in text and 'echo "CLAUDE_PLUGIN_ROOT=$R"' not in text:
-            bad.append(f"{rel(sk)}: a relay skill opens with the CLAUDE_PLUGIN_ROOT= command "
-                       f"(skills/countz/SKILL.md), not a read under ${{CLAUDE_PLUGIN_ROOT}}")
+    # 8. One way to name the plugin's folder on every host. A model-read file writes it as
+    #     <plugin_root>, never ${CLAUDE_PLUGIN_ROOT}: Claude Code substitutes that token in
+    #     skill text and other hosts may not, so it would make the hosts behave differently.
+    #     Every host names the loaded skill's folder, so each skill that uses <plugin_root>
+    #     sets it on its first line from that base path, and each agent says its skill or
+    #     brief sets it. Scripts find the folder from their own path. A search for the
+    #     folder runs code from any copy it finds, and the directory scan cannot tell
+    #     which code that is. Hooks are exempt: a hook command is the one place every host
+    #     sets the environment variable.
+    SET = "Set `<plugin_root>` to `<base path for this skill>/../..`."
+    AGENT = "`<plugin_root>` is the plugin folder, as your skill or brief sets it."
+    read = [f for d in ("skills", "agents", "reference", "scripts") for f in sorted((root / d).rglob("*"))
+            if f.is_file() and f.suffix in {".md", ".py"} and "__pycache__" not in f.parts]
+    for f in read:
+        text = f.read_text(encoding="utf-8")
+        if "CLAUDE_PLUGIN_ROOT" in text:
+            bad.append(f"{rel(f)}: names CLAUDE_PLUGIN_ROOT; write <plugin_root>, which every "
+                       f"host resolves the same way")
+        for marker in ("find /", 'find "$HOME', "plugins/synced/*", "plugins/cache/*"):
+            if marker in text and f.suffix == ".md":
+                bad.append(f"{rel(f)}: searches for the plugin folder (`{marker}`); use <plugin_root>")
+        if "<plugin_root>" not in text:
+            continue
+        if f.name == "SKILL.md":
+            body = text.split("\n---\n", 1)[-1].lstrip("\n")
+            if not body.startswith(SET):
+                bad.append(f"{rel(f)}: uses <plugin_root>, so its first line is: {SET}")
+        elif f.parent.name == "agents" and AGENT not in text:
+            bad.append(f"{rel(f)}: uses <plugin_root>, so its head says: {AGENT}")
 
     return bad
 

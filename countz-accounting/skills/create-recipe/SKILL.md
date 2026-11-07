@@ -12,16 +12,18 @@ background: false
 user-invocable: false
 ---
 
+Set `<plugin_root>` to `<base path for this skill>/../..`.
+
 # Author a recipe
 
 § What a recipe states, § Research and § Write the recipe apply to every recipe: one
 generated in a run, and one written for the corpus outside a run. § In a run applies to
 the run's `create-recipe` step only.
 
-Read `${CLAUDE_PLUGIN_ROOT}/reference/RECIPE_FORMAT.md` whole; it is the contract you
+Read `<plugin_root>/reference/RECIPE_FORMAT.md` whole; it is the contract you
 write to. Then read
-`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py reference/PLAYBOOK_RECIPES.md "What every recipe inherits"`
-and `${CLAUDE_PLUGIN_ROOT}/reference/DOCTRINE.md` § Voice and § Number conventions.
+`python3 <plugin_root>/scripts/section.py reference/PLAYBOOK_RECIPES.md "What every recipe inherits"`
+and `<plugin_root>/reference/DOCTRINE.md` § Voice and § Number conventions.
 
 ## What a recipe states
 
@@ -133,7 +135,7 @@ State acceptance in `Rules`, the invariants and each family's **Done when**.
 Then run the gate and fix every defect it names:
 
 ```
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/validate_recipe.py <recipe path>
+python3 <plugin_root>/scripts/validate_recipe.py <recipe path>
 ```
 
 ## In a run
@@ -146,7 +148,7 @@ Without `answers` you are on the draft stage; with it, the author stage. Append
 
 Read `run.json`. Its registered sources are the data room; you read them under
 `agents/planner.md`'s rules, through `scripts/peek.py`, bounded per
-`${CLAUDE_PLUGIN_ROOT}/reference/CONDUCT.md § Reading client files`. You write a recipe, not a plan: no file
+`<plugin_root>/reference/CONDUCT.md § Reading client files`. You write a recipe, not a plan: no file
 index, no profiles, no definition. `check-plan` does that against the recipe you leave.
 
 ### Draft stage (no `answers`)

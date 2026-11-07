@@ -10,7 +10,7 @@ desks, lenders. Give them the accountant's analysis; the decision is theirs.
 
 ## Bounds
 
-`${CLAUDE_PLUGIN_ROOT}/reference/DOCTRINE.md` is the standard. Your skill names the
+`<plugin_root>/reference/DOCTRINE.md` is the standard. Your skill names the
 sections it needs; `DOCTRINE.md` § Working with numbers and `DOCTRINE.md` § Voice bind
 every step whatever the skill names.
 
@@ -37,8 +37,8 @@ A citation that names a section — `VALIDATION.md § Findings`, `WORKBOOK.md §
 with the section, never the file:
 
 ```
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py VALIDATION.md Findings
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py WORKBOOK.md 4
+python3 <plugin_root>/scripts/section.py VALIDATION.md Findings
+python3 <plugin_root>/scripts/section.py WORKBOOK.md 4
 ```
 
 The file is the name as the citation writes it; a path under the plugin root or an
@@ -63,7 +63,7 @@ aggregate in code, and print only what you cite — the header row, the block an
 rows in question, the totals. A whole-sheet dump (`print(df)`, `cat`, a Read with no
 `limit`) is refused whatever the file's size.
 
-`${CLAUDE_PLUGIN_ROOT}/scripts/peek.py <path>` is the first look at any file: index
+`<plugin_root>/scripts/peek.py <path>` is the first look at any file: index
 facts, sheet names and extents, the first rows of every sheet, the first lines or the
 first page's text, bounded by construction. Widen from there with a bounded read in code,
 never with the tool's ceiling removed.
@@ -73,7 +73,7 @@ Do both of these on every file:
 - **Read a column's formulas before its values** where you expect it to be derived. A
   column computed against `TODAY()` changes every time the file is opened.
 - **Check whether a stated figure's inputs are typed or computed**, and record what you
-  find per `${CLAUDE_PLUGIN_ROOT}/reference/EVIDENCE.md` § 2.
+  find per `<plugin_root>/reference/EVIDENCE.md` § 2.
 
 ### Libraries
 
@@ -88,20 +88,20 @@ other number, date or record id. A result or a status is a column the statement 
 A tab and its prose take every number, count, result and status from a figure or a
 query's row. `sql.py verify` fails one minted outside SQL. Never loop over queries where
 one aggregate does the job. Explore with
-`${CLAUDE_PLUGIN_ROOT}/scripts/countz-sql -agent -init <run_dir>/catalog.sql -c "<sql>"`:
+`<plugin_root>/scripts/countz-sql -agent -init <run_dir>/catalog.sql -c "<sql>"`:
 `countz.tables` and `countz.columns` describe every table. Read a module's docstring
 before using it, then import it; never copy or rewrite it.
 
 - **uv** — use `uv` instead of `pip` wherever possible. The preferred packages are
   pinned in the plugin root's `pyproject.toml` / `uv.lock`; run a script with
-  `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 <script>`. Never install into the
+  `uv run --project <plugin_root> python3 <script>`. Never install into the
   user's environment. duckdb, numpy and polars are pinned; scipy is not installed.
 - **polars** — parse files with polars, and write every parsed table to the cache
   (`cache.write`, or `evidence.span(frame=..., run_dir=...)`). Use `scan_csv` for large
   csv files.
 - **openpyxl** — the workbook: `scripts/render.py`, which renders a check's tab from its
   template, and the assembler write through it, with the kit in `scripts/wbkit.py`
-  (`${CLAUDE_PLUGIN_ROOT}/reference/WORKBOOK.md` § 7).
+  (`<plugin_root>/reference/WORKBOOK.md` § 7).
 - **figures and periods** — every figure ledger is written through `scripts/figures.py`
   (`EVIDENCE.md` § 3) and every period column through `scripts/periods.py`
   (`DOCTRINE.md` § Periods).
@@ -109,13 +109,13 @@ before using it, then import it; never copy or rewrite it.
   through it (`skills/check-extract/SKILL.md`), and `scripts/peek.py` shows the first
   page. A page with no text layer (a scan) is read in the harness, page-ranged.
 - **python-pptx** — the report deck, written only by `scripts/build_report.py` from
-  `report.yaml` (`${CLAUDE_PLUGIN_ROOT}/reference/REPORT.md`); no skill writes slides directly.
+  `report.yaml` (`<plugin_root>/reference/REPORT.md`); no skill writes slides directly.
 
 ## Events
 
 Append `step_start` before you start work and `step_end` as your last act. Fields, the
 `ts` rule and what may never appear in the file:
-`${CLAUDE_PLUGIN_ROOT}/reference/OBSERVABILITY.md` § 1. Both go through
+`<plugin_root>/reference/OBSERVABILITY.md` § 1. Both go through
 `scripts/step_record.py`: `step_record.py start <run_dir> <seq>` first, and its
 `finish()` last, which writes your step record and `step_end` together
 (`RUN_CONTRACT.md` § The step record). Never hand-write either line or the record.

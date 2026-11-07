@@ -25,7 +25,7 @@ tab workbook and records their figures in the check's ledger:
 already there: a second set (another `res` of the same check) goes ahead of the first. At
 the seal they follow the Exec Summary (WORKBOOK.md § 2).
 
-    import sys; sys.path.insert(0, "<${CLAUDE_PLUGIN_ROOT}>/scripts")   # the token expanded
+    import sys; sys.path.insert(0, "<plugin_root>/scripts")   # the token expanded
     from match_tabs import match_tabs
 
     names = match_tabs(wb, res, left, right, check="recon_inv_bank", token="recon inv bank",

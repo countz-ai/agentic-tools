@@ -2,7 +2,7 @@
 """Wording fixes to the staged workbook, made by the report step: a cell's words change,
 its numbers, ids and placeholders do not (check-report SKILL.md § 3).
 
-    python3 ${CLAUDE_PLUGIN_ROOT}/scripts/reword.py <run_dir> <edits.yaml>
+    python3 <plugin_root>/scripts/reword.py <run_dir> <edits.yaml>
 
 `edits.yaml` is a list. Each entry:
 

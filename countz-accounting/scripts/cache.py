@@ -9,7 +9,7 @@ writes its own script, `workpapers/extract-<check>.py`, that parses every table 
 downstream steps need out of it, once. The script hands each parsed table here with the
 coordinates it read it at:
 
-    import sys; sys.path.insert(0, "<${CLAUDE_PLUGIN_ROOT}>/scripts")   # the token expanded
+    import sys; sys.path.insert(0, "<plugin_root>/scripts")   # the token expanded
     import cache
 
     cache.write(RUN, "invoice_lines_fy2025", df,
@@ -57,7 +57,7 @@ recorded sha256 and byte count, and the parquet still holds the rows it was writ
     cache.py <run_dir> --show              one line per id
     cache.py <run_dir> --verify [id]       exit 3 on a disagreement
 
-Run as `uv run --project ${CLAUDE_PLUGIN_ROOT} python3`.
+Run as `uv run --project <plugin_root> python3`.
 """
 from __future__ import annotations
 
@@ -97,7 +97,7 @@ def _pl():
         import polars as pl
     except ImportError as exc:                      # pragma: no cover
         sys.exit(f"cache.py needs polars ({exc}); run it as "
-                 "`uv run --project ${CLAUDE_PLUGIN_ROOT} python3`")
+                 "`uv run --project <plugin_root> python3`")
     return pl
 
 

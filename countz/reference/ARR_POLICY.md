@@ -11,7 +11,7 @@ position, convention, decision, option and derivation) lives only in
 with:
 
 ```
-uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/arr_policy.py catalog
+uv run --project <plugin_root> python3 <plugin_root>/scripts/arr_policy.py catalog
 ```
 
 Below, `arr_policy.py` means that same invocation.
@@ -63,10 +63,10 @@ resolving again would not change and that matches its digest.
 
 ```yaml
 # ARR policy. Before you use any value in this file, read how it is applied:
-#   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py reference/ARR_POLICY.md "Applying the policy"
+#   python3 <plugin_root>/scripts/section.py reference/ARR_POLICY.md "Applying the policy"
 # ...
 schema: countz-accounting/arr-policy@1
-apply_per: ${CLAUDE_PLUGIN_ROOT}/reference/ARR_POLICY.md § Applying the policy
+apply_per: <plugin_root>/reference/ARR_POLICY.md § Applying the policy
 company: Acme Corp
 status: approved                  # draft until `approve`; any re-resolve returns it to draft
 approved: {by: Jane Smith, at: 2026-09-24T22:22:32Z, digest: 3f9a0c6e1b2d4a57}
@@ -154,7 +154,7 @@ resets monthly is annualized at twelve times the tier.
 
 - **The library:** `$HOME/.countz/arr-policies/<company-slug>.yaml`, one
   approved policy per company, the file a later run reuses. The user may name another
-  path. Look it up with `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/arr_policy.py library --company "<the company>"`, never by listing the folder: it prints `MATCH:` for the
+  path. Look it up with `uv run --project <plugin_root> python3 <plugin_root>/scripts/arr_policy.py library --company "<the company>"`, never by listing the folder: it prints `MATCH:` for the
   company's own policy and `POLICY:` for every other, or `NONE`, which a machine with no
   library yet also prints.
 - **In a run:** pinned at `<run_dir>/arr_policy.yaml` by

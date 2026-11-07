@@ -10,6 +10,8 @@ background: false
 user-invocable: false
 ---
 
+Set `<plugin_root>` to `<base path for this skill>/../..`.
+
 # Perform one vouch
 
 The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.
@@ -36,7 +38,7 @@ consume the whole list — every item on it ends with a classification, none dro
 ## 2. Trace each item
 
 Trace with SQL joins, one per matching round; check the assignment with
-`${CLAUDE_PLUGIN_ROOT}/scripts/matching.py`'s `check_assignment()`, and classify every
+`<plugin_root>/scripts/matching.py`'s `check_assignment()`, and classify every
 item left unmatched after the last round per § 3.
 
 Into the target source at item grain: the clearing or supporting line's citation, its

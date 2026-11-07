@@ -119,7 +119,7 @@ This is the run's first question, and it goes to the user before anything else i
 no file written, no folder made, no other question asked.
 
 1. Get the recipe of the catalog entry the ask matched (`skills/analyze/SKILL.md`).
-   `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/bundled_recipe.py <its name>` prints `RECIPE:`
+   `python3 <plugin_root>/scripts/bundled_recipe.py <its name>` prints `RECIPE:`
    and `VERSION:` when the package carries a copy: that path is the recipe. On `NONE`, call
    `get_recipe_for_countz_analysis(recipe="<its name>")` on the `countz` server; the
    body is its `recipe_markdown`. Do not write the served body to a file: § 3 pins it after the
@@ -135,13 +135,13 @@ no file written, no folder made, no other question asked.
    read from, which registration adds.
 3. Print the choice, with `--suggest <their ids, comma-separated>` on a specific
    request and without it on a broad one. For a bundled copy, pass its path:
-   `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/recipe_scope.py ask <the RECIPE path>`. For a
+   `python3 <plugin_root>/scripts/recipe_scope.py ask <the RECIPE path>`. For a
    served body, pipe in only its family headers, the lines that open `### ` under
    `## The families`, copied exactly, and pass `--recipe <its name>` so the estimates
    come from that recipe's earlier runs:
 
    ```
-   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/recipe_scope.py ask --recipe cash-substantiation --suggest c4,c5 <<'EOF'
+   python3 <plugin_root>/scripts/recipe_scope.py ask --recipe cash-substantiation --suggest c4,c5 <<'EOF'
    ### C0 — the population, drawn from the balance sheet (kind `analysis`, one check)
    ...
    EOF
@@ -155,8 +155,8 @@ no file written, no folder made, no other question asked.
    are relevant, shall we run them?* Use no question tool: the user reads the whole
    list, then answers in their own words.
 5. Stop. Your turn ends with that message. Once the user has answered, read
-   `${CLAUDE_PLUGIN_ROOT}/reference/RUN_CONTRACT.md` whole and the rest of this procedure
-   (`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py PLAYBOOK_RECIPES.md "Running a recipe"`)
+   `<plugin_root>/reference/RUN_CONTRACT.md` whole and the rest of this procedure
+   (`python3 <plugin_root>/scripts/section.py PLAYBOOK_RECIPES.md "Running a recipe"`)
    where you have not read them, and go on from § 2.
 
 The `KEY:` lines are yours alone: each maps a row number to its family id and title.
@@ -201,7 +201,7 @@ Once the user has picked what to run (§ 1), ask the rest in one message:
 collected answers and the picks. The fetch itself:
 
 First look for a bundled copy:
-`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/bundled_recipe.py <your recipe's name>`. When it
+`python3 <plugin_root>/scripts/bundled_recipe.py <your recipe's name>`. When it
 prints `RECIPE:` and `VERSION:`, the package was built with that recipe in it: say so to
 the user in one line, register with `--recipe <the RECIPE path> --recipe-version <the
 VERSION>`, and call no recipe tool. `NONE` means nothing is bundled: fetch.
@@ -226,7 +226,7 @@ it: put that to the user and stop.
 The registration:
 
 ```
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/setup_run.py \
+python3 <plugin_root>/scripts/setup_run.py \
     --output-root <abs> --company "<the user's words>" \
     --goal <the recipe's name> --session "$CLAUDE_CODE_SESSION_ID" \
     --sources '[{"id": "gl", "path": "<abs>", "name": "<the user's words>"}, ...]' \
@@ -306,7 +306,7 @@ on to the deliverable without asking again, except about the data room
 ### 5. Execute
 
 The `playbook` skill's run loop. Run
-`uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/playbook_next.py <run_dir> <definition path>` and
+`uv run --project <plugin_root> python3 <plugin_root>/scripts/playbook_next.py <run_dir> <definition path>` and
 execute the lines it prints in order: `RECORD:`, `LAUNCH:`, `NEXT:`, then the `THEN:`
 lines (`record`, any `RETRY:`, the script again). On `ESCALATE:` (exit code 3) or any
 other failure, invoke the `playbook-next` skill with the same arguments, execute its

@@ -8,7 +8,9 @@ description: >-
 context: inline
 ---
 
-Read `${CLAUDE_PLUGIN_ROOT}/reference/RUN_CONTRACT.md` for context.
+Set `<plugin_root>` to `<base path for this skill>/../..`.
+
+Read `<plugin_root>/reference/RUN_CONTRACT.md` for context.
 
 You are the relay. You collect the inputs, register them, dispatch the checks as
 parallel sub-agents, and put each result in front of the user. **You do no
@@ -40,7 +42,7 @@ the company as a slug, the stamp the local clock — and prints it as `RUN_DIR:`
 path is `<run_dir>` everywhere below. Never compose the name yourself:
 
 ```
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/setup_run.py \
+python3 <plugin_root>/scripts/setup_run.py \
     --output-root <abs> --skill tieout --company "<the user's words>" \
     --goal checks --session "$CLAUDE_CODE_SESSION_ID" \
     --sources '[{"id": "gl", "path": "<abs>", "name": "<the user's words>"}, ...]' \
@@ -62,7 +64,7 @@ Register one check — `kind: tieout`, the sources, the goal verbatim, `params` 
 tolerance the user declared:
 
 ```
-uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/run_state.py add-checks <run_dir> \
+uv run --project <plugin_root> python3 <plugin_root>/scripts/run_state.py add-checks <run_dir> \
     --checks '[{"id": "tie_gl_tb", "kind": "tieout", "sources": ["gl", "tb"],
                 "goal": "<verbatim>", "params": {}}]'
 ```

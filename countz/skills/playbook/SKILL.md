@@ -8,8 +8,10 @@ context: inline
 user-invocable: false
 ---
 
-Read `${CLAUDE_PLUGIN_ROOT}/reference/RUN_CONTRACT.md` and
-`${CLAUDE_PLUGIN_ROOT}/reference/PLAYBOOKS.md` for context.
+Set `<plugin_root>` to `<base path for this skill>/../..`.
+
+Read `<plugin_root>/reference/RUN_CONTRACT.md` and
+`<plugin_root>/reference/PLAYBOOKS.md` for context.
 
 You are the relay for an open-ended session: the user brings sources, asks for checks,
 saves what worked, and replays it next period. **You do no analysis and you open no client
@@ -67,7 +69,7 @@ or `recon`: the records are the source, not the conversation.
 ## "List playbooks"
 
 ```
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/check_playbook.py --list \
+python3 <plugin_root>/scripts/check_playbook.py --list \
     $HOME/.countz/playbooks
 ```
 
@@ -90,7 +92,7 @@ listing and lookup.
    `scripts/run_state.py bind-playbook <run_dir> --path <definition> --bound
    '{"slot": "source_id", ...}'` (its `DROPPED:` lines are the unbound-fed steps). Then
    loop: run
-   `uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/playbook_next.py <run_dir> <definition path>`
+   `uv run --project <plugin_root> python3 <plugin_root>/scripts/playbook_next.py <run_dir> <definition path>`
    and execute the lines it prints in their order — `RECORD:`, `LAUNCH:`, `NEXT:`, then
    the `THEN:` lines (`record`, launch any `RETRY:`, the script again); with SendMessage
    available, assign holder lanes first and run the loop as `RUN_CONTRACT.md § Holder

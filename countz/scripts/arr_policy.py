@@ -65,10 +65,10 @@ SCHEMA = "countz-accounting/arr-policy@1"
 
 # Where every policy file points its reader before any value in it is used. A worker that
 # opens the policy to read a decision meets this first (ARR_POLICY.md § Applying the policy).
-APPLY_PER = "${CLAUDE_PLUGIN_ROOT}/reference/ARR_POLICY.md § Applying the policy"
+APPLY_PER = "<plugin_root>/reference/ARR_POLICY.md § Applying the policy"
 HEADER = (
     "# ARR policy. Before you use any value in this file, read how it is applied:\n"
-    "#   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py reference/ARR_POLICY.md "
+    "#   python3 <plugin_root>/scripts/section.py reference/ARR_POLICY.md "
     "\"Applying the policy\"\n"
     "# It says how decisions and instructions are applied and cited, and what to do with a\n"
     "# question this policy does not answer. Edit this file only through arr_policy.py.\n")

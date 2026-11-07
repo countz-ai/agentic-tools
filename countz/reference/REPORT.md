@@ -295,8 +295,8 @@ where the author declares `dense: true`.
 Build and gate, from the run directory:
 
 ```
-uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/build_report.py <run_dir>
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/check_report.py <run_dir>/out/.staging/report.pptx --run-dir <run_dir>
+uv run --project <plugin_root> python3 <plugin_root>/scripts/build_report.py <run_dir>
+python3 <plugin_root>/scripts/check_report.py <run_dir>/out/.staging/report.pptx --run-dir <run_dir>
 ```
 
 ## 3. Tone

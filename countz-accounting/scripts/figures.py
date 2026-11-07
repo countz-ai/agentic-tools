@@ -5,7 +5,7 @@ importable module.
 Every step that mints a figure imports this rather than writing its own `fig()`. Compute
 every figure in SQL (`scripts/sql.py`), one row per figure.
 
-    import sys; sys.path.insert(0, "<${CLAUDE_PLUGIN_ROOT}>/scripts")   # the token expanded
+    import sys; sys.path.insert(0, "<plugin_root>/scripts")   # the token expanded
     from figures import Ledger
 
     L = Ledger(RUN, "a5_bridge_retention")      # resumes workpapers/figures-<check>.yaml
@@ -96,7 +96,7 @@ resolved. `md_table(headers, rows, units)` writes a
 Markdown table whose numeric cells go through `fmt`.
 
 Requires pyyaml — run as
-`uv run --project ${CLAUDE_PLUGIN_ROOT} python3`.
+`uv run --project <plugin_root> python3`.
 """
 from __future__ import annotations
 

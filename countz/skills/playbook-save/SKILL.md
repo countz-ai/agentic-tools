@@ -9,13 +9,15 @@ background: false
 user-invocable: false
 ---
 
+Set `<plugin_root>` to `<base path for this skill>/../..`.
+
 # Save a playbook
 
 Arguments: `run_dir`, `name` (kebab-case, the user's choice), `title`, and optionally
 `dest` (a directory; the default is `$HOME/.countz/playbooks/`) and
 `overwrite=true` (replace an existing file of the same name).
 
-Read `${CLAUDE_PLUGIN_ROOT}/reference/PLAYBOOKS.md` — the format and the distillation
+Read `<plugin_root>/reference/PLAYBOOKS.md` — the format and the distillation
 rules — then `run.json` and, where the run executed a definition, that definition
 (`run.json.playbook`).
 
@@ -49,7 +51,7 @@ unless the arguments say `overwrite=true`, which replaces `<name>.extract/` too 
 which file is in the way). Then:
 
 ```
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/check_playbook.py <the file>
+python3 <plugin_root>/scripts/check_playbook.py <the file>
 ```
 
 A non-zero exit means you return the error and delete the file and `<name>.extract/` — a broken playbook in the

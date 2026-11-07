@@ -21,7 +21,7 @@ peek that is bounded by construction:
     docx/pptx     the first TEXT_CHARS of body text
     xls/xlsb      the sheet names and the first ROWS rows of each, through fastexcel
                   when it is importable (run under `uv run --project
-                  ${CLAUDE_PLUGIN_ROOT}`); without it, size only and that instruction
+                  <plugin_root>`); without it, size only and that instruction
     zip           the entry count and the first entry names
     anything else the first bytes, as hex
 
@@ -338,7 +338,7 @@ def peek_binary_book(path: pathlib.Path, rows: int) -> dict:
     except ImportError:
         return {"kind": "xls", "note": f"binary .{path.suffix.lower().lstrip('.')} - no "
                 "stdlib reader; peek it again under `uv run --project "
-                "${CLAUDE_PLUGIN_ROOT} python3 scripts/peek.py`, which has fastexcel"}
+                "<plugin_root> python3 scripts/peek.py`, which has fastexcel"}
     book = fastexcel.read_excel(str(path))
     sheets = []
     for i, name in enumerate(book.sheet_names):

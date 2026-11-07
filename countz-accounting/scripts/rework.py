@@ -3,7 +3,7 @@
 touching it, and state afterwards what moved in its figures ledger. Edit the files
 yourself between the snapshot and the diff.
 
-    import sys; sys.path.insert(0, "<${CLAUDE_PLUGIN_ROOT}>/scripts")   # the token expanded
+    import sys; sys.path.insert(0, "<plugin_root>/scripts")   # the token expanded
     from rework import snapshot, diff_ledger
 
     snap = snapshot(RUN, "a5_bridge")            # rework/a5_bridge/<UTC stamp>/, a copy

@@ -330,7 +330,7 @@ and `styles()`, and the helpers that place the band and the blocks), which a run
 tab's script imports too:
 
 ```python
-import sys; sys.path.insert(0, "<${CLAUDE_PLUGIN_ROOT}>/scripts")   # the token expanded
+import sys; sys.path.insert(0, "<plugin_root>/scripts")   # the token expanded
 from wbkit import *
 ```
 
@@ -374,9 +374,9 @@ as a value.
 renames it into place; run it as your last act. The gates it runs:
 
 ```
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/check_workbook.py <run_dir>/out/.staging/<tab>.xlsx --run-dir <run_dir>
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/check_prose.py <run_dir>/out/.staging/<tab>.xlsx --run-dir <run_dir>
-uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/sql.py verify <run_dir> --check <check>
+python3 <plugin_root>/scripts/check_workbook.py <run_dir>/out/.staging/<tab>.xlsx --run-dir <run_dir>
+python3 <plugin_root>/scripts/check_prose.py <run_dir>/out/.staging/<tab>.xlsx --run-dir <run_dir>
+uv run --project <plugin_root> python3 <plugin_root>/scripts/sql.py verify <run_dir> --check <check>
 ```
 
 `scripts/step_record.py`'s `place_tab(run_dir, seq)` runs all three and renames the tab into

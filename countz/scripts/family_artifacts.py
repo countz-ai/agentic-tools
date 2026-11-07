@@ -2,7 +2,7 @@
 """Each recipe family's two artifacts: a one-page summary and the family's workbook
 (RUN_CONTRACT.md § Every wave).
 
-    uv run --project ${CLAUDE_PLUGIN_ROOT} python3 family_artifacts.py <run_dir>
+    uv run --project <plugin_root> python3 family_artifacts.py <run_dir>
 
 For every family of the pinned recipe whose checks are all terminal (ok, blocked or
 failed), writes under `<run_dir>/out/families/`, named by the family's number in the

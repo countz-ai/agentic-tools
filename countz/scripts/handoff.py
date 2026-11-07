@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """What a step's inputs already hold, read from the run directory when its brief is written.
 
-    uv run --project ${CLAUDE_PLUGIN_ROOT} python3 handoff.py <run_dir> <brief.md>
+    uv run --project <plugin_root> python3 handoff.py <run_dir> <brief.md>
         print the handoff for that brief's arguments
 
 A fresh worker otherwise spends its first turns finding out what its inputs are: which
@@ -12,7 +12,7 @@ with those facts instead of rediscovering them. It names only what the brief's o
 params name (`params.reads`, every `*_from`), as `agents/worker.md` § Your procedure
 bounds a step's inputs. An item table's columns and row count are read from its parquet
 with polars, so the relay runs run_state, lanes and playbook_next with
-`uv run --project ${CLAUDE_PLUGIN_ROOT} python3`.
+`uv run --project <plugin_root> python3`.
 """
 from __future__ import annotations
 

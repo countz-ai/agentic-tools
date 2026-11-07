@@ -4,7 +4,7 @@
 Every step that computes by period imports this rather than typing its own windows,
 labels and fiscal-year rule:
 
-    import sys; sys.path.insert(0, "<${CLAUDE_PLUGIN_ROOT}>/scripts")   # the token expanded
+    import sys; sys.path.insert(0, "<plugin_root>/scripts")   # the token expanded
     from periods import Periods, fy_of, month_key, month_label, month_seq, cutoff_spec
 
     P = Periods.load(RUN, "a5_bridge_retention")   # params.columns + params.fiscal_year_end

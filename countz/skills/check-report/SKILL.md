@@ -10,6 +10,8 @@ background: false
 user-invocable: false
 ---
 
+Set `<plugin_root>` to `<base path for this skill>/../..`.
+
 # Assemble the deliverable
 
 The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.
@@ -21,7 +23,7 @@ optionally `rerun: false`.
 **`mode: fix`.** `fix_input` holds the deck review's findings (`check-deck`): each names
 a page, the words it quotes, the rule they break and the problem. You fix each one with
 this file's own means, and leave the rest of the deliverable as it was sealed. Read
-§ Voice (`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py DOCTRINE.md Voice`),
+§ Voice (`python3 <plugin_root>/scripts/section.py DOCTRINE.md Voice`),
 `REPORT.md` § 2 and § 3, and the sealed `out/report.yaml`; read a tab where a finding
 needs it. When a finding says a claim goes further than the work, fix it by adding the
 evidence: name the test the check ran and the record it ran on, from the check's own
@@ -49,9 +51,9 @@ each change to `RUN_SUMMARY.md` under `## Wording changes`: the finding id, the 
 words and the new.
 
 Follow `DOCTRINE.md` § Voice and § Number conventions. Read
-`${CLAUDE_PLUGIN_ROOT}/reference/WORKBOOK.md` (where the reader's eye lands on every tab —
-the map, the frozen band, the run-level tabs), `${CLAUDE_PLUGIN_ROOT}/reference/WORKBOOK_STYLE.md` (how a
-cell looks; the kit every tab script starts from) and `${CLAUDE_PLUGIN_ROOT}/reference/REPORT.md`
+`<plugin_root>/reference/WORKBOOK.md` (where the reader's eye lands on every tab —
+the map, the frozen band, the run-level tabs), `<plugin_root>/reference/WORKBOOK_STYLE.md` (how a
+cell looks; the kit every tab script starts from) and `<plugin_root>/reference/REPORT.md`
 (the deck: the brief, `report.yaml`, the gate), then `run.json` (the check roster and
 statuses), the latest review record, every `checks/<check>.md`, and the ledgers. Each
 check wrote its own tab; **you copy tabs, cached values intact — never rewrite one.** A
@@ -80,14 +82,14 @@ rolls the results up, and the tab most of the figures are copied from. A scoped 
 state that the run covers only the steps the user picked, and name the steps left out
 (REPORT.md § 1, *A partial run*). Which of its
 tables the story shows, if any, is the recipe's `## Exec summary` to say. A run with no
-recipe tells the story its objective and results support. Read `${CLAUDE_PLUGIN_ROOT}/reference/DOCTRINE.md`
+recipe tells the story its objective and results support. Read `<plugin_root>/reference/DOCTRINE.md`
 § Voice again before writing its sentences
-(`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py DOCTRINE.md Voice`).
+(`python3 <plugin_root>/scripts/section.py DOCTRINE.md Voice`).
 
 **Sources, Tables, Constants, Evidence.** Run the root collapse first:
 
 ```
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/resolve_roots.py <run_dir>
+python3 <plugin_root>/scripts/resolve_roots.py <run_dir>
 ```
 
 An `unresolved` entry is a ledger reference nothing defines — a blocker against the check
@@ -104,7 +106,7 @@ write(wb, RUN, "<entity> · <the period set, as the band's subtitle states it>")
 **Links.** After assembly:
 
 ```
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/link_workbook.py <run_dir>/out/.staging/workbook.xlsx --run-dir <run_dir>
+python3 <plugin_root>/scripts/link_workbook.py <run_dir>/out/.staging/workbook.xlsx --run-dir <run_dir>
 ```
 
 It wires every id and every Exec Summary amount to where it resolves, turns each Exec
@@ -127,11 +129,11 @@ The deck is for the decider; the workbook is for the reviewer who checks it
 planning.
 
 The plan states each page's message, so the voice binds from the plan on. You read
-`${CLAUDE_PLUGIN_ROOT}/reference/DOCTRINE.md` § Voice before the workbook's assembly;
+`<plugin_root>/reference/DOCTRINE.md` § Voice before the workbook's assembly;
 read it again now, before planning, by section:
 
 ```
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/section.py DOCTRINE.md Voice
+python3 <plugin_root>/scripts/section.py DOCTRINE.md Voice
 ```
 
 Every sentence the plan and the pages carry — a `title`, `message`, `text`, `bullets`,
@@ -174,7 +176,7 @@ Every sentence the plan and the pages carry — a `title`, `message`, `text`, `b
   that argues one — and the sentence stating the message, where the page needs one, is
   `message`; every sentence on a slide is complete.
 
-Read `${CLAUDE_PLUGIN_ROOT}/reference/REPORT.md` § 3 for the words and § 4 for the
+Read `<plugin_root>/reference/REPORT.md` § 3 for the words and § 4 for the
 numbers before writing pages; no other check reads either. Rules a finished deck got wrong:
 
 - Write figures in US form, as `scripts/style.py` does: `$50.5M`, `$81K`, `$1.2B`, `57.8 days`,
@@ -201,7 +203,7 @@ side it falls (REPORT.md § 3, One figure, one meaning). Fix what does not hold,
 Then build:
 
 ```
-uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/build_report.py <run_dir>
+uv run --project <plugin_root> python3 <plugin_root>/scripts/build_report.py <run_dir>
 ```
 
 A reference the builder cannot resolve is named on stderr: fix it by copying the label
@@ -211,13 +213,13 @@ overflowing is split or trimmed, never squeezed.
 ## 3. Gates
 
 ```
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/check_workbook.py <run_dir>/out/.staging/workbook.xlsx \
+python3 <plugin_root>/scripts/check_workbook.py <run_dir>/out/.staging/workbook.xlsx \
     --run-dir <run_dir>
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/check_prose.py <run_dir>/out/.staging/workbook.xlsx \
+python3 <plugin_root>/scripts/check_prose.py <run_dir>/out/.staging/workbook.xlsx \
     --run-dir <run_dir>
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/check_report.py <run_dir>/out/.staging/report.pptx \
+python3 <plugin_root>/scripts/check_report.py <run_dir>/out/.staging/report.pptx \
     --run-dir <run_dir>
-uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/sql.py verify <run_dir>
+uv run --project <plugin_root> python3 <plugin_root>/scripts/sql.py verify <run_dir>
 ```
 
 A `sql.py verify` failure is the owning check's to fix: end the step `blocked` naming it.
@@ -239,7 +241,7 @@ seal (§ 6).** On a surface YOU wrote — a run-level tab, `report.yaml` — fix
 re-gate. On a copied tab or a ledger tab, fix a defect of wording alone yourself: the words
 of a label, a heading, a sentence or a constant's basis, where every number, id, status
 and row stays as the check wrote it. Write each change to `out/.staging/wording.yaml` and
-run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/reword.py <run_dir> <run_dir>/out/.staging/wording.yaml`
+run `python3 <plugin_root>/scripts/reword.py <run_dir> <run_dir>/out/.staging/wording.yaml`
 (its docstring gives the entry shape), then rebuild the deck and re-gate. Example: `check_prose.py`
 reads `Customer C10007, days beyond terms` as a typed day count; reword `, days` to
 `: days` on the tab. Any other defect on a copied tab — a figure, a population, a status
@@ -271,7 +273,7 @@ change `reword.py` made (`out/wording.json`: tab, cell count, old, new, why), an
 run ended. Then paste, unedited, under `## What this run took`, the rendering of:
 
 ```
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/usage_report.py <run_dir>
+python3 <plugin_root>/scripts/usage_report.py <run_dir>
 ```
 
 Do not retype or round its numbers, and keep the line about rates being estimated. Write

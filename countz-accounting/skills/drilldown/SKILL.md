@@ -12,12 +12,11 @@ argument-hint: "[run directory] the figure, finding or open item"
 context: inline
 ---
 
-```
-R=; for d in "${CLAUDE_PLUGIN_ROOT}" "${CLAUDE_SKILL_DIR}/../.." "$HOME"/.claude/plugins/synced/*/countz-accounting $(ls -td "$HOME"/.claude/plugins/cache/*/countz-accounting/*/ 2>/dev/null); do grep -qs '^def emptying' "$d/scripts/sql.py" && R=$(cd "$d" && pwd) && break; done; [ -n "$R" ] || { f=$(find "$HOME/.claude/plugins" -maxdepth 7 -path "*/countz-accounting/scripts/sql.py" -exec grep -l '^def emptying' {} + 2>/dev/null | head -1); [ -n "$f" ] && R=${f%/scripts/sql.py}; }; if [ -z "$R" ]; then echo "NOT INSTALLED: this plugin's files are not in the session. Tell the user so in one line, and stop."; else echo "CLAUDE_PLUGIN_ROOT=$R"; python3 "$R/scripts/section.py" DOCTRINE.md "Voice" "Number conventions"; fi
-```
+Set `<plugin_root>` to `<base path for this skill>/../..`.
 
-`$R` below is the `CLAUDE_PLUGIN_ROOT` the block printed. You explain one result from the
-run's own tables, in this conversation.
+Run `python3 <plugin_root>/scripts/section.py DOCTRINE.md "Voice" "Number conventions"`.
+
+You explain one result from the run's own tables, in this conversation.
 
 ## Inputs
 
@@ -29,7 +28,7 @@ run's own tables, in this conversation.
 
 ## Querying
 
-Run SQL with `$R/scripts/countz-sql -agent -init <run_dir>/catalog.sql -c "<sql>"`. Each
+Run SQL with `<plugin_root>/scripts/countz-sql -agent -init <run_dir>/catalog.sql -c "<sql>"`. Each
 call starts an empty in-memory database: a `CREATE TEMP VIEW` lasts for that call, so put
 the queries that use it in the same `-c`. The catalog describes the run:
 
@@ -101,4 +100,4 @@ with this line:
 
 > To walk through the data and re-perform each step, say: reperform.
 
-Write the explanation per § Voice and § Number conventions, which the block printed.
+Write the explanation per § Voice and § Number conventions, which you printed at the start.

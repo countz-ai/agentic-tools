@@ -11,6 +11,8 @@ background: false
 user-invocable: false
 ---
 
+Set `<plugin_root>` to `<base path for this skill>/../..`.
+
 # Perform one cutoff check
 
 The accounting standard we use is `run.json.inputs.params.accounting_standard`; follow it where applicable.
@@ -53,7 +55,7 @@ window, each side with its count and control total.
 ## 2. Trace both directions
 
 Pair with SQL joins, one per pass; check the assignment with
-`${CLAUDE_PLUGIN_ROOT}/scripts/matching.py`'s `check_assignment()` before writing it.
+`<plugin_root>/scripts/matching.py`'s `check_assignment()` before writing it.
 
 - **book → bank**: every book posting in the window resolves to a bank line with its
   date, or to an in-transit item on the period-end reconciliation (`params.items_from`).

@@ -5,7 +5,7 @@
 
 Every step opens and closes through this rather than hand-building the record:
 
-    import sys; sys.path.insert(0, "<${CLAUDE_PLUGIN_ROOT}>/scripts")   # the token expanded
+    import sys; sys.path.insert(0, "<plugin_root>/scripts")   # the token expanded
     from step_record import start, place_tab, finish
 
     start(RUN, 10)                   # first act: appends step_start
@@ -483,7 +483,7 @@ def _ledger_entries(path: pathlib.Path) -> list[dict]:
             doc = _ledger_text(text)
         except _Unreadable as exc:
             raise ValueError(f"{path}: cannot be read without PyYAML ({exc}) - run the step "
-                             f"under `uv run --project ${{CLAUDE_PLUGIN_ROOT}}`") from None
+                             f"under `uv run --project <plugin_root>`") from None
     else:
         try:
             doc = yaml.load(text, Loader=getattr(yaml, "CSafeLoader", yaml.SafeLoader))

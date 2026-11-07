@@ -8,7 +8,7 @@ rule compares the items the rules before it left open; a pair matches only where
 the other's one candidate under the rule. What no rule matches is an exception, for a
 person to clear. Every match names its rule.
 
-    import sys; sys.path.insert(0, "<${CLAUDE_PLUGIN_ROOT}>/scripts")   # the token expanded
+    import sys; sys.path.insert(0, "<plugin_root>/scripts")   # the token expanded
     from resolve import Rule, chain, resolve, rules
 
     res = resolve(book, bank, rules(window=(0, 3), same_entity=True), transit=3)

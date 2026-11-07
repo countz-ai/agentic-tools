@@ -13,6 +13,8 @@ argument-hint: "[what you want analyzed]"
 context: inline
 ---
 
+Set `<plugin_root>` to `<base path for this skill>/../..`.
+
 What the user typed after `/countz:analyze` decides what you do. Invoked without the slash
 command, take the ask from the message that invoked you.
 
@@ -48,7 +50,7 @@ drafts its plan from your files first and runs nothing until you confirm it.
 
 ## Run the analysis the ask describes
 
-Sign in first (`${CLAUDE_PLUGIN_ROOT}/reference/RUN_CONTRACT.md § Sign in first`):
+Sign in first (`<plugin_root>/reference/RUN_CONTRACT.md § Sign in first`):
 `get_countz_config` returns `catalog_yaml`, one entry per analysis with `name`,
 `description` and `aliases`. Never carry a list of analyses of your own: the catalog is
 fetched on every run, so what the server added since the plugin was installed is there.
@@ -75,9 +77,8 @@ Then:
 
 ### Relay a catalog match or a miss
 
-```
-R=; for d in "${CLAUDE_PLUGIN_ROOT}" "${CLAUDE_SKILL_DIR}/../.." "$HOME"/.claude/plugins/synced/*/countz $(ls -td "$HOME"/.claude/plugins/cache/*/countz/*/ 2>/dev/null); do [ -f "$d/scripts/section.py" ] && R=$(cd "$d" && pwd) && break; done; [ -n "$R" ] || { f=$(find "$HOME/.claude/plugins" -maxdepth 7 -path "*/countz/scripts/section.py" 2>/dev/null | head -1); [ -n "$f" ] && R=${f%/scripts/section.py}; }; if [ -z "$R" ]; then echo "NOT INSTALLED: this plugin's files are not in the session. Tell the user so in one line, and stop."; else echo "CLAUDE_PLUGIN_ROOT=$R"; cat "$R/reference/RUN_CONTRACT.md"; python3 "$R/scripts/section.py" PLAYBOOK_RECIPES.md "Running a recipe"; fi
-```
+Read `<plugin_root>/reference/RUN_CONTRACT.md`, then run
+`python3 <plugin_root>/scripts/section.py PLAYBOOK_RECIPES.md "Running a recipe"`.
 
 You are the relay for a plan-driven run. You do no analysis and you open no client file.
 On a match, the run directory is named after the matched recipe. On a miss, it is named
@@ -96,7 +97,7 @@ recipe's name; its § 2 collects the ask in the user's words as `instructions`.
    `--recipe <that file> --recipe-version <recipe_version>`
    (`PLAYBOOK_RECIPES.md § Fetch the recipe and register`).
 2. **On a miss**, scrub the ask before anything crosses, under
-   `${CLAUDE_PLUGIN_ROOT}/reference/SCRUB.md` (read it whole). Register the run first
+   `<plugin_root>/reference/SCRUB.md` (read it whole). Register the run first
    (the registration in `PLAYBOOK_RECIPES.md § Fetch the recipe and register`, with
    `--skill analyze` in place of `--recipe`). Then two separate invocations of the `countz:scrubber` agent
    (the Agent tool, `subagent_type: countz:scrubber`, a fresh agent each time,
@@ -115,7 +116,7 @@ recipe's name; its § 2 collects the ask in the user's words as `instructions`.
    4. Record it — the removal lists, the verdicts and the text sent:
 
       ```
-      uv run --project ${CLAUDE_PLUGIN_ROOT} python3 ${CLAUDE_PLUGIN_ROOT}/scripts/run_state.py record-scrub <run_dir> --json @<run_dir>/scrub-draft.json
+      uv run --project <plugin_root> python3 <plugin_root>/scripts/run_state.py record-scrub <run_dir> --json @<run_dir>/scrub-draft.json
       ```
 
       where the file (written with the Write tool, so no quoting touches the text) holds `{"send": "<SEND text>", "rounds": [{"removed": [{"category": "...", "replacement": "..."}], "verdict": "clean|flagged", "flags": [{"category": "...", "where": "..."}]}, ...]}`.
@@ -149,7 +150,7 @@ on `revise=`.
    `blocked` rather than hand the plan a malformed recipe. `record`, then pin the file:
 
    ```
-   python3 ${CLAUDE_PLUGIN_ROOT}/scripts/setup_run.py <run_dir> --session "$CLAUDE_CODE_SESSION_ID" \
+   python3 <plugin_root>/scripts/setup_run.py <run_dir> --session "$CLAUDE_CODE_SESSION_ID" \
        --sources '[]' --recipe <run_dir>/recipes/<name>.md
    ```
 
