@@ -259,6 +259,10 @@ cache_defects: []                   # [{id, what, fix}]: a cache id whose table 
                                     # step found wrong, and in words what the extract
                                     # script must do differently (agents/worker.md
                                     # § Your procedure)
+untied_inputs: []                   # [{check, reason}]: an input check with figures that
+                                    # no tie of the step reaches, and why none of its
+                                    # figures states a total of what the step derives
+                                    # from it; a complete step lists every such input
 notes: ""
 ```
 

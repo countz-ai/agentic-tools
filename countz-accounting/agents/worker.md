@@ -84,6 +84,11 @@ your inputs — one of your step's `after` dependencies, terminal before you sta
 its figures at their recorded values, cited to that check (`file_role: run_artifact`,
 `from_check`), never recomputed from its sources, and read no check that no param names.
 
+Tie each input to your work: a total you derive from an input check's items ties (the ledger's `tie()`)
+to that check's figure for the same population and date. `finish` refuses a complete step
+while an input that has figures is reached by none of your ties and is not named in
+`untied_inputs` with the reason no figure of it states such a total.
+
 `params.cache_from` names the extract step that parsed the files your step reads, and
 `params.reads` the ids. Before relying on an id, `cache.py <run_dir> --verify <id>`
 (exit 3: the source file or the parquet no longer agrees with its metadata).

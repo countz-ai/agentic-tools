@@ -68,7 +68,13 @@ same seq (`rewrite=True` replaces it). It also refuses: `blockers`, `cache_defec
 not a mapping of path to words, and an extra keyword that names a field it derives
 (RECORD_FIELDS: `step`, `check_id`, `args`, `started_at`, ...). `error` is only for work
 the step could not do at all; a gate that refused is `blocked` with the gate's output as
-the blocker's `what`. The record is UTF-8 JSON, written to `.tmp` then renamed; a
+the blocker's `what`.
+
+**Every input is reconciled.** A `complete` check step refuses to finish while a check its
+`_from` params name (`input_checks`: each with a figures ledger, `cache_from` aside) is
+reached by no tie in the step's own ledger — no `T.` record whose side is a figure that
+input's ledger states — and is not named in `untied_inputs`, `[{check, reason}]`, the reason
+saying why no figure of that check states a total of what the step derives from it. The record is UTF-8 JSON, written to `.tmp` then renamed; a
 character UTF-8 cannot carry (a lone surrogate from a file name that is not UTF-8) is
 written as its JSON escape, so it reads back as it was.
 
@@ -101,7 +107,7 @@ import check_playbook  # noqa: E402  sibling: CHECK_ID, the check-id grammar
 import run_state  # noqa: E402  sibling: the brief's argument block, written and read back
 
 __all__ = ["start", "finish", "place_tab", "brief", "consumed_from_citations", "own_files",
-           "GateRefused", "OUTCOMES", "RECORD_FIELDS"]
+           "input_checks", "untied", "GateRefused", "OUTCOMES", "RECORD_FIELDS"]
 
 SCHEMA = "countz-accounting/step@1"
 OUTCOMES = ("complete", "blocked")
@@ -109,7 +115,12 @@ OUTCOMES = ("complete", "blocked")
 # extra keyword that would overwrite one.
 RECORD_FIELDS = ("schema", "seq", "step", "check_id", "args", "started_at", "completed_at",
                  "outcome", "error", "conclusion", "produced", "consumed", "blockers",
-                 "findings", "cache_defects", "notes")
+                 "findings", "cache_defects", "notes", "untied_inputs")
+# `_from` params that name no check whose figures a step reconciles to: the extract step
+# that parsed the step's files.
+NOT_RECONCILED = ("cache_from",)
+_LEDGER_ID = re.compile(r"^- id: (\S+)", re.M)
+_TIE_SIDE = re.compile(r"^ {4}side_[ab]:\n {6}figure_id: (\S+)", re.M)
 # A file's mtime may trail the wall clock by a kernel tick (Linux stamps files from a
 # coarse clock): a file written just after step_start can carry an mtime a few ms before it.
 MTIME_SLACK = 0.05
@@ -618,10 +629,44 @@ def _produced(run_dir: pathlib.Path, check: str | None, since: dt.datetime, extr
 
 
 # --- the record ------------------------------------------------------------------------
+def input_checks(run_dir, params) -> list[str]:
+    """The checks a step's `_from` params name that carry a figures ledger, in param order:
+    the inputs `finish` requires a tie to. `cache_from` is not one (NOT_RECONCILED)."""
+    run_dir = pathlib.Path(run_dir)
+    out: list[str] = []
+    for k, v in (params or {}).items():
+        if not k.endswith("_from") or k in NOT_RECONCILED:
+            continue
+        for c in (v if isinstance(v, list) else [v]):
+            if isinstance(c, str) and c not in out \
+                    and (run_dir / "workpapers" / f"figures-{c}.yaml").exists():
+                out.append(c)
+    return out
+
+
+def untied(run_dir, check: str, params, untied_inputs=()) -> list[str]:
+    """The input checks (`input_checks`) that no tie in `workpapers/figures-<check>.yaml`
+    reaches and `untied_inputs` does not name. A tie reaches an input when one of its sides
+    is a figure that input's ledger states."""
+    run_dir = pathlib.Path(run_dir)
+    own = run_dir / "workpapers" / f"figures-{check}.yaml"
+    sides = set(_TIE_SIDE.findall(own.read_text(encoding="utf-8"))) if own.exists() else set()
+    named = {x.get("check") for x in untied_inputs}
+    missing = []
+    for c in input_checks(run_dir, params):
+        if c in named:
+            continue
+        ids = set(_LEDGER_ID.findall(
+            (run_dir / "workpapers" / f"figures-{c}.yaml").read_text(encoding="utf-8")))
+        if not sides & ids:
+            missing.append(c)
+    return missing
+
+
 def finish(run_dir, seq: int, *, conclusion: str, outcome: str = "complete",
            error: str | None = None, blockers=(), notes: str = "", consumed=None,
-           produced=(), findings=(), cache_defects=(), rewrite: bool = False,
-           **extra) -> dict:
+           produced=(), findings=(), cache_defects=(), untied_inputs=(),
+           rewrite: bool = False, **extra) -> dict:
     """Write `steps/<NNNN>-<step>.json` and append `step_end`: the last act of a step.
     Extra keyword fields (`fix` on a fix run, per check-tie SKILL § mode: fix) are
     carried into the record as given, each JSON-serializable; one that names a field
@@ -664,6 +709,19 @@ def finish(run_dir, seq: int, *, conclusion: str, outcome: str = "complete",
     if not _is_list(findings):
         raise ValueError(f"`findings` is a list, got {type(findings).__name__}")
     findings = list(findings)
+    untied_inputs = _mappings("untied_inputs", untied_inputs)
+    for x in untied_inputs:
+        if not str(x.get("check", "")).strip() or not str(x.get("reason", "")).strip():
+            raise ValueError(f"untied input {x}: {{check, reason}} - `reason` says why no figure "
+                             f"of that check states a total of what this step derives from it")
+    if check and outcome == "complete" and error is None:
+        missing = untied(run_dir, check, b["args"].get("params"), untied_inputs)
+        if missing:
+            raise ValueError(
+                f"no tie reaches {', '.join(missing)}: tie (the ledger's `tie()`) a total this step derives "
+                f"from each input to that check's figure for the same population and date, or "
+                f"name it in `untied_inputs` as {{check, reason}} (agents/worker.md § Your "
+                f"procedure)")
     staged = run_dir / "out" / ".staging" / f"{check}.xlsx"
     if check and outcome == "complete" and error is None and staged.exists():
         raise ValueError(f"{staged} is still staged - place_tab() gates it and renames it "
@@ -678,7 +736,7 @@ def finish(run_dir, seq: int, *, conclusion: str, outcome: str = "complete",
            "produced": _produced(run_dir, check, _parse(started), produced),
            "consumed": _consumed(run_dir, b, consumed),
            "blockers": blockers, "findings": findings,
-           "cache_defects": cache_defects, "notes": notes}
+           "cache_defects": cache_defects, "notes": notes, "untied_inputs": untied_inputs}
     rec.update(extra)
     end = _now()
     rec["completed_at"] = _iso(end)

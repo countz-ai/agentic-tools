@@ -367,13 +367,50 @@ def test_fallback_ledger(d: pathlib.Path, bad: list) -> None:
         sys.modules["yaml"] = saved
 
 
+def test_input_ties(d: pathlib.Path, bad: list) -> None:
+    """A complete check step finishes only when a tie reaches each `_from` input that has
+    figures, or `untied_inputs` names it with a reason; `cache_from` and inputs without a
+    ledger are not required."""
+    params = json.dumps({"rollforward_from": "up", "findings_from": ["up2", "nofigs"],
+                         "cache_from": "ext"})
+    text = ("# dispatch\n\nYour arguments:\n\n    run_dir=/x\n    seq=7\n    check=k1\n"
+            "    sources=gl\n    goal=(none)\n    params=" + params + "\n    mode=fresh\n")
+    run = _run(d, "ties", text=text)
+    wp = run / "workpapers"
+    (wp / "figures-up.yaml").write_text("- id: F.up.opening\n  value: 5\n", encoding="utf-8")
+    (wp / "figures-up2.yaml").write_text("- id: F.up2.total\n  value: 1\n", encoding="utf-8")
+    (wp / "figures-ext.yaml").write_text("- id: F.ext.rows\n  value: 1\n", encoding="utf-8")
+    if step_record.input_checks(run, json.loads(params)) != ["up", "up2"]:
+        bad.append(f"input_checks: {step_record.input_checks(run, json.loads(params))}")
+    tie = ("- id: F.k1.t.difference\n  value: 0\n  tie:\n    id: T.k1.t\n    side_a:\n"
+           "      figure_id: F.k1.opening\n      value: 5\n    side_b:\n"
+           "      figure_id: F.up.opening\n      value: 5\n")
+    (wp / "figures-k1.yaml").write_text(tie, encoding="utf-8")
+    start(run, 7)
+    _refuses(bad, "an input no tie reaches", finish, run, 7, conclusion="x", want="up2")
+    _refuses(bad, "an untied input with no reason", finish, run, 7, conclusion="x",
+             untied_inputs=[{"check": "up2"}], want="reason")
+    _refuses(bad, "untied_inputs as a mapping", finish, run, 7, conclusion="x",
+             untied_inputs={"check": "up2", "reason": "r"})
+    if (run / "steps" / "0007-tie.json").exists():
+        bad.append("a refused finish wrote a record")
+    rec = finish(run, 7, conclusion="x",
+                 untied_inputs=[{"check": "up2", "reason": "states no total of the items"}])
+    if rec["untied_inputs"] != [{"check": "up2", "reason": "states no total of the items"}]:
+        bad.append(f"untied_inputs not recorded: {rec['untied_inputs']}")
+    blocked = finish(run, 7, conclusion="x", outcome="blocked", rewrite=True,
+                     blockers=[{"what": "w", "effect": "e"}])
+    if blocked["outcome"] != "blocked":
+        bad.append("a blocked step was held to the tie rule")
+
+
 def main() -> int:
     bad: list[str] = []
     with tempfile.TemporaryDirectory() as td:
         d = pathlib.Path(td).resolve()
         for t in (test_lifecycle, test_brief_arguments, test_accounting_standard,
                   test_check_ids, test_events, test_finish_inputs, test_paths,
-                  test_produced_mtime, test_fallback_ledger):
+                  test_produced_mtime, test_fallback_ledger, test_input_ties):
             try:
                 t(d, bad)
             except Exception as exc:  # noqa: BLE001
