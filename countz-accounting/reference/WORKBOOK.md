@@ -342,7 +342,9 @@ figure to where it came from by Excel's precedents, so:
 
 - A body figure is a value: it comes from the data room, which the workbook does not
   hold, and its reperformance is its Sources row. In a template it is `cell('F.…')`, and
-  the cell carries the figure's id.
+  the cell carries the figure's id. A number one of your figures states is written
+  `cell('F.…')` in every table that shows it, never cast to a plain value; a number no
+  figure states, such as a count computed per row, stays a value.
 - A figure you built a table on the tab to support — the rows it counts, adds or filters
   — is a formula over that table: `cell('F.…', formula := 'SUMIFS({Entries
   selected.Gross}, {Entries selected.Counterparty}, {Who or what})')`. `{Heading.Header}`
