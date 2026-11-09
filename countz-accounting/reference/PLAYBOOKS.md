@@ -62,9 +62,9 @@ at least one slot.
   entry per table — `{id, path, source?, file_role, sheet?, what?, control?}` — and it
   names no `_from`. A saved extract step carries `params.prior_script`, last period's
   script beside the playbook file (`<name>.extract/<check>.py`). A step that reads the cache carries
-  `params.cache_from` (the extract step) and `params.reads` (the ids it reads);
-  `check_playbook.py` refuses a read of an id the extract step does not parse. A table
-  the extract step could not parse is read from the source by the steps that name it.
+  `params.cache_from` (the extract step) and chooses which of its tables to read;
+  `check_playbook.py` refuses `params.reads`. A table the extract step could not parse is
+  read from the source by the steps that need it.
 - `steps[].goal`: carried verbatim into the check dispatch. A step with no goal runs the
   kind's default procedure.
 - `steps[].params`: options the check must honor: declared tolerances, a cutoff's

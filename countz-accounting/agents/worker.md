@@ -89,8 +89,10 @@ to that check's figure for the same population and date. `finish` refuses a comp
 while an input that has figures is reached by none of your ties and is not named in
 `untied_inputs` with the reason no figure of it states such a total.
 
-`params.cache_from` names the extract step that parsed the files your step reads, and
-`params.reads` the ids. Before relying on an id, `cache.py <run_dir> --verify <id>`
+`params.cache_from` names the extract step, which parsed every table of the data room's
+relevant files; your handoff lists them. Which of them you read is yours to decide from
+your family section and the recipe's rules: read every table that holds evidence a
+finding of yours rests on. Before relying on an id, `cache.py <run_dir> --verify <id>`
 (exit 3: the source file or the parquet no longer agrees with its metadata).
 
 Compute in SQL (`CONDUCT.md` § Libraries). Parse a file the cache lacks, or holds wrong,

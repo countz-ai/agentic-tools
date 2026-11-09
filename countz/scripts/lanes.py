@@ -189,7 +189,8 @@ def _to_holder(run_dir: pathlib.Path, st: dict, lane: str, brief, params, seq: i
     as written). Marks the lane busy; returns the LANE: line."""
     h = st["holders"].setdefault(lane, _new_holder())
     if h["agent"] and not _spent(st, h):
-        handoff.replace(brief, handoff.render(run_dir, handoff.held_out(params, h["checks"], h["reads"]),
+        tables = {**(params or {}), "reads": handoff.tables_of(run_dir, params)}
+        handoff.replace(brief, handoff.render(run_dir, handoff.held_out(tables, h["checks"], h["reads"]),
                                               kit=False))
         who = h["agent"]
     else:
@@ -306,7 +307,7 @@ def cmd_done(a) -> int:
     step = next((s for s in definition["steps"] if s["id"] == b["check"]), {})
     h = st["holders"][lane]
     h["checks"].append(b["check"])
-    h["reads"] = sorted(set(h["reads"]) | set((step.get("params") or {}).get("reads") or []))
+    h["reads"] = sorted(set(h["reads"]) | set(handoff.tables_of(run_dir, step.get("params"))))
     h["briefs"] += 1
     h["context"] = a.context if a.context is not None else context_of(a.agent)
     st["busy"][lane] = None

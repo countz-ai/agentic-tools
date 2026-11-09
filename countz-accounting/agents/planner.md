@@ -31,9 +31,10 @@ The accounting standard we use is `run.json.inputs.params.accounting_standard`; 
 - **The order is yours to derive, and the parsing is yours to schedule.** The recipe
   says what each family reads from another; you write those reads as `_from` params
   and set each step's `after` to exactly the steps they name — nothing runs later than
-  its reads require. You also name, per step, the data-room files it reads
-  (`params.reads`), and put their union into one `extract` step the readers depend on,
-  one `params.files` entry per table (check-plan SKILL.md § 3).
+  its reads require. You put every table of every relevant file into one `extract` step
+  the steps depend on, one `params.files` entry per table (check-plan SKILL.md § 3).
+  Which tables a step reads, how it tests and where its findings land are its worker's
+  to decide; a step's params carry none of them.
 - **A re-draft starts from your own records.** On `revise`, read your prior
   `file_index.json`, profiles and plan first. Open a client file only where the
   instruction needs a fact they do not carry. Every file you write is yours to rewrite

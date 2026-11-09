@@ -46,11 +46,11 @@ KINDS = {
     "extract": "check-extract",
 }
 
-# The one kind that computes no figure: `extract` parses the tables the plan's steps read
-# out of the data-room files into `<run_dir>/cache/` (its own script, written at run time,
+# The one kind that computes no figure: `extract` parses every table of the relevant
+# data-room files into `<run_dir>/cache/` (its own script, written at run time,
 # landing each table through scripts/cache.py), once, ahead of the steps that read them.
 # Its `params.files` lists the tables to parse, one entry per table; a consumer names the
-# extract step in `params.cache_from` and the ids it reads in `params.reads`. Review skips
+# extract step in `params.cache_from` and chooses which tables to read. Review skips
 # it; the report lists it on Coverage.
 EXTRACT = "extract"
 # `what` is the table in words from the planner's profile ("the By-stream table, header at
@@ -168,18 +168,10 @@ def check_params(kind: str, params, *, after: list | None = None,
                 or ".." in pathlib.PurePosixPath(ps).parts:
             bad.append(f"`params.prior_script` is a .py path relative to the playbook file, "
                        f"got {ps!r}")
-    reads = params.get("reads")
-    if reads is not None:
-        if kind == EXTRACT:
-            bad.append("an `extract` step reads no cache; `params.reads` belongs on the "
-                       "steps that read what it writes")
-        elif not isinstance(reads, list) or not reads \
-                or not all(isinstance(r, str) and SLUG.fullmatch(r) for r in reads):
-            bad.append(f"`params.reads` must be a non-empty list of cache file ids (slugs), "
-                       f"got {reads!r}")
-        elif not params.get("cache_from"):
-            bad.append("`params.reads` names cache files but `params.cache_from` names no "
-                       "extract step - a cache read is declared like any other dependency")
+    if "reads" in params:
+        bad.append("`params.reads`: the plan names no tables a step reads - its worker "
+                   "chooses them from everything the extract step parsed (check-plan "
+                   "SKILL.md § 3)")
     for key, val in params.items():
         if not key.endswith("_from") or val is None:
             continue
@@ -419,24 +411,13 @@ def validate(path: pathlib.Path, skills_dir: pathlib.Path | None) -> list[str]:
                 bad.append(f"{path}: step `{st['id']}` is after `{dep}` but no `_from` param "
                            f"reads it - `after` is the set of steps the step's `_from` "
                            f"params name, nothing more")
-        # A cache read resolves: the named step is an extract step, and it parses every
-        # id this step reads.
+        # A cache read resolves: the named step is an extract step.
         params = st.get("params") or {}
-        if isinstance(params.get("reads"), list) and isinstance(params.get("cache_from"), str):
+        if isinstance(params.get("cache_from"), str):
             src = by_id.get(params["cache_from"])
-            if src is None:
-                pass                  # check_params reported the missing dependency
-            elif src.get("check") != EXTRACT:
+            if src is not None and src.get("check") != EXTRACT:
                 bad.append(f"{path}: step `{st['id']}` names `{params['cache_from']}` in "
                            f"`cache_from`, which is a `{src.get('check')}` step, not `extract`")
-            else:
-                have = {f.get("id") for f in ((src.get("params") or {}).get("files") or [])
-                        if isinstance(f, dict)}
-                lost = [r for r in params["reads"] if r not in have]
-                if lost:
-                    bad.append(f"{path}: step `{st['id']}` reads {lost}, which "
-                               f"`{params['cache_from']}` does not parse - add the file to "
-                               f"its `params.files` or drop the read")
 
     # One fiscal calendar per entity per run, declared wherever a period column needs
     # one: scripts/periods.py reads it from the step, else from any step that declares it.

@@ -433,7 +433,7 @@ brief for a holder that ran some of its inputs hands over only the rest
 Before the review: a step record carrying `cache_defects` names a cache table the step
 found wrong and what the extract script must do differently. Re-dispatch the extract
 step that owns the id with `--mode fix` and `fix_input` holding those entries — it edits
-its script, re-runs it, and records the control total before and after — then every step whose `params.reads` names the id,
+its script, re-runs it, and records the control total before and after — then every step whose statements read the id (`countz.reads`),
 with `--mode fix` and `fix_input` naming the id, before the review runs. The step that
 found the defect computed from the source and needs no re-run.
 

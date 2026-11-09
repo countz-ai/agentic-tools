@@ -170,7 +170,7 @@ def main() -> int:
                        f"{handoff._item_head(rd / 'checks' / 't0-pairs.parquet')}")
         # the brief lists a parsed table's columns inline, so a worker sees each one
         cb = "\n".join(handoff.cache_block(rd, ["inv"]))
-        if "- `room.inv` — " not in cb or "Columns: id (" not in cb or "start (" not in cb:
+        if "- `room.inv` (`inv.csv`" not in cb or "Columns: id (" not in cb or "start (" not in cb:
             bad.append(f"handoff's parsed-table block: {cb}")
 
         # figures and populations are rows

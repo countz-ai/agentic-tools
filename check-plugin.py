@@ -1206,7 +1206,7 @@ def check(root: pathlib.Path) -> list[str]:
                 {"id": "x0", "check": "extract", "sources": ["a"], "after": [],
                  "params": {"files": files}},
                 {"id": "s1", "check": "tieout", "sources": ["a", "b"], "after": ["x0"],
-                 "params": {"cache_from": "x0", "reads": ["gl_fy2026"]}}])))
+                 "params": {"cache_from": "x0"}}])))
             unparsed = tdp / "unparsed.json"
             unparsed.write_text(json.dumps(wf("unparsed", [
                 {"id": "x0", "check": "extract", "sources": ["a"], "after": [],
@@ -1243,9 +1243,10 @@ def check(root: pathlib.Path) -> list[str]:
                                    (unknown, 1, "an unknown check kind"),
                                    (cyclic, 1, "a dependency cycle"),
                                    (unread, 1, "an `after` no `_from` read justifies"),
-                                   (cached, 0, "an extract step with a resolved cache read"),
-                                   (unparsed, 1, "a cache read of an id the extract step "
-                                                 "does not parse"),
+                                   (cached, 0, "a step naming the extract step in "
+                                               "`cache_from`"),
+                                   (unparsed, 1, "a step whose params name its tables "
+                                                 "(`params.reads`)"),
                                    (unnamed, 1, "two tables on one sheet, one without "
                                                 "`what`"),
                                    (respec, 1, "an extract file entry carrying a read "

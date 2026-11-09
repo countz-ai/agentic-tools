@@ -8,9 +8,10 @@ A fresh worker otherwise spends its first turns finding out what its inputs are:
 parsed tables exist and how to read their columns, which tables and figure ids each
 `_from` check left, what those checks concluded and carried forward, and the kit's call signatures.
 `run_state.render_brief` appends this block to every check brief, so the worker starts
-with those facts instead of rediscovering them. It names only what the brief's own
-params name (`params.reads`, every `*_from`), as `agents/worker.md` § Your procedure
-bounds a step's inputs. An item table's columns and row count are read from its parquet
+with those facts instead of rediscovering them. It names the checks the brief's own
+params name (every `*_from`), as `agents/worker.md` § Your procedure bounds a step's
+inputs, and, where `params.cache_from` names the extract step, every table it parsed:
+the worker chooses which to read (`tables_of`). An item table's columns and row count are read from its parquet
 with polars, so the relay runs run_state, lanes and playbook_next with
 `uv run --project <plugin_root> python3`.
 """
@@ -116,28 +117,46 @@ def _sql_command(run_dir: pathlib.Path, query: str) -> str:
             f"-c \"{query}\"")
 
 
+def cache_tables(run_dir) -> list[str]:
+    """The ids of the tables the run's cache holds."""
+    return sorted(p.stem for p in (pathlib.Path(run_dir) / "cache").glob("*.parquet"))
+
+
+def tables_of(run_dir, params) -> list[str]:
+    """The cache tables a step's handoff lists: every table the cache holds where the step
+    names the extract step (`params.cache_from`), else none. The step chooses which to read."""
+    return cache_tables(run_dir) if isinstance(params, dict) and params.get("cache_from") else []
+
+
 def cache_block(run_dir: pathlib.Path, reads: list[str]) -> list[str]:
-    held = sorted(p.stem for p in (run_dir / "cache").glob("*.parquet"))
+    held = cache_tables(run_dir)
     if not held:
         return []
     names = [f"room.{r}" for r in reads if r in held]
-    out = ["### The parsed tables your params read", ""]
+    out = ["### The parsed tables of the data room", "",
+           "Which of them you read is yours to choose (`agents/worker.md` § Your procedure). "
+           "Tables with the same grain and columns are listed together.", ""]
     if names:
-        listed = ", ".join("'" + n + "'" for n in names)
         out += ["Each column's description, unit and place in the file:", "",
                 "    " + _sql_command(run_dir, "SELECT table_name, column_name, type, "
-                "description, unit FROM countz.columns WHERE table_name IN (" + listed
-                + ") ORDER BY table_name, ordinal"), ""]
+                "description, unit FROM countz.columns WHERE table_name = 'room.<id>' "
+                "ORDER BY ordinal"), ""]
+        groups: dict = {}
         for r in reads:
             if r not in held:
                 continue
             e = sql.cache.entry(run_dir, r)
-            ct = e.get("control_total") or {}
-            tot = f"; control total {ct['column']} = {ct.get('value')}" if ct.get("column") else ""
             cols = ", ".join(f"{c['name']} ({c.get('dtype', '?')})" for c in e.get("columns", []))
-            out.append(f"- `room.{r}` — {e.get('grain', '')}. `{e.get('file', '')}`"
-                       f"{' sheet ' + str(e['sheet']) if e.get('sheet') else ''}; "
-                       f"{e.get('row_count', '?')} rows{tot}. Columns: {cols}")
+            groups.setdefault((e.get("grain", ""), cols), []).append((r, e))
+        for (grain, cols), members in groups.items():
+            each = []
+            for r, e in members:
+                ct = e.get("control_total") or {}
+                tot = f", control total {ct['column']} = {ct.get('value')}" if ct.get("column") else ""
+                each.append(f"`room.{r}` (`{e.get('file', '')}`"
+                            f"{' sheet ' + str(e['sheet']) if e.get('sheet') else ''}; "
+                            f"{e.get('row_count', '?')} rows{tot})")
+            out.append(f"- {'; '.join(each)} — {grain}. Columns: {cols}")
     missing = [r for r in reads if r not in held]
     if missing:
         out.append(f"- not parsed: {', '.join('`room.' + r + '`' for r in missing)}. The cache "
@@ -262,8 +281,8 @@ def kit_block() -> list[str]:
 
 def held_out(params, held_checks=(), held_reads=()) -> dict:
     """`params` less what an agent already holds in context: the `_from` checks it ran and
-    the cache tables those read. A holder lane's next brief hands over only the rest
-    (scripts/lanes.py)."""
+    the cache tables already listed to it. `params["reads"]` is the step's tables
+    (`tables_of`). A holder lane's next brief hands over only the rest (scripts/lanes.py)."""
     if not isinstance(params, dict):
         return {}
     held_checks, held_reads = set(held_checks), set(held_reads)
@@ -296,7 +315,8 @@ def render(run_dir, params, kit: bool = True) -> str:
     run_dir = pathlib.Path(run_dir)
     if not isinstance(params, dict):
         return ""
-    reads = [r for r in params.get("reads") or [] if isinstance(r, str)]
+    reads = [r for r in params.get("reads") or [] if isinstance(r, str)] \
+        if "reads" in params else tables_of(run_dir, params)
     froms = _from_checks(params)
     if not reads and not froms:
         return ""

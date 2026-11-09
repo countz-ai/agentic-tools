@@ -261,34 +261,34 @@ reads timestamps: a step whose entities no zone-declaring step covers fails mid-
 timezone-aware column. `column_labels` where the company's own heading for a period differs from
 the default; each `declared` option written verbatim into
 the steps the recipe directs to read it — required keys per kind are enforced by the
-validation below), `reads` and `cache_from` per the next subsection, and `after`
+validation below), `cache_from` per the next subsection, and `after`
 derived from the step's `_from` params — exactly the steps they name.
 
 ### Schedule the reads, the extraction and the order
 
-You derive the order; the recipe states none. Three declarations per step:
+You derive the order; the recipe states none. The plan schedules; it does not choose
+a step's data or method. A step's params name no data-room files, tests or result
+categories (`params.reads` is refused): its worker chooses the tables it reads from
+everything the extract step parsed, by its family section and the recipe's rules. Its
+`goal` states the question and the scope, not the answer. Two declarations per step:
 
-- **`params.reads`** — the ids of the data-room files the step's procedure computes
-  from, taken from the family section and your index: every `relevant: true` file the
-  family's reads name, and no `"context"` file. A file two families read appears in
-  both steps' `reads`.
 - **the `extract` step** — one step of kind `extract` per registered folder source (id
-  `extract_<slot>`), `after: []`, whose `params.files` is the union of every step's
-  `reads` under that source and nothing else, one entry per table a step reads: `id`
+  `extract_<slot>`), `after: []`, whose `params.files` is every table of every
+  `relevant: true` file under that source, and no `"context"` file, one entry per table: `id`
   (the slug the readers use, with `_`, not `-`: `aging_2025_06_30`), `path` relative to
   the source, `file_role` from the source class you assigned in § 3, `control` (the
   column a check would agree a total to, or `"none"`), `sheet` where the file has
   several, and `what` — the table in your profile's words and anchors (`"the By-stream
   table, header at row 40"`), required when two entries share a path and sheet. How the
   table is written is the extract worker's to read; each table needs one whole-table
-  span in your profile for its control check. What no step reads is not in the list.
-- **`params.cache_from`** on every step with a non-empty `reads`, naming that extract
+  span in your profile for its control check.
+- **`params.cache_from`** on every step whose family reads the data room, naming that extract
   step; it is one of the step's `_from` params, so the extract step is in its `after`
   like any other read.
 
 `after` is the set of steps the step's `_from` params name, and nothing else.
 `check_playbook.py` refuses an `after` entry no read justifies, a read naming a step
-outside `after`, and a `reads` id the extract step does not parse.
+outside `after`, a `cache_from` naming a step that is not `extract`, and any `params.reads`.
 
 ## 4. Write
 

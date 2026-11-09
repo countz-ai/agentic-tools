@@ -88,6 +88,25 @@ def main() -> int:
     expect(any("step entry has no valid `id`" in p and "at most 31" in p for p in got),
            f"a step id longer than a tab name is refused, got {got}")
 
+    # The plan schedules; the step chooses its tables. A step names the extract step in
+    # `cache_from` and no tables: `params.reads` is refused (revenue_leak, 2026-11-07: the
+    # plan left the collections log out of 13 of 17 R6 steps' reads, and their causes
+    # went undocumented).
+    ext = {"id": "extract_a", "check": "extract", "sources": ["a"], "after": [],
+           "params": {"files": [{**entry, "id": "log"}]}}
+    reader = {**step, "after": ["extract_a"],
+              "params": {**step["params"], "cache_from": "extract_a"}}
+    got = problems(plan([ext, reader]))
+    expect(got == [], f"a step naming the extract step in cache_from is clean, got {got}")
+    got = problems(plan([ext, {**reader, "params": {**reader["params"], "reads": ["log"]}}]))
+    expect(len(got) == 1 and "`params.reads`" in got[0] and "step `c1_cutoff`" in got[0],
+           f"a step whose params name its tables is refused, got {got}")
+    other = {**step, "id": "c2_cutoff"}
+    got = problems(plan([other, {**reader, "after": ["c2_cutoff"],
+                                 "params": {**reader["params"], "cache_from": "c2_cutoff"}}]))
+    expect(any("not `extract`" in p for p in got),
+           f"a cache_from naming a step that is not extract is refused, got {got}")
+
     for b in bad:
         print("FAIL", b)
     print("check_playbook.py self-check:", "FAIL" if bad else "ok")
