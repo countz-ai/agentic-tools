@@ -404,7 +404,9 @@ def check(root: pathlib.Path) -> list[str]:
     # The section name may wrap across a line; join it before matching.
     SECREF = re.compile(r"([A-Za-z0-9_-]+\.md)`?[^\S\n]*\n?[^\S\n]*(\u00a7(?:[^\n`,;)]|\n)*)")
     for f in sorted(root.rglob("*.md")):
-        if not f.is_file():
+        # `make bundle` copies of the corpus: their citations name the corpus's files,
+        # checked where the corpus lives, and a run pins one recipe, never its neighbors.
+        if not f.is_file() or "bundled-recipes" in f.relative_to(root).parts:
             continue
         for m in SECREF.finditer(f.read_text(errors="replace")):
             fn, tail = m.group(1), " ".join(m.group(2).split())

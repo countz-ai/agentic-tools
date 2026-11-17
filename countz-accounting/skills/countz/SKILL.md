@@ -26,8 +26,11 @@ command, take the ask from the message that invoked you.
 
 ## What countz-accounting runs
 
-Read no file first. Call `get_countz_config` on the `countz` server, once. It returns
-`catalog_yaml`, one entry per analysis with `name`, `description` and `aliases`.
+Read no file first. Run `python3 <plugin_root>/scripts/bundled_recipe.py --catalog`.
+When it prints `CATALOG:`, the plugin is offline: read that file as `catalog_yaml` and
+call no `countz` tool. Otherwise call `get_countz_config` on the `countz` server, once.
+It returns `catalog_yaml`, one entry per analysis with `name`, `description` and
+`aliases`.
 
 Then send one message: the table and the line below, as written, and under them the
 analyses as a table of their own, one row per catalog entry: `/countz <name>` and the
@@ -52,7 +55,8 @@ drafts its plan from your files first and runs nothing until you confirm it.
 
 Sign in first (`<plugin_root>/reference/RUN_CONTRACT.md § Sign in first`):
 `get_countz_config` returns `catalog_yaml`, one entry per analysis with `name`,
-`description` and `aliases`. Never carry a list of analyses of your own: the catalog is
+`description` and `aliases`. An offline package reads it from the file
+`bundled_recipe.py --catalog` names and calls no `countz` tool for the rest of the run. Never carry a list of analyses of your own: the catalog is
 fetched on every run, so what the server added since the plugin was installed is there.
 
 **Match the ask against the catalog.** Read each entry's `description` and `aliases`.
@@ -96,7 +100,11 @@ recipe's name; its § 2 collects the ask in the user's words as `instructions`.
    a file, else write `recipe_markdown` to a file and register with
    `--recipe <that file> --recipe-version <recipe_version>`
    (`PLAYBOOK_RECIPES.md § Fetch the recipe and register`).
-2. **On a miss**, scrub the ask before anything crosses, under
+2. **On a miss in an offline package**, nothing crosses: register the run (the
+   registration in `PLAYBOOK_RECIPES.md § Fetch the recipe and register`, with
+   `--skill countz` in place of `--recipe`) and go to § Authoring the recipe. Skip the
+   scrub and the send below.
+3. **On a miss**, scrub the ask before anything crosses, under
    `<plugin_root>/reference/SCRUB.md` (read it whole). Register the run first
    (the registration in `PLAYBOOK_RECIPES.md § Fetch the recipe and register`, with
    `--skill countz` in place of `--recipe`). Then two separate invocations of the `countz-accounting:scrubber` agent

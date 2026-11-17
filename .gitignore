@@ -2,3 +2,5 @@ dist/
 .venv/
 __pycache__/
 .DS_Store
+# `make bundle` output: the recipes ship only from a private fork (Makefile § bundle)
+countz-accounting/bundled-recipes/

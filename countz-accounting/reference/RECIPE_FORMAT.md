@@ -4,7 +4,8 @@ A playbook recipe declares which checks substantiate a fixed objective, over whi
 classes, at what grain. This document is the contract two producers satisfy: the
 **corpus** — the recipes authored in git under `playbook-recipes/`, listed in
 `catalog.yaml` beside them, and served to a running plugin by the Countz connector
-(`get_recipe_for_countz_analysis`), never shipped in the package — and a **generated
+(`get_recipe_for_countz_analysis`), never shipped in the public package (a private
+offline package carries a copy, `make bundle`) — and a **generated
 recipe**, which the `create-recipe` step writes on the user's machine for an analysis
 the catalog does not cover. Either way a run reads its recipe from
 `<run_dir>/recipes/<name>.md`, the bytes it pinned (`RUN_CONTRACT.md`).

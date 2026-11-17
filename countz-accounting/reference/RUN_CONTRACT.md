@@ -26,6 +26,17 @@ absolute path also works. Open a file whole only where the citation names no sec
 
 ## Sign in first
 
+**An offline package signs in to nothing.** Before any call, run
+`python3 <plugin_root>/scripts/bundled_recipe.py --catalog`. When it prints `CATALOG:`
+and `VERSION:`, the package carries the catalog and every recipe it lists, and the
+plugin is offline. Read that file as `catalog_yaml`, with `VERSION` as its
+`catalog_version`. Take `blocked_tools` as empty. Make no call to the `countz` server
+for the whole run: not `get_countz_config`, `get_recipe_for_countz_analysis` or
+`create_countz_playbook_recipe`. This holds even where the session has the tools from a
+connector set up outside the plugin. Then continue with the run. On exit 2, tell the user
+in one line that the packaged catalog is incomplete, quoting its message, and stop.
+`NONE` means the package carries no catalog: sign in as below.
+
 Every skill that opens a run makes `get_countz_config` on the `countz` server — the
 Countz connector, declared in the plugin's `.mcp.json` — its first tool call after the
 skill's opening command, where it has one: before any client file is opened, any
@@ -67,7 +78,8 @@ carries:
   tools on every call, with an error that carries `tool_blocked:`.
 
 Every signed-in account, the testing tenant included, fetches its recipe body from the
-server (`get_recipe_for_countz_analysis`) and runs everything else locally.
+server (`get_recipe_for_countz_analysis`) and runs everything else locally. An offline
+package pins the bundled copy instead (`PLAYBOOK_RECIPES.md` § 3).
 
 `get_countz_config` takes no arguments. Nothing from a run — no path, no figure,
 no file name — goes to the server; the one text that may cross is the scrubbed pre-run

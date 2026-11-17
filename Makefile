@@ -10,7 +10,7 @@ MAX_FILES := 5000
 MAX_BYTES := 209715200
 
 .DEFAULT_GOAL := help
-.PHONY: help validate check agents zip clean ci smoke-dso smoke-dso-room smoke-dso-validate
+.PHONY: help validate check agents zip bundle clean ci smoke-dso smoke-dso-room smoke-dso-validate
 
 help:
 	@echo "make validate [PLUGIN=<name>]  claude plugin validate (the manifest)"
@@ -18,6 +18,8 @@ help:
 	@echo "make agents   [PLUGIN=<name>]  regenerate agents/*.md from the documents scripts/build_agents.py appends"
 	@echo "make zip      [PLUGIN=<name>]  validate + check, then package into $(DIST)/"
 	@echo "              [RECIPES=\"a.md b.md\"]  also bundle these recipes; the run uses them, not the connector's"
+	@echo "make bundle CORPUS=<dir> [PLUGIN=<name>]  copy <dir>/catalog.yaml and every recipe it lists into"
+	@echo "              <plugin>/bundled-recipes/: the plugin then runs offline and calls no countz tool"
 	@echo "make clean                     remove $(DIST)/"
 	@echo "make smoke-dso                 LIVE PAID DISPATCH: full DSO run on a synthetic room, then validate"
 	@echo "make smoke-dso-room            generate + verify the synthetic room only"
@@ -75,6 +77,29 @@ zip: validate check
 			(cd $$stage && zip -qr $(abspath $(DIST))/$$(basename $$out) $$p); \
 			rm -rf $$stage; \
 		fi; \
+	done
+
+# CORPUS=<dir> holds catalog.yaml and the recipes it lists (milkyway models/recipes/).
+# Each recipe is validated and copied to `<plugin>/bundled-recipes/<frontmatter name>.md`
+# beside the catalog, replacing the recipes there. With the catalog in the package the
+# plugin is offline: it lists, matches and pins from these files and calls no `countz`
+# tool (scripts/bundled_recipe.py --catalog, RUN_CONTRACT.md § Sign in first). The public
+# repo ignores the directory; a private fork that ships offline commits it.
+bundle:
+	@test -n "$(CORPUS)" && test -f "$(CORPUS)/catalog.yaml" || { echo "usage: make bundle CORPUS=<dir holding catalog.yaml>" >&2; exit 2; }
+	@for p in $(PLUGIN); do \
+		[ -f $$p/scripts/bundled_recipe.py ] || continue; \
+		mkdir -p $$p/bundled-recipes; \
+		find $$p/bundled-recipes -maxdepth 1 -type f \( -name '*.md' -o -name catalog.yaml \) -delete; \
+		cp "$(CORPUS)/catalog.yaml" $$p/bundled-recipes/catalog.yaml; \
+		for r in "$(CORPUS)"/*.md; do \
+			rn=$$(python3 -c "import sys;sys.path.insert(0,'$$p/scripts');import bundled_recipe as b;print(b.frontmatter_name(open(sys.argv[1]).read()) or '')" "$$r"); \
+			[ -n "$$rn" ] || continue; \
+			python3 $$p/scripts/validate_recipe.py "$$r" >/dev/null || { echo "$$r: does not validate" >&2; exit 1; }; \
+			cp "$$r" $$p/bundled-recipes/$$rn.md; \
+		done; \
+		python3 $$p/scripts/bundled_recipe.py --catalog >/dev/null || exit 1; \
+		echo "$$p/bundled-recipes: catalog.yaml and $$(ls $$p/bundled-recipes | grep -vc '^catalog.yaml$$') recipe(s)"; \
 	done
 
 # `make -C models ci` fans out to this. Packaging is deliberately NOT part of it: `zip`
